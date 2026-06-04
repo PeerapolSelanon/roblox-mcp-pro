@@ -126,6 +126,42 @@ $configs = @(
 
 $registeredCount = 0
 
+# Node script that merges our server entry into an existing config and writes it back
+# pretty-printed (2-space indent, UTF-8 no BOM, stable key order). We use Node — already
+# verified as a prerequisite above — instead of PowerShell's ConvertTo-Json, which in
+# Windows PowerShell 5.1 emits oddly-aligned output, reorders keys, and can mangle deeply
+# nested existing config. Node round-trips the JSON losslessly. The script is written to a
+# temp file and run as `node file.js` (not `node -e`) because PowerShell 5.1 strips the
+# double quotes out of an inline -e string, which would corrupt the script.
+$mergeScript = @'
+const fs = require("fs");
+const file = process.argv[2];
+let cfg = {};
+if (fs.existsSync(file)) {
+  let raw = fs.readFileSync(file, "utf8");
+  if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1); // strip UTF-8 BOM
+  if (raw.trim()) {
+    try {
+      cfg = JSON.parse(raw);
+    } catch (e) {
+      // Existing file is not valid JSON. Do NOT overwrite it — abort so we never
+      // destroy a user's config. Register-Mcp treats the non-zero exit as a skip.
+      console.error("existing config is not valid JSON; left untouched");
+      process.exit(2);
+    }
+  }
+}
+if (typeof cfg !== "object" || cfg === null || Array.isArray(cfg)) cfg = {};
+if (typeof cfg.mcpServers !== "object" || cfg.mcpServers === null || Array.isArray(cfg.mcpServers)) {
+  cfg.mcpServers = {};
+}
+cfg.mcpServers["roblox-mcp-pro"] = { command: "npx", args: ["-y", "roblox-mcp-pro"] };
+fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + "\n");
+'@
+
+$mergeScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) ("rmp_merge_" + [System.Guid]::NewGuid().ToString() + ".js")
+[System.IO.File]::WriteAllText($mergeScriptFile, $mergeScript, (New-Object System.Text.UTF8Encoding($false)))
+
 # Helper to inject config
 function Register-Mcp($configPath, $appName) {
     try {
@@ -133,35 +169,13 @@ function Register-Mcp($configPath, $appName) {
         if (-not (Test-Path $parentDir)) {
             return $false
         }
-        
-        $config = @{ mcpServers = @{} }
-        if (Test-Path $configPath) {
-            $rawContent = Get-Content -Path $configPath -Raw
-            if (-not [string]::IsNullOrWhiteSpace($rawContent)) {
-                $config = ConvertFrom-Json $rawContent
-            }
+
+        & node $mergeScriptFile $configPath
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[WARN] Failed to register with $($appName) (node exited $LASTEXITCODE)." -ForegroundColor Yellow
+            return $false
         }
-        
-        if ($null -eq $config.mcpServers) {
-            $config | Add-Member -MemberType NoteProperty -Name "mcpServers" -Value @{} -Force
-        }
-        
-        # Add server config
-        $serverConfig = @{
-            command = "npx"
-            args = @("-y", "roblox-mcp-pro")
-        }
-        
-        # Add to mcpServers
-        if ($config.mcpServers.PSObject -ne $null) {
-            $config.mcpServers | Add-Member -MemberType NoteProperty -Name "roblox-mcp-pro" -Value $serverConfig -Force
-        } else {
-            $config.mcpServers."roblox-mcp-pro" = $serverConfig
-        }
-        
-        $json = ConvertTo-Json $config -Depth 10
-        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-        [System.IO.File]::WriteAllText($configPath, $json, $utf8NoBom)
+
         Write-Host "[OK] Registered with $($appName) ($configPath)" -ForegroundColor Green
         return $true
     } catch {
@@ -179,6 +193,11 @@ foreach ($cfg in $configs) {
             $registeredCount++
         }
     }
+}
+
+# Clean up the temp merge script.
+if (Test-Path $mergeScriptFile) {
+    Remove-Item $mergeScriptFile -Force -ErrorAction SilentlyContinue
 }
 
 if ($registeredCount -eq 0) {

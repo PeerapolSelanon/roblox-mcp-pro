@@ -391,23 +391,31 @@ function UI.setStatus(status: string)
 
 	statusLabel.Text = status
 
+	-- NOTE: statusLabel color is driven manually here (not via registerTheme) so we
+	-- avoid appending a new theme entry on every status change, which would otherwise
+	-- grow themeRegistry unbounded and override our status color on the next ThemeChanged.
 	if status == "Connected" then
 		isConnected = true
 		statusIndicator.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- Green
 		statusLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
 		toggleButton.Text = "Disconnect"
-		registerTheme(statusLabel, "TextColor3", Enum.StudioStyleGuideColor.MainText) -- Fallback reset if needed
 	elseif status == "Reconnecting" or status == "Connecting" then
 		isConnected = true
 		statusIndicator.BackgroundColor3 = Color3.fromRGB(241, 196, 15) -- Yellow
 		statusLabel.TextColor3 = Color3.fromRGB(241, 196, 15)
+		toggleButton.Text = "Disconnect"
+	elseif status == "Offline" then
+		-- Server unreachable, but the poll loop is still active and retrying, so the
+		-- toggle stays "Disconnect" (clicking it stops the retry loop).
+		isConnected = true
+		statusIndicator.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- Red
+		statusLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
 		toggleButton.Text = "Disconnect"
 	else
 		isConnected = false
 		statusIndicator.BackgroundColor3 = Color3.fromRGB(149, 165, 166) -- Gray / Muted
 		statusLabel.TextColor3 = settings().Studio.Theme:GetColor(Enum.StudioStyleGuideColor.DimmedText)
 		toggleButton.Text = "Connect"
-		registerTheme(statusLabel, "TextColor3", Enum.StudioStyleGuideColor.DimmedText)
 	end
 end
 
