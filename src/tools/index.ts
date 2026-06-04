@@ -16,9 +16,11 @@ import { registerAnimationTools } from "./animation.js";
 import { registerWorldTools } from "./world.js";
 import { registerBuildTools } from "./build.js";
 import { registerStudioInfoTools } from "./studioInfo.js";
+import { registerCaptureTools } from "./capture.js";
 
 export function registerAllTools(server: McpServer): void {
   registerSystemTools(server);
+  registerCaptureTools(server);
   registerExecuteTools(server);
   registerInstanceTools(server);
   registerSyncTools(server);

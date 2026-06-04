@@ -95,7 +95,7 @@ npm run build      # compile the server to dist/
 When working **in this repo** with Claude Code, a project `.mcp.json` is already included — just
 approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 
-## Tools (23)
+## Tools (24)
 
 **Core**
 
@@ -139,6 +139,7 @@ approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 | `manage_studio`    | Studio environment info (version, theme, state).      |
 | `manage_logs`      | Recent Output log history.                            |
 | `workspace_state`  | High-level read-only session snapshot.                |
+| `capture_studio`   | Screenshot the Studio window so the agent sees the real render. |
 
 ## Development
 
