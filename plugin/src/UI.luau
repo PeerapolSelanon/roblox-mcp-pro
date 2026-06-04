@@ -147,7 +147,7 @@ local function createInput(parent: Instance, name: string, size: UDim2, placehol
 	padding.Parent = input
 
 	registerTheme(input, "BackgroundColor3", Enum.StudioStyleGuideColor.InputFieldBackground)
-	registerTheme(input, "TextColor3", Enum.StudioStyleGuideColor.InputFieldText)
+	registerTheme(input, "TextColor3", Enum.StudioStyleGuideColor.MainText)
 	registerTheme(input, "PlaceholderColor3", Enum.StudioStyleGuideColor.DimmedText)
 
 	return input
