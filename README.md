@@ -21,12 +21,12 @@ AI Agent ──MCP stdio──▶ MCP Server (Node/TS) ──HTTP 127.0.0.1:3690
 
 ## Install (end users)
 
-### Super Easy Install (Windows)
+### Super Easy Install (Windows - Private Repo)
 
-Open PowerShell and run the following command to automatically download the Roblox Studio plugin and register the MCP server in your AI clients (Claude Desktop, Cursor, Cline, etc.):
+Open PowerShell and run the following command (requires GitHub CLI `gh` to be installed and authenticated) to automatically download the Roblox Studio plugin and register the MCP server in your AI clients:
 
 ```powershell
-irm https://raw.githubusercontent.com/PeerapolSelanon/roblox-mcp-pro/main/install.ps1 | iex
+gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | iex
 ```
 
 ---
