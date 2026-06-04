@@ -26,7 +26,7 @@ AI Agent ──MCP stdio──▶ MCP Server (Node/TS) ──HTTP 127.0.0.1:3690
 Open PowerShell and run the following command (requires GitHub CLI `gh` to be installed and authenticated) to automatically download the Roblox Studio plugin and register the MCP server in your AI clients:
 
 ```powershell
-gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | iex
+gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | Out-String | iex
 ```
 
 ---
