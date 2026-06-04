@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "description": "Open MCP server that lets AI agents control Roblox Studio: live execution, instance query/mutate, and bidirectional Studio<->local sync.",
   "license": "AGPL-3.0-or-later",
+  "author": "Peerapol",
+  "homepage": "https://github.com/PeerapolSelanon/roblox-mcp-pro#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PeerapolSelanon/roblox-mcp-pro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PeerapolSelanon/roblox-mcp-pro/issues"
+  },
+  "keywords": [
+    "roblox",
+    "roblox-studio",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "luau",
+    "ai",
+    "studio-plugin"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -10,7 +29,8 @@
   },
   "files": [
     "dist",
-    "plugin",
+    "plugin/src",
+    "plugin/default.project.json",
     "README.md",
     "LICENSE"
   ],
@@ -19,7 +39,8 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "inspector": "npx @modelcontextprotocol/inspector node dist/index.js"
+    "inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "engines": {
     "node": ">=18"

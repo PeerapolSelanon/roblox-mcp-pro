@@ -1,0 +1,55 @@
+name: Release
+
+# Push a version tag to cut a release:
+#   npm version patch        # bumps package.json + creates a vX.Y.Z tag
+#   git push --follow-tags
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to create the GitHub Release and upload assets
+
+jobs:
+  plugin:
+    name: Build plugin & publish GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rojo
+        uses: ok-nick/setup-aftman@v0.4.2
+
+      - name: Build Studio plugin
+        run: |
+          cd plugin
+          rojo build default.project.json --output RobloxMcpPro.rbxmx
+
+      - name: Create / update GitHub Release with the plugin artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          files: plugin/RobloxMcpPro.rbxmx
+          generate_release_notes: true
+
+  npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Publish
+        # Requires an NPM_TOKEN repo secret. Until it is set this job will fail
+        # while the plugin Release above still succeeds.
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

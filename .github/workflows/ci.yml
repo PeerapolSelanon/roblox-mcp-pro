@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build server (tsc, strict)
+        run: npm run build
+
+      - name: Setup Rojo
+        uses: ok-nick/setup-aftman@v0.4.2
+
+      - name: Build Studio plugin
+        run: |
+          cd plugin
+          rojo build default.project.json --output /tmp/RobloxMcpPro.rbxmx

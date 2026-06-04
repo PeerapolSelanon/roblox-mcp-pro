@@ -19,44 +19,34 @@ AI Agent ──MCP stdio──▶ MCP Server (Node/TS) ──HTTP 127.0.0.1:3690
 2. **Bridge** holds a localhost HTTP server; each tool enqueues a command and awaits a result.
 3. **Studio plugin** (`plugin/`) long-polls the bridge, runs the command in Studio, posts the result back.
 
-## Setup
+## Install (end users)
 
-### 1. Build the server
+You need two pieces: the **MCP server** (a CLI you register with your agent) and the **Studio
+plugin** (a file Studio loads).
 
-```powershell
-npm install
-npm run build
+### 1. Register the server with your agent
+
+Claude Code, one command:
+
+```bash
+claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro
 ```
 
-### 2. Build & install the Studio plugin
-
-```powershell
-.\build.ps1
-```
-
-This builds `plugin/RobloxMcpPro.rbxmx` and copies it into
-`%LOCALAPPDATA%\Roblox\Plugins`. Open Roblox Studio and you'll see a **Roblox MCP Pro**
-toolbar. (You may need to allow HTTP requests: Studio enables it automatically on connect,
-or set `HttpService.HttpEnabled = true`.)
-
-### 3. Register the MCP server with your agent
-
-**Claude Code (this repo):** a project `.mcp.json` is already included — open this folder in
-Claude Code and approve the `roblox-mcp-pro` server when prompted (or run `/mcp`). To use it from
-*other* projects, add the same entry to your user config (`claude mcp add`).
-
-**Claude Desktop / manual config:**
+Or add it to any client's MCP config manually:
 
 ```json
 {
   "mcpServers": {
     "roblox-mcp-pro": {
-      "command": "node",
-      "args": ["D:/roblox-mcp-pro/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "roblox-mcp-pro"]
     }
   }
 }
 ```
+
+`npx` downloads and runs the published package — no clone or build needed. (Prefer a pinned global
+install? `npm i -g roblox-mcp-pro`, then use `"command": "roblox-mcp-pro"`.)
 
 Optional environment variables:
 
@@ -65,10 +55,33 @@ Optional environment variables:
 | `ROBLOX_MCP_PORT`  | `3690`  | Bridge port (plugin must match).         |
 | `ROBLOX_MCP_TOKEN` | _(none)_| Shared secret; also set it in the plugin.|
 
-### 4. Connect
+### 2. Install the Studio plugin
 
-In Studio, click **MCP: Off** on the toolbar → it flips to **MCP: On**. Ask your agent to call
+Download **`RobloxMcpPro.rbxmx`** from the
+[latest release](https://github.com/PeerapolSelanon/roblox-mcp-pro/releases/latest) and drop it
+into your local plugins folder:
+
+- Windows: `%LOCALAPPDATA%\Roblox\Plugins`
+- macOS: `~/Documents/Roblox/Plugins`
+
+Open Studio — you'll see a **Roblox MCP Pro** toolbar. (Studio enables HTTP requests automatically
+on connect; if needed, set `HttpService.HttpEnabled = true`.)
+
+### 3. Connect
+
+In Studio, click the **MCP** toolbar button so it's highlighted. Ask your agent to call
 `system_info` — it should report `pluginConnected: true`.
+
+## Build from source (developers)
+
+```powershell
+npm install
+npm run build      # compile the server to dist/
+.\build.ps1        # build the plugin .rbxmx and install it to the Plugins folder
+```
+
+When working **in this repo** with Claude Code, a project `.mcp.json` is already included — just
+approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 
 ## Tools (23)
 
@@ -122,6 +135,19 @@ npm run dev          # server with auto-reload (tsx watch)
 npm run inspector    # exercise tools with the MCP Inspector
 .\build.ps1 -NoInstall
 ```
+
+## Releasing
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the plugin and attaches
+`RobloxMcpPro.rbxmx` to a GitHub Release, then publishes the server to npm.
+
+```bash
+npm version patch        # bump package.json and create the matching vX.Y.Z tag
+git push --follow-tags   # push commit + tag -> Actions cuts the release
+```
+
+npm publishing needs an `NPM_TOKEN` repository secret (Settings → Secrets → Actions). Until it's
+set, the plugin/GitHub-Release half still succeeds; only the npm job fails.
 
 ## License
 
