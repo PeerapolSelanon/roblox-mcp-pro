@@ -108,7 +108,7 @@ $configs = @(
     },
     @{
         Name = "Gemini / Antigravity"
-        Path = Join-Path $env:USERPROFILE ".gemini\config\mcp.config.json"
+        Path = Join-Path $env:USERPROFILE ".gemini\config\mcp_config.json"
     },
     @{
         Name = "Cursor"
