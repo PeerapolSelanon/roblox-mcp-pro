@@ -160,7 +160,8 @@ function Register-Mcp($configPath, $appName) {
         }
         
         $json = ConvertTo-Json $config -Depth 10
-        Set-Content -Path $configPath -Value $json -Encoding UTF8
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($configPath, $json, $utf8NoBom)
         Write-Host "[OK] Registered with $($appName) ($configPath)" -ForegroundColor Green
         return $true
     } catch {
