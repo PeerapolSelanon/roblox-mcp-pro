@@ -1,0 +1,59 @@
+<!--
+  Evaluation set for roblox-mcp-pro (per the mcp-builder skill, Phase 4).
+
+  Each question is read-only and requires the agent to use the tools to answer.
+  Answers are chosen to be STABLE: they rely on Roblox/DataModel invariants and
+  Studio defaults rather than the contents of any particular place.
+
+  Preconditions for a run:
+    - The roblox-mcp-pro server is running and a Studio session is connected
+      (system_info -> bridge.pluginConnected == true).
+    - A default/baseplate place with unmodified Workspace.Gravity and Lighting.
+  Verify answers by string comparison.
+-->
+<evaluation>
+  <qa_pair>
+    <question>Connect-check the session, then report the ClassName of the instance at the path game.Workspace.Terrain.</question>
+    <answer>Terrain</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the ClassName of game.Workspace.Camera?</question>
+    <answer>Camera</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using the Studio info tool, is the session currently in edit mode (not a running playtest)? Answer true or false.</question>
+    <answer>true</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Report Workspace.Gravity for a default place using the workspace snapshot tool.</question>
+    <answer>196.2</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Run Luau that returns the result of 6 multiplied by 7. What value comes back?</question>
+    <answer>42</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Query instances of ClassName "Camera" under Workspace (recursive). Is the total at least 1? Answer true or false.</question>
+    <answer>true</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Using execute_luau, return the Name of the service at game.Lighting.</question>
+    <answer>Lighting</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Read the properties of game.Workspace.Terrain and report whether the instance has children directly under it that are returned by a non-recursive query (true or false) for a fresh baseplate.</question>
+    <answer>false</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Cast a ray from [0, 500, 0] in direction [0, -1000, 0] on a default baseplate. Does it hit something? Answer true or false.</question>
+    <answer>true</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Get the camera's current FieldOfView on a default Studio camera. What number is it?</question>
+    <answer>70</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use execute_luau to print the text "hello-eval", then read the recent Output logs. Does a log line contain "hello-eval"? Answer true or false.</question>
+    <answer>true</answer>
+  </qa_pair>
+</evaluation>

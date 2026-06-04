@@ -41,7 +41,11 @@ or set `HttpService.HttpEnabled = true`.)
 
 ### 3. Register the MCP server with your agent
 
-Claude Desktop / Claude Code `mcp` config:
+**Claude Code (this repo):** a project `.mcp.json` is already included — open this folder in
+Claude Code and approve the `roblox-mcp-pro` server when prompted (or run `/mcp`). To use it from
+*other* projects, add the same entry to your user config (`claude mcp add`).
+
+**Claude Desktop / manual config:**
 
 ```json
 {

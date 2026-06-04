@@ -53,6 +53,19 @@ function syncRootDir(): string {
   return process.env.ROBLOX_MCP_SYNC_DIR ?? path.join(process.cwd(), "roblox-mcp-sync");
 }
 
+/** Reverse the name escaping done by the mirror (`~~` -> `~`). */
+function deEscape(name: string): string {
+  return name.replace(/~~/g, "~");
+}
+
+/** Determine the script ClassName from a .luau filename suffix, or null. */
+function classFromFile(file: string): string | null {
+  if (file.endsWith(".server.luau")) return "Script";
+  if (file.endsWith(".client.luau")) return "LocalScript";
+  if (file.endsWith(".module.luau")) return "ModuleScript";
+  return null;
+}
+
 class SyncEngine {
   private running = false;
   private roots: string[] = [];
@@ -92,7 +105,6 @@ class SyncEngine {
     this.explorerDir = path.join(this.placeDir, "explorer");
 
     await this.pull();
-    await this.startFileWatcher();
     await this.startStudioWatch();
 
     this.running = true;
@@ -100,9 +112,17 @@ class SyncEngine {
     return this.status();
   }
 
-  /** Full Studio -> disk snapshot; rebuilds the file index and sourcemap. */
+  /**
+   * Full Studio -> disk snapshot; rebuilds the file index and sourcemap.
+   * The file watcher is closed while we rewrite the tree and reopened with
+   * `ignoreInitial` afterward, so our own writes never fire watcher events.
+   */
   async pull(): Promise<void> {
     const snap = await callStudio<SnapshotResponse>("sync_snapshot", { roots: this.roots });
+    if (this.watcher) {
+      await this.watcher.close();
+      this.watcher = null;
+    }
     await fs.rm(this.explorerDir, { recursive: true, force: true });
     await fs.mkdir(this.explorerDir, { recursive: true });
 
@@ -111,12 +131,9 @@ class SyncEngine {
     for (const root of snap.roots) {
       const scripts = await writeTree(this.explorerDir, root);
       this.index(scripts);
-      // Suppress the watcher events our own writes will trigger, so a pull
-      // doesn't echo every file back to Studio as a "change".
-      const expiry = Date.now() + 3000;
-      for (const s of scripts) this.suppressFile.set(s.absPath, expiry);
     }
     await writeSourcemap(this.placeDir, this.explorerDir);
+    await this.startFileWatcher();
     log(`pulled ${this.instanceToFile.size} scripts from Studio`);
   }
 
@@ -170,6 +187,12 @@ class SyncEngine {
     this.watcher.on("change", (p: string) => {
       if (p.endsWith(".luau")) void this.onFileChange(p);
     });
+    this.watcher.on("add", (p: string) => {
+      if (p.endsWith(".luau")) void this.onFileAdd(p);
+    });
+    this.watcher.on("unlink", (p: string) => {
+      if (p.endsWith(".luau")) void this.onFileUnlink(p);
+    });
   }
 
   private async startStudioWatch(): Promise<void> {
@@ -191,7 +214,11 @@ class SyncEngine {
     if (this.consume(this.suppressFile, absPath)) return; // echo of a Studio write
 
     const instancePath = this.fileToInstance.get(absPath);
-    if (!instancePath) return; // unknown file (new on disk) — not yet supported
+    if (!instancePath) {
+      // A file we don't track changed — treat it as a new script.
+      void this.onFileAdd(absPath);
+      return;
+    }
 
     try {
       const source = await fs.readFile(absPath, "utf8");
@@ -201,6 +228,68 @@ class SyncEngine {
     } catch (error) {
       log(`FS->Studio failed for ${instancePath}: ${String(error)}`);
     }
+  }
+
+  /** A new .luau file appeared on disk -> create the corresponding script in Studio. */
+  private async onFileAdd(absPath: string): Promise<void> {
+    if (!this.running) return;
+    if (this.fileToInstance.has(absPath)) return; // already tracked (handled by change)
+    if (this.consume(this.suppressFile, absPath)) return; // our own write
+
+    const className = classFromFile(absPath);
+    if (!className) return;
+    const dir = path.dirname(absPath);
+    const name = deEscape(path.basename(dir));
+    const parentPath = this.instancePathFromDir(path.dirname(dir));
+    if (!parentPath) return;
+
+    try {
+      const source = await fs.readFile(absPath, "utf8");
+      const instancePath = `${parentPath}.${name}`;
+      this.suppressStudio.set(instancePath, Date.now() + SUPPRESS_MS);
+      const res = await callStudio<{ ok: boolean; path?: string; error?: string }>(
+        "manage_scripts",
+        { action: "create", class_name: className, parent: parentPath, name, source },
+      );
+      if (res.ok) {
+        const created = res.path ?? instancePath;
+        this.fileToInstance.set(absPath, created);
+        this.instanceToFile.set(created, absPath);
+        log(`FS->Studio created ${created}`);
+      } else {
+        log(`FS->Studio create failed for ${instancePath}: ${res.error ?? "unknown"}`);
+      }
+    } catch (error) {
+      log(`FS->Studio create failed: ${String(error)}`);
+    }
+  }
+
+  /** A tracked .luau file was deleted on disk -> delete the script in Studio. */
+  private async onFileUnlink(absPath: string): Promise<void> {
+    if (!this.running) return;
+    const instancePath = this.fileToInstance.get(absPath);
+    if (!instancePath) return;
+    if (this.consume(this.suppressFile, absPath)) return; // our own removal
+
+    this.fileToInstance.delete(absPath);
+    this.instanceToFile.delete(instancePath);
+    try {
+      this.suppressStudio.set(instancePath, Date.now() + SUPPRESS_MS);
+      await callStudio("mutate_instances", {
+        operations: [{ action: "delete", path: instancePath }],
+      });
+      log(`FS->Studio deleted ${instancePath}`);
+    } catch (error) {
+      log(`FS->Studio delete failed for ${instancePath}: ${String(error)}`);
+    }
+  }
+
+  /** Map a directory under explorerDir to its instance path (e.g. "game.ServerScriptService.Folder"). */
+  private instancePathFromDir(dir: string): string | null {
+    const rel = path.relative(this.explorerDir, dir);
+    if (rel.startsWith("..")) return null;
+    const segments = rel.split(path.sep).filter((s) => s.length > 0).map(deEscape);
+    return `game${segments.length ? "." + segments.join(".") : ""}`;
   }
 
   private async onStudioEvent(event: StudioEvent): Promise<void> {
