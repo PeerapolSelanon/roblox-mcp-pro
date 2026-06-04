@@ -107,6 +107,10 @@ $configs = @(
         Path = Join-Path $env:USERPROFILE ".claude.json"
     },
     @{
+        Name = "Gemini / Antigravity"
+        Path = Join-Path $env:USERPROFILE ".gemini\config\mcp.config.json"
+    },
+    @{
         Name = "Cursor"
         Path = Join-Path $env:APPDATA "Cursor\User\globalStorage\moose-coder.cursor-mcp\mcp.json"
     },
