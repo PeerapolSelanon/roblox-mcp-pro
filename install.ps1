@@ -44,24 +44,51 @@ $destPath = Join-Path $pluginsFolder "RobloxMcpPro.rbxmx"
 Write-Host "Fetching latest release information from GitHub..." -ForegroundColor Gray
 
 try {
-    # Fetch latest release URL
-    $releaseUrl = "https://api.github.com/repos/PeerapolSelanon/roblox-mcp-pro/releases/latest"
-    # Set SecurityProtocol to TLS 1.2
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $response = Invoke-RestMethod -Uri $releaseUrl -Headers @{"User-Agent"="Roblox-Mcp-Pro-Installer"}
-    
-    $asset = $response.assets | Where-Object { $_.name -eq "RobloxMcpPro.rbxmx" }
-    if (-not $asset) {
-        throw "Could not find RobloxMcpPro.rbxmx asset in the latest release."
+    $downloaded = $false
+
+    # Try downloading using gh CLI if available (supports private repos automatically since user is logged in)
+    $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+    if ($ghCommand) {
+        Write-Host "GitHub CLI (gh) detected. Attempting to download via gh CLI..." -ForegroundColor Gray
+        try {
+            $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
+            New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+            
+            # Download using gh
+            & gh release download --repo PeerapolSelanon/roblox-mcp-pro --pattern "RobloxMcpPro.rbxmx" --dir $tempDir --clobber
+            
+            $downloadedFile = Join-Path $tempDir "RobloxMcpPro.rbxmx"
+            if (Test-Path $downloadedFile) {
+                Copy-Item $downloadedFile $destPath -Force
+                Remove-Item $tempDir -Recurse -Force
+                Write-Host "✓ Installed plugin to $destPath" -ForegroundColor Green
+                $downloaded = $true
+            }
+        } catch {
+            Write-Host "⚠ gh CLI download failed, falling back to public API..." -ForegroundColor Yellow
+        }
     }
-    
-    $downloadUrl = $asset.browser_download_url
-    Write-Host "Downloading latest plugin version $($response.tag_name)..." -ForegroundColor Gray
-    
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $destPath -Headers @{"User-Agent"="Roblox-Mcp-Pro-Installer"}
-    Write-Host "✓ Installed plugin to $destPath" -ForegroundColor Green
+
+    if (-not $downloaded) {
+        # Fetch latest release URL
+        $releaseUrl = "https://api.github.com/repos/PeerapolSelanon/roblox-mcp-pro/releases/latest"
+        # Set SecurityProtocol to TLS 1.2
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $response = Invoke-RestMethod -Uri $releaseUrl -Headers @{"User-Agent"="Roblox-Mcp-Pro-Installer"}
+        
+        $asset = $response.assets | Where-Object { $_.name -eq "RobloxMcpPro.rbxmx" }
+        if (-not $asset) {
+            throw "Could not find RobloxMcpPro.rbxmx asset in the latest release."
+        }
+        
+        $downloadUrl = $asset.browser_download_url
+        Write-Host "Downloading latest plugin version $($response.tag_name)..." -ForegroundColor Gray
+        
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $destPath -Headers @{"User-Agent"="Roblox-Mcp-Pro-Installer"}
+        Write-Host "✓ Installed plugin to $destPath" -ForegroundColor Green
+    }
 } catch {
-    Write-Host "✗ Failed to download plugin from GitHub Releases: $_" -ForegroundColor Red
+    Write-Host "✗ Failed to download plugin: $_" -ForegroundColor Red
     Write-Host "  Please download RobloxMcpPro.rbxmx manually from:" -ForegroundColor Yellow
     Write-Host "  https://github.com/PeerapolSelanon/roblox-mcp-pro/releases" -ForegroundColor Yellow
 }
