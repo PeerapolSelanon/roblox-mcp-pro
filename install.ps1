@@ -19,15 +19,15 @@ try {
     if ($nodeVersion -match "^v(\d+)") {
         $major = [int]$Matches[1]
         if ($major -lt 18) {
-            Write-Host "⚠ Node.js version $nodeVersion is installed, but Node.js 18+ is recommended." -ForegroundColor Yellow
+            Write-Host "[WARN] Node.js version $nodeVersion is installed, but Node.js 18+ is recommended." -ForegroundColor Yellow
         } else {
-            Write-Host "✓ Node.js $nodeVersion detected." -ForegroundColor Green
+            Write-Host "[OK] Node.js $nodeVersion detected." -ForegroundColor Green
         }
     } else {
         throw "Node.js not found"
     }
 } catch {
-    Write-Host "✗ Node.js is not installed or not in PATH." -ForegroundColor Red
+    Write-Host "[ERROR] Node.js is not installed or not in PATH." -ForegroundColor Red
     Write-Host "  Please install Node.js 18+ from https://nodejs.org/ before running this installer." -ForegroundColor Yellow
     Read-Host "Press Enter to exit..."
     exit 1
@@ -61,11 +61,11 @@ try {
             if (Test-Path $downloadedFile) {
                 Copy-Item $downloadedFile $destPath -Force
                 Remove-Item $tempDir -Recurse -Force
-                Write-Host "✓ Installed plugin to $destPath" -ForegroundColor Green
+                Write-Host "[OK] Installed plugin to $destPath" -ForegroundColor Green
                 $downloaded = $true
             }
         } catch {
-            Write-Host "⚠ gh CLI download failed, falling back to public API..." -ForegroundColor Yellow
+            Write-Host "[WARN] gh CLI download failed, falling back to public API..." -ForegroundColor Yellow
         }
     }
 
@@ -85,10 +85,10 @@ try {
         Write-Host "Downloading latest plugin version $($response.tag_name)..." -ForegroundColor Gray
         
         Invoke-WebRequest -Uri $downloadUrl -OutFile $destPath -Headers @{"User-Agent"="Roblox-Mcp-Pro-Installer"}
-        Write-Host "✓ Installed plugin to $destPath" -ForegroundColor Green
+        Write-Host "[OK] Installed plugin to $destPath" -ForegroundColor Green
     }
 } catch {
-    Write-Host "✗ Failed to download plugin: $_" -ForegroundColor Red
+    Write-Host "[ERROR] Failed to download plugin: $_" -ForegroundColor Red
     Write-Host "  Please download RobloxMcpPro.rbxmx manually from:" -ForegroundColor Yellow
     Write-Host "  https://github.com/PeerapolSelanon/roblox-mcp-pro/releases" -ForegroundColor Yellow
 }
@@ -157,10 +157,10 @@ function Register-Mcp($configPath, $appName) {
         
         $json = ConvertTo-Json $config -Depth 10
         Set-Content -Path $configPath -Value $json -Encoding UTF8
-        Write-Host "✓ Registered with $appName ($configPath)" -ForegroundColor Green
+        Write-Host "[OK] Registered with $($appName) ($configPath)" -ForegroundColor Green
         return $true
     } catch {
-        Write-Host "⚠ Failed to register with $appName: $_" -ForegroundColor Yellow
+        Write-Host "[WARN] Failed to register with $($appName). Error: $_" -ForegroundColor Yellow
         return $false
     }
 }
@@ -177,10 +177,10 @@ foreach ($cfg in $configs) {
 }
 
 if ($registeredCount -eq 0) {
-    Write-Host "⚠ No active AI app directories found. Please configure manually or register using:" -ForegroundColor Yellow
+    Write-Host "[WARN] No active AI app directories found. Please configure manually or register using:" -ForegroundColor Yellow
     Write-Host "  claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro" -ForegroundColor Yellow
 } else {
-    Write-Host "✓ Registered MCP server in $registeredCount client configurations." -ForegroundColor Green
+    Write-Host "[OK] Registered MCP server in $registeredCount client configurations." -ForegroundColor Green
 }
 
 Write-Host "`n==============================================" -ForegroundColor Green
