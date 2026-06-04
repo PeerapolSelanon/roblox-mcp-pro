@@ -234,7 +234,7 @@ function UI.create(widget: DockWidgetPluginGui, initialSettings: { url: string, 
 	-- ── SETTINGS CONFIG SECTION ──
 	local settingsBox = createFrame(container, "SettingsBox", UDim2.new(1, 0, 0, 88))
 	settingsBox.LayoutOrder = 2
-	registerTheme(settingsBox, "BackgroundColor3", Enum.StudioStyleGuideColor.SubBackground)
+	registerTheme(settingsBox, "BackgroundColor3", Enum.StudioStyleGuideColor.InputFieldBackground)
 	
 	local boxCorner = Instance.new("UICorner")
 	boxCorner.CornerRadius = UDim.new(0, 4)
