@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Built Studio plugin artifact
+plugin/*.rbxmx
+plugin/*.rbxm
+
+# Local sync mirror (generated)
+roblox-mcp-sync/
+
+# Editor
+.vscode/
+.idea/
