@@ -13,25 +13,41 @@ local CANDIDATE_PROPS = {
 	"Locked", "CastShadow", "Massless",
 }
 
+-- Round to ~4 decimals to drop float noise (0.14901961... -> 0.149,
+-- 6.199999809 -> 6.2). Whole numbers stay exact. Big token saver: a float
+-- component shrinks from ~18 chars to ~5 with no meaningful precision loss.
+local function r(n: number): number
+	if n ~= n or n == math.huge or n == -math.huge then
+		return n -- leave NaN/inf as-is
+	end
+	return math.floor(n * 10000 + 0.5) / 10000
+end
+
 -- Convert a Roblox value into something JSON-encodable.
 function Serialize.value(v: any): any
 	local t = typeof(v)
-	if t == "nil" or t == "boolean" or t == "number" or t == "string" then
+	if t == "number" then
+		return r(v)
+	elseif t == "nil" or t == "boolean" or t == "string" then
 		return v
 	elseif t == "Vector3" then
-		return { v.X, v.Y, v.Z } -- compact [x,y,z]; coerce accepts this back
+		return { r(v.X), r(v.Y), r(v.Z) } -- compact [x,y,z]; coerce accepts this back
 	elseif t == "Vector2" then
-		return { v.X, v.Y } -- [x,y]
+		return { r(v.X), r(v.Y) } -- [x,y]
 	elseif t == "CFrame" then
-		return { v:GetComponents() }
+		local c = { v:GetComponents() }
+		for i, n in c do
+			c[i] = r(n)
+		end
+		return c
 	elseif t == "Color3" then
-		return { v.R, v.G, v.B } -- [r,g,b]
+		return { r(v.R), r(v.G), r(v.B) } -- [r,g,b]
 	elseif t == "BrickColor" then
 		return v.Name
 	elseif t == "UDim" then
-		return { scale = v.Scale, offset = v.Offset }
+		return { scale = r(v.Scale), offset = v.Offset }
 	elseif t == "UDim2" then
-		return { { v.X.Scale, v.X.Offset }, { v.Y.Scale, v.Y.Offset } }
+		return { { r(v.X.Scale), v.X.Offset }, { r(v.Y.Scale), v.Y.Offset } }
 	elseif t == "EnumItem" then
 		return v.Name
 	elseif t == "Instance" then
@@ -39,6 +55,27 @@ function Serialize.value(v: any): any
 	else
 		return tostring(v)
 	end
+end
+
+-- Shallow structural equality for comparing a serialized value to an expected
+-- JSON value (used by find_instances match_props). Handles primitives and
+-- flat arrays like [r,g,b] / [x,y,z].
+function Serialize.shallowEqual(a: any, b: any): boolean
+	if type(a) ~= type(b) then
+		return false
+	end
+	if type(a) ~= "table" then
+		return a == b
+	end
+	if #a ~= #b then
+		return false
+	end
+	for i = 1, #a do
+		if a[i] ~= b[i] then
+			return false
+		end
+	end
+	return true
 end
 
 -- Build the full dotted path of an instance, rooted at "game".

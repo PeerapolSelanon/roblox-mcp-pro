@@ -8,6 +8,7 @@ local Handlers = script.Parent.Handlers
 local HANDLER_NAMES = {
 	execute_luau = "Execute",
 	query_instances = "Query",
+	find_instances = "FindInstances",
 	scene_overview = "SceneOverview",
 	describe_instance = "DescribeInstance",
 	mutate_instances = "Mutate",
