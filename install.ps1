@@ -97,7 +97,7 @@ try {
 # any project — not just this repo). Skills live in ~/.claude/skills/<name>/ and
 # ~/.codex/skills/<name>/ when those clients are present.
 Write-Host "`n[3/5] Installing agent skills..." -ForegroundColor Cyan
-$skills = @("roblox-mcp-pro", "roblox-ui-from-image")
+$skills = @("roblox-mcp-pro", "roblox-ui-from-image", "roblox-ui-animation", "roblox-studio-plugin")
 $skillRoots = @(
     (Join-Path $env:USERPROFILE ".claude\skills"),
     (Join-Path $env:USERPROFILE ".codex\skills")

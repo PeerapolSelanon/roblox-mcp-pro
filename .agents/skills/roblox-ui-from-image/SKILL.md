@@ -64,12 +64,38 @@ backdrop for accurate comparison.
   children:[ { className:"UICorner", properties:{ CornerRadius:[0,16] } } ] }
 ```
 
-**Button (rounded, accent)**
+**Button (rounded, accent — with edge highlight + readable text)**
 ```
 { className:"TextButton", name:"Play",
   properties:{ Text:"PLAY", Font:"GothamBold", TextSize:20, TextColor3:[1,1,1],
                BackgroundColor3:[0.2,0.7,0.4], Size:[[0,160],[0,48]], BorderSizePixel:0 },
-  children:[ { className:"UICorner", properties:{ CornerRadius:[0,10] } } ] }
+  children:[ { className:"UICorner", properties:{ CornerRadius:[0,10] } },
+             // edge highlight — ApplyStrokeMode "Border" (see below); Color is a LIGHTER tint of
+             // the fill ([0.2,0.7,0.4] → [0.4,0.95,0.5]) so the button pops
+             { className:"UIStroke", name:"Border",
+               properties:{ ApplyStrokeMode:"Border", Thickness:2, Color:[0.4,0.95,0.5] } },
+             // text outline — a SECOND stroke, Contextual + dark, so white text stays legible
+             { className:"UIStroke", name:"TextStroke",
+               properties:{ ApplyStrokeMode:"Contextual", Thickness:2, Color:[0,0,0] } } ] }
+```
+
+**Button with a gradient background (gradient must NOT tint the text)**
+A `UIGradient` on a `TextButton` recolors the **text too**, not just the fill. To keep the gradient
+on the button only, give the button empty `Text` and move the label into a child `TextLabel`.
+Also: `UIGradient` **multiplies** with the object's own color, so set the fill `BackgroundColor3` to
+**white `[1,1,1]`** — otherwise the gradient comes out tinted/darker than the colors you specified:
+```
+{ className:"TextButton", name:"Play",
+  properties:{ Text:"", BackgroundColor3:[1,1,1], Size:[[0,160],[0,48]], BorderSizePixel:0 },
+  children:[ { className:"UICorner", properties:{ CornerRadius:[0,10] } },
+             { className:"UIGradient", properties:{ Rotation:90 } },  // set .Color via execute_luau
+             { className:"UIStroke", name:"Border",
+               properties:{ ApplyStrokeMode:"Border", Thickness:2, Color:[0.4,0.95,0.5] } },
+             // text in its OWN label → the button's gradient can't reach it
+             { className:"TextLabel", name:"Label",
+               properties:{ Text:"PLAY", Font:"GothamBold", TextSize:20, TextColor3:[1,1,1],
+                            BackgroundTransparency:1, Size:[[1,0],[1,0]] },
+               children:[ { className:"UIStroke", properties:{ Thickness:2, Color:[0,0,0] } } ] } ] }
 ```
 
 **Vertical list (auto-stacked rows)**
@@ -91,5 +117,22 @@ backdrop for accurate comparison.
   images to upload.
 - **Gradients/sequences**: `UIGradient.Color` (ColorSequence) and similar sequence properties may not
   coerce from simple arrays — set a solid color first, and use `execute_luau` for a true gradient if
-  needed.
+  needed. A `UIGradient` on a `TextButton`/`TextLabel` also **tints the text**, not just the fill —
+  to gradient the button only, give the button empty `Text` and move the label into a child
+  `TextLabel` with `BackgroundTransparency:1` (see the gradient-button recipe above).
+- **UIGradient multiplies with the base color**: the gradient is *multiplied over* the object's own
+  color, so to get the exact ColorSequence colors you specified, first set the underlying property to
+  **white** — `BackgroundColor3:[1,1,1]` for a fill gradient, `TextColor3:[1,1,1]` for a text
+  gradient. A non-white base darkens/tints the whole gradient.
+- **UIStroke on buttons/text — the two-stroke rule**: a `UIStroke` under a `TextButton`/`TextLabel`
+  defaults to `ApplyStrokeMode = "Contextual"`, which outlines the **text glyphs, not the button
+  border**. So a single default stroke gives you a text outline when you wanted an edge highlight.
+  - For a button **edge/glow highlight**, set `ApplyStrokeMode:"Border"`.
+  - **Highlight color = a lighter/whiter tint of the button's own fill**, not a contrasting accent.
+    Push the `BackgroundColor3` toward white (raise each channel, e.g. green fill `[0.2,0.7,0.4]` →
+    edge `[0.4,0.95,0.5]`) so the rim reads as a lit edge and the button visually pops off the panel.
+  - To get **both** an edge highlight *and* a crisp text outline, add **two** UIStrokes on the same
+    button: one `"Border"` (the lighter-tint edge) and one `"Contextual"` (the text). They target
+    different parts and both render.
+  - The **text** stroke should be a **dark/near-black** color so white button text stays legible.
 - After previewing, always `ui_preview hide` so the overlay doesn't linger in CoreGui.
