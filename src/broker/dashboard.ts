@@ -3,6 +3,10 @@
  * no external assets) served by the broker at `/`. It opens an SSE stream to
  * `/api/stream` and re-renders on every update, falling back to polling
  * `/api/state` if the stream drops.
+ *
+ * Design goal: the connection state of the two things that can break — the
+ * Studio plugin and the AI agents — must be impossible to misread, and when
+ * either is down the page says exactly what to do about it.
  */
 
 export const DASHBOARD_HTML = `<!doctype html>
@@ -13,9 +17,10 @@ export const DASHBOARD_HTML = `<!doctype html>
 <title>roblox-mcp-pro · monitor</title>
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3;
-    --muted: #8b949e; --green: #3fb950; --red: #f85149; --amber: #d29922;
-    --accent: #58a6ff;
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149;
+    --amber: #d29922; --accent: #58a6ff;
+    --green-bg: rgba(63,185,80,.12); --red-bg: rgba(248,81,73,.12); --amber-bg: rgba(210,153,34,.12);
   }
   * { box-sizing: border-box; }
   body {
@@ -24,52 +29,92 @@ export const DASHBOARD_HTML = `<!doctype html>
   }
   header {
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--panel);
+    padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--panel);
   }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
   header h1 small { color: var(--muted); font-weight: 400; margin-left: 8px; }
-  .badge {
-    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
-    border-radius: 999px; border: 1px solid var(--border); font-size: 12px;
-  }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+    border-radius: 999px; border: 1px solid var(--border); font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
   .dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .dot.off { background: var(--red); }
-  .dot.warn { background: var(--amber); }
+  .dot.off { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .dot.warn { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
   .spacer { flex: 1; }
-  main { padding: 24px; display: grid; gap: 24px; grid-template-columns: 1fr; max-width: 1100px; margin: 0 auto; }
-  .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-  .card .value { font-size: 26px; font-weight: 600; margin-top: 4px; }
+  main { padding: 24px; display: grid; gap: 22px; max-width: 1100px; margin: 0 auto; }
+
+  /* Diagnostics banner */
+  .banner { border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
+  .banner.ok { background: var(--green-bg); border-color: var(--green); }
+  .banner.bad { background: var(--red-bg); border-color: var(--red); }
+  .banner.warn { background: var(--amber-bg); border-color: var(--amber); }
+  .banner .head { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .banner ul { margin: 10px 0 0; padding-left: 22px; }
+  .banner li { margin: 3px 0; }
+  .banner .problem { margin-top: 12px; }
+  .banner .problem:first-of-type { margin-top: 8px; }
+  .banner .ptitle { font-weight: 600; }
+
+  /* Hero status cards */
+  .heroes { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .hero { background: var(--panel); border: 1px solid var(--border); border-left-width: 5px;
+    border-radius: 12px; padding: 18px 20px; }
+  .hero.ok { border-left-color: var(--green); }
+  .hero.bad { border-left-color: var(--red); }
+  .hero.warn { border-left-color: var(--amber); }
+  .hero .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .hero .state { display: flex; align-items: center; gap: 12px; margin: 8px 0 4px; }
+  .hero .state .big { font-size: 26px; font-weight: 700; letter-spacing: .01em; }
+  .hero .state .big.ok { color: var(--green); }
+  .hero .state .big.bad { color: var(--red); }
+  .hero .state .big.warn { color: var(--amber); }
+  .hero .bigdot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .hero .sub { color: var(--muted); font-size: 13px; min-height: 20px; }
+  .hero .sub b { color: var(--text); font-weight: 600; }
+
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .card .clabel { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .card .cvalue { font-size: 22px; font-weight: 600; margin-top: 2px; }
+
   section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
   tr:last-child td { border-bottom: none; }
   td.tool { color: var(--accent); }
-  .ok { color: var(--green); } .err { color: var(--red); }
-  .muted { color: var(--muted); }
+  td.agentcell { display: flex; align-items: center; gap: 8px; }
+  .ok { color: var(--green); } .err { color: var(--red); } .muted { color: var(--muted); }
   .empty { color: var(--muted); padding: 16px; text-align: center; }
-  .err-msg { color: var(--red); font-size: 12px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
-  .pill { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>roblox-mcp-pro <small>broker monitor</small></h1>
-  <span class="badge"><span id="brokerDot" class="dot on"></span><span id="brokerText">broker</span></span>
-  <span class="badge"><span id="pluginDot" class="dot"></span><span id="pluginText">Studio plugin</span></span>
-  <div class="spacer"></div>
+  <h1>roblox-mcp-pro <small>broker monitor · :3690</small></h1>
   <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
+  <div class="spacer"></div>
+  <span class="badge muted" id="clock"></span>
 </header>
 <main>
+  <div id="banner" class="banner warn"><div class="head">Loading…</div></div>
+
+  <div class="heroes">
+    <div id="pluginHero" class="hero">
+      <div class="label">① Roblox Studio plugin</div>
+      <div class="state"><span id="pluginBigDot" class="bigdot"></span><span id="pluginBig" class="big">—</span></div>
+      <div id="pluginSub" class="sub"></div>
+    </div>
+    <div id="agentHero" class="hero">
+      <div class="label">② AI agents</div>
+      <div class="state"><span id="agentBigDot" class="bigdot"></span><span id="agentBig" class="big">—</span></div>
+      <div id="agentSub" class="sub"></div>
+    </div>
+  </div>
+
   <div class="cards">
-    <div class="card"><div class="label">Agents</div><div class="value" id="agentCount">0</div></div>
-    <div class="card"><div class="label">Queued</div><div class="value" id="queued">0</div></div>
-    <div class="card"><div class="label">In flight</div><div class="value" id="inflight">0</div></div>
-    <div class="card"><div class="label">Commands</div><div class="value" id="totalCmds">0</div></div>
-    <div class="card"><div class="label">Sync</div><div class="value" id="syncState">off</div></div>
+    <div class="card"><div class="clabel">Queued</div><div class="cvalue" id="queued">0</div></div>
+    <div class="card"><div class="clabel">In flight</div><div class="cvalue" id="inflight">0</div></div>
+    <div class="card"><div class="clabel">Commands</div><div class="cvalue" id="totalCmds">0</div></div>
+    <div class="card"><div class="clabel">Sync</div><div class="cvalue" id="syncState">off</div></div>
   </div>
 
   <section>
@@ -92,27 +137,104 @@ export const DASHBOARD_HTML = `<!doctype html>
 const $ = (id) => document.getElementById(id);
 const fmtTime = (ts) => new Date(ts).toLocaleTimeString();
 const ago = (ts) => {
-  if (!ts) return "—";
+  if (!ts) return "never";
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
   if (s < 60) return s + "s ago";
-  const m = Math.round(s / 60); return m + "m ago";
+  const m = Math.floor(s / 60); if (m < 60) return m + "m ago";
+  return Math.floor(m / 60) + "h ago";
 };
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
+// The Studio plugin long-polls every ~25s, so an age up to ~25s is healthy.
+// Past ~28s with no poll, it's likely dropping; past the broker's liveness
+// window pluginConnected itself flips false.
+function pluginState(p) {
+  const age = p && p.lastPollAt ? Date.now() - p.lastPollAt : null;
+  if (!p || !p.pluginConnected) {
+    return { level: "bad", label: "DISCONNECTED", never: !(p && p.lastPollAt), age };
+  }
+  if (age != null && age > 28000) return { level: "warn", label: "RECONNECTING…", age };
+  return { level: "ok", label: "CONNECTED", age };
+}
+
+function setHero(prefix, level, big, sub) {
+  const cls = level; // ok | bad | warn
+  $(prefix + "Hero").className = "hero " + cls;
+  $(prefix + "BigDot").className = "bigdot";
+  $(prefix + "BigDot").style.background = level === "ok" ? "var(--green)" : level === "warn" ? "var(--amber)" : "var(--red)";
+  $(prefix + "BigDot").style.boxShadow = "0 0 8px " + ($(prefix + "BigDot").style.background);
+  $(prefix + "Big").className = "big " + cls;
+  $(prefix + "Big").textContent = big;
+  $(prefix + "Sub").innerHTML = sub;
+}
+
+const PLUGIN_FIX = [
+  "Open <b>Roblox Studio</b>.",
+  "Click the <b>MCP</b> button on the toolbar so it's highlighted (or open the panel and Connect).",
+  "Make sure <b>Game Settings → Security → Allow HTTP Requests</b> is ON.",
+  "After restarting the server, allow ~5s for the plugin to auto-reconnect.",
+];
+const AGENT_FIX = [
+  "Start or restart your AI client (Claude Code, Codex, Antigravity, …).",
+  "It connects to this broker automatically on port 3690 — no extra setup.",
+  "If it can't reach the broker, check nothing else is using port 3690.",
+];
+
+function renderBanner(problems) {
+  const b = $("banner");
+  if (problems.length === 0) {
+    b.className = "banner ok";
+    b.innerHTML = '<div class="head"><span class="dot on"></span>All systems connected — ready to drive Studio.</div>';
+    return;
+  }
+  const worst = problems.some((p) => p.sev === "bad") ? "bad" : "warn";
+  b.className = "banner " + worst;
+  const head = '<div class="head"><span class="dot ' + (worst === "bad" ? "off" : "warn") +
+    '"></span>' + (problems.length === 1 ? "1 issue needs attention" : problems.length + " issues need attention") + "</div>";
+  const body = problems.map((p) =>
+    '<div class="problem"><div class="ptitle">' + (p.sev === "bad" ? "✗ " : "⚠ ") + esc(p.title) + "</div>" +
+    (p.detail ? '<div class="muted">' + p.detail + "</div>" : "") +
+    "<ul>" + p.steps.map((s) => "<li>" + s + "</li>").join("") + "</ul></div>"
+  ).join("");
+  b.innerHTML = head + body;
+}
+
 function render(state) {
   const plugin = state.plugin || {};
-  $("pluginDot").className = "dot " + (plugin.pluginConnected ? "on" : "off");
-  $("pluginText").textContent = "Studio plugin: " + (plugin.pluginConnected ? "connected" : "offline");
-  $("agentCount").textContent = (state.agents || []).length;
+  const agents = state.agents || [];
+  const problems = [];
+
+  // ① plugin hero
+  const ps = pluginState(plugin);
+  if (ps.level === "ok") {
+    setHero("plugin", "ok", "CONNECTED", "Studio is responding · <b>" + ago(plugin.lastPollAt) + "</b>");
+  } else if (ps.level === "warn") {
+    setHero("plugin", "warn", "RECONNECTING…", "No response for <b>" + ago(plugin.lastPollAt) + "</b> — Studio may be busy.");
+    problems.push({ sev: "warn", title: "Studio plugin is slow to respond", detail: "Last response " + ago(plugin.lastPollAt) + ". If this persists, reconnect:", steps: PLUGIN_FIX });
+  } else {
+    setHero("plugin", "bad", "DISCONNECTED", ps.never ? "Has <b>never</b> connected since the broker started." : "Last response <b>" + ago(plugin.lastPollAt) + "</b>.");
+    problems.push({ sev: "bad", title: ps.never ? "Studio plugin has never connected" : "Studio plugin disconnected", detail: ps.never ? "The broker is up but no plugin has attached." : "Studio may have closed or lost the connection.", steps: PLUGIN_FIX });
+  }
+
+  // ② agents hero
+  if (agents.length > 0) {
+    const names = agents.map((a) => "<b>" + esc(a.name) + "</b>").join(", ");
+    setHero("agent", "ok", agents.length + " CONNECTED", names);
+  } else {
+    setHero("agent", "bad", "NONE CONNECTED", "No AI agent is attached to the broker.");
+    problems.push({ sev: "bad", title: "No AI agent connected", detail: "Nothing is driving Studio right now.", steps: AGENT_FIX });
+  }
+
+  renderBanner(problems);
+
   $("queued").textContent = plugin.queued ?? 0;
   $("inflight").textContent = plugin.inflight ?? 0;
   $("totalCmds").textContent = state.totalCommands ?? 0;
   const sync = state.sync || {};
-  $("syncState").textContent = sync.running ? (sync.scriptCount + " scripts") : "off";
+  $("syncState").textContent = sync.running ? sync.scriptCount + " scripts" : "off";
 
-  const agents = state.agents || [];
   $("agents").innerHTML = agents.length ? agents.map((a) =>
-    "<tr><td>" + esc(a.name) + "</td><td class=muted>" + esc(a.version || "—") +
+    "<tr><td class=agentcell><span class='dot on'></span>" + esc(a.name) + "</td><td class=muted>" + esc(a.version || "—") +
     "</td><td class=muted>" + (a.pid ?? "—") + "</td><td>" + a.commandCount +
     "</td><td class=muted>" + ago(a.connectedAt) + "</td><td class=muted>" + ago(a.lastSeenAt) + "</td></tr>"
   ).join("") : "<tr><td class=empty colspan=6>No agents connected.</td></tr>";
@@ -123,25 +245,28 @@ function render(state) {
     "</td><td class=tool>" + esc(c.tool) + "</td><td class=" + (c.ok ? "ok>ok" : "err>" + esc(c.error || "error")) +
     "</td><td class=muted>" + c.durationMs + "</td></tr>"
   ).join("") : "<tr><td class=empty colspan=5>No activity yet.</td></tr>";
+
+  $("clock").textContent = "updated " + new Date().toLocaleTimeString();
 }
 
 function setStream(ok) {
   $("streamDot").className = "dot " + (ok ? "on" : "off");
-  $("streamText").textContent = ok ? "live" : "disconnected";
+  $("streamText").textContent = ok ? "live" : "disconnected — retrying";
 }
+
+let last = null;
+function apply(s) { last = s; render(s); }
 
 let es;
 function connect() {
   es = new EventSource("/api/stream");
   es.onopen = () => setStream(true);
-  es.onmessage = (e) => { try { render(JSON.parse(e.data)); } catch {} };
+  es.onmessage = (e) => { try { apply(JSON.parse(e.data)); } catch {} };
   es.onerror = () => { setStream(false); es.close(); setTimeout(connect, 2000); };
 }
 connect();
-// refresh relative timestamps even without new events
-setInterval(() => { if (window.__last) render(window.__last); }, 5000);
-const _render = render;
-render = (s) => { window.__last = s; _render(s); };
+// keep relative timestamps fresh between server pushes
+setInterval(() => { if (last) render(last); }, 2000);
 </script>
 </body>
 </html>`;
