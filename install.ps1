@@ -12,8 +12,8 @@ Write-Host "     Roblox MCP Pro Installer for Windows     " -ForegroundColor Cya
 Write-Host "==============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# [1/4] Detect Node.js
-Write-Host "[1/4] Checking Prerequisites..." -ForegroundColor Cyan
+# [1/5] Detect Node.js
+Write-Host "[1/5] Checking Prerequisites..." -ForegroundColor Cyan
 try {
     $nodeVersion = node -v 2>$null
     if ($nodeVersion -match "^v(\d+)") {
@@ -33,8 +33,8 @@ try {
     exit 1
 }
 
-# [2/4] Install Roblox Studio Plugin
-Write-Host "`n[2/4] Installing Roblox Studio Plugin..." -ForegroundColor Cyan
+# [2/5] Install Roblox Studio Plugin
+Write-Host "`n[2/5] Installing Roblox Studio Plugin..." -ForegroundColor Cyan
 $pluginsFolder = Join-Path $env:LOCALAPPDATA "Roblox\Plugins"
 if (-not (Test-Path $pluginsFolder)) {
     New-Item -ItemType Directory -Path $pluginsFolder -Force | Out-Null
@@ -93,17 +93,19 @@ try {
     Write-Host "  https://github.com/PeerapolSelanon/roblox-mcp-pro/releases" -ForegroundColor Yellow
 }
 
-# [3/4] Install agent skills (so AI assistants know how to drive this server in
-# any project — not just this repo). Skills live in ~/.claude/skills/<name>/.
-Write-Host "`n[3/4] Installing agent skills..." -ForegroundColor Cyan
+# [3/5] Install agent skills (so AI assistants know how to drive this server in
+# any project — not just this repo). Skills live in ~/.claude/skills/<name>/ and
+# ~/.codex/skills/<name>/ when those clients are present.
+Write-Host "`n[3/5] Installing agent skills..." -ForegroundColor Cyan
 $skills = @("roblox-mcp-pro", "roblox-ui-from-image")
-$skillsRoot = Join-Path $env:USERPROFILE ".claude\skills"
+$skillRoots = @(
+    Join-Path $env:USERPROFILE ".claude\skills",
+    Join-Path $env:USERPROFILE ".codex\skills"
+)
 $repo = "PeerapolSelanon/roblox-mcp-pro"
 $skillCount = 0
 $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
 foreach ($skill in $skills) {
-    $destDir = Join-Path $skillsRoot $skill
-    $destFile = Join-Path $destDir "SKILL.md"
     $apiPath = ".agents/skills/$skill/SKILL.md"
     try {
         $content = $null
@@ -117,11 +119,15 @@ foreach ($skill in $skills) {
             $content = (Invoke-WebRequest -Uri $raw -Headers @{"User-Agent"="Roblox-Mcp-Pro-Installer"}).Content
         }
         if ($content -and $content.Trim()) {
-            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-            # Write UTF-8 without BOM so the skill loader parses the frontmatter.
-            [System.IO.File]::WriteAllText($destFile, $content, (New-Object System.Text.UTF8Encoding($false)))
-            Write-Host "[OK] Installed skill '$skill'" -ForegroundColor Green
-            $skillCount++
+            foreach ($skillsRoot in $skillRoots) {
+                $destDir = Join-Path $skillsRoot $skill
+                $destFile = Join-Path $destDir "SKILL.md"
+                if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+                # Write UTF-8 without BOM so the skill loader parses the frontmatter.
+                [System.IO.File]::WriteAllText($destFile, $content, (New-Object System.Text.UTF8Encoding($false)))
+                Write-Host "[OK] Installed skill '$skill' to $skillsRoot" -ForegroundColor Green
+                $skillCount++
+            }
         } else {
             Write-Host "[WARN] Could not fetch skill '$skill' (empty response)." -ForegroundColor Yellow
         }
@@ -130,13 +136,13 @@ foreach ($skill in $skills) {
     }
 }
 if ($skillCount -gt 0) {
-    Write-Host "[OK] $skillCount skill(s) installed to $skillsRoot" -ForegroundColor Green
+    Write-Host "[OK] $skillCount skill install(s) completed." -ForegroundColor Green
 } else {
     Write-Host "[WARN] No skills installed (the AI will still work, just without the guides)." -ForegroundColor Yellow
 }
 
-# [4/4] Register MCP Server
-Write-Host "`n[4/4] Registering MCP Server..." -ForegroundColor Cyan
+# [4/5] Register MCP Server in JSON-based clients
+Write-Host "`n[4/5] Registering MCP Server..." -ForegroundColor Cyan
 
 # Define candidate config paths
 $configs = @(
@@ -247,6 +253,40 @@ if ($registeredCount -eq 0) {
     Write-Host "  claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro" -ForegroundColor Yellow
 } else {
     Write-Host "[OK] Registered MCP server in $registeredCount client configurations." -ForegroundColor Green
+}
+
+# [5/5] Register MCP Server in Codex
+Write-Host "`n[5/5] Registering Codex MCP Server..." -ForegroundColor Cyan
+$codexConfig = Join-Path $env:USERPROFILE ".codex\config.toml"
+$codexDir = Split-Path $codexConfig -Parent
+if (Test-Path $codexDir) {
+    try {
+        $codexBlock = @'
+[mcp_servers.roblox-mcp-pro]
+command = "npx"
+args = ["-y", "roblox-mcp-pro"]
+'@
+        $existing = ""
+        if (Test-Path $codexConfig) {
+            $existing = [System.IO.File]::ReadAllText($codexConfig)
+        }
+
+        $pattern = '(?ms)^\[mcp_servers\.roblox-mcp-pro\]\r?\n.*?(?=^\[|\z)'
+        $updated = [System.Text.RegularExpressions.Regex]::Replace($existing, $pattern, "")
+        $updated = $updated.TrimEnd() + "`r`n`r`n" + $codexBlock + "`r`n"
+        [System.IO.File]::WriteAllText($codexConfig, $updated, (New-Object System.Text.UTF8Encoding($false)))
+
+        Write-Host "[OK] Registered with Codex ($codexConfig)" -ForegroundColor Green
+        Write-Host "     Restart Codex for the new MCP server to load." -ForegroundColor Gray
+    } catch {
+        Write-Host "[WARN] Failed to register with Codex. Error: $_" -ForegroundColor Yellow
+        Write-Host "  Add this to $codexConfig manually:" -ForegroundColor Yellow
+        Write-Host '  [mcp_servers.roblox-mcp-pro]' -ForegroundColor Gray
+        Write-Host '  command = "npx"' -ForegroundColor Gray
+        Write-Host '  args = ["-y", "roblox-mcp-pro"]' -ForegroundColor Gray
+    }
+} else {
+    Write-Host "[WARN] Codex config directory not found at $codexDir. Skipped Codex registration." -ForegroundColor Yellow
 }
 
 Write-Host "`n==============================================" -ForegroundColor Green

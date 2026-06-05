@@ -68,6 +68,14 @@ Or add it to any client's MCP config manually:
 `npx` downloads and runs the published package — no clone or build needed. (Prefer a pinned global
 install? `npm i -g roblox-mcp-pro`, then use `"command": "roblox-mcp-pro"`.)
 
+Codex uses TOML. Add this to `%USERPROFILE%\.codex\config.toml`:
+
+```toml
+[mcp_servers.roblox-mcp-pro]
+command = "npx"
+args = ["-y", "roblox-mcp-pro"]
+```
+
 Optional environment variables:
 
 | Variable           | Default | Meaning                                  |
