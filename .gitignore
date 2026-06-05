@@ -13,3 +13,12 @@ roblox-mcp-sync/
 # Editor
 .vscode/
 .idea/
+
+# Agent skills: track only this project's own skills, ignore CLI-installed ones.
+.agents/skills/*
+!.agents/skills/roblox-mcp-pro/
+!.agents/skills/roblox-studio-plugin/
+!.agents/skills/roblox-ui-from-image/
+!.agents/skills/roblox-ui-animation/
+.claude/
+skills-lock.json
