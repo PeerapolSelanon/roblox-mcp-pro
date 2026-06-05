@@ -99,8 +99,8 @@ try {
 Write-Host "`n[3/5] Installing agent skills..." -ForegroundColor Cyan
 $skills = @("roblox-mcp-pro", "roblox-ui-from-image")
 $skillRoots = @(
-    Join-Path $env:USERPROFILE ".claude\skills",
-    Join-Path $env:USERPROFILE ".codex\skills"
+    (Join-Path $env:USERPROFILE ".claude\skills"),
+    (Join-Path $env:USERPROFILE ".codex\skills")
 )
 $repo = "PeerapolSelanon/roblox-mcp-pro"
 $skillCount = 0

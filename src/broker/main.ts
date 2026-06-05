@@ -10,6 +10,7 @@
  */
 
 import { appendFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
 import { bridge } from "../services/bridge.js";
@@ -31,6 +32,35 @@ function log(message: string): void {
 /** Exit after this long with no agents AND no Studio plugin polling. */
 const IDLE_SHUTDOWN_MS = 120_000;
 
+/**
+ * Open the monitoring dashboard in the default browser, but only when
+ * ROBLOX_MCP_OPEN_DASHBOARD is set to a truthy value ("1"/"true"/"yes").
+ * Opt-in so the broker — which can be spawned repeatedly by any agent — never
+ * pops a browser window uninvited. Best-effort: a failure is logged, not fatal.
+ */
+function maybeOpenDashboard(url: string): void {
+  const flag = (process.env.ROBLOX_MCP_OPEN_DASHBOARD ?? "").toLowerCase();
+  if (flag !== "1" && flag !== "true" && flag !== "yes") {
+    return;
+  }
+  try {
+    const [command, args] =
+      process.platform === "win32"
+        ? // `start` is a cmd built-in; the empty "" is the window title so a
+          // quoted URL isn't mistaken for one.
+          (["cmd", ["/c", "start", "", url]] as const)
+        : process.platform === "darwin"
+          ? (["open", [url]] as const)
+          : (["xdg-open", [url]] as const);
+    const child = spawn(command, [...args], { detached: true, stdio: "ignore" });
+    child.on("error", (error) => log(`could not open dashboard: ${String(error)}`));
+    child.unref();
+    log(`opening dashboard in browser: ${url}`);
+  } catch (error) {
+    log(`could not open dashboard: ${String(error)}`);
+  }
+}
+
 async function main(): Promise<void> {
   const routes = createBrokerRoutes(bridge);
   bridge.onUnhandled = routes.handle;
@@ -49,7 +79,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  log(`listening on http://${BRIDGE_HOST}:${BRIDGE_PORT} (dashboard at /)`);
+  const dashboardUrl = `http://${BRIDGE_HOST}:${BRIDGE_PORT}/`;
+  log(`listening on ${dashboardUrl} (dashboard at /)`);
+  // Only the broker that actually bound the port reaches here — the one that
+  // loses the bind race exits above, so the dashboard opens at most once.
+  maybeOpenDashboard(dashboardUrl);
 
   let idleSince: number | null = null;
   const heartbeat = setInterval(() => {
