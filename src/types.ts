@@ -12,6 +12,12 @@ export interface Command {
   args: unknown;
   /** Epoch ms the command was created. */
   createdAt: number;
+  /**
+   * True for broker-internal probes (e.g. the dashboard's periodic system_info).
+   * The plugin still runs them but omits them from its activity log so the log
+   * only shows real AI-agent commands.
+   */
+  internal?: boolean;
 }
 
 /** The plugin's reply to a command, posted back to /respond. */

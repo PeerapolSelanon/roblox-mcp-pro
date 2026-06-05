@@ -41,32 +41,12 @@ export function registerExecuteTools(server: McpServer): void {
     "execute_luau",
     {
       title: "Execute Luau in Studio",
-      description: `Run a Luau script inside the connected Roblox Studio session and capture its output.
-
-The code runs with full plugin privileges in Studio's command context. Anything printed
-(via print/warn) is captured as 'output'. To return data, end with \`return <value>\`.
-
-Args:
-  - code (string): Luau source to run. Example: \`return workspace:GetChildren()[1].Name\`
-  - timeout_ms (number): Abort after this many ms (100-60000, default 5000)
-
-Returns (structured):
-  {
-    "ok": boolean,        // true if the script ran without raising an error
-    "returns": any[],     // serialized return values
-    "output": string,     // captured print/warn output
-    "error"?: string      // error message + traceback when ok is false
-  }
-
-Examples:
-  - Use when: "What is the Name of the first child of Workspace?" -> code: "return workspace:GetChildren()[1].Name"
-  - Use when: you need a one-off computation or inspection not covered by a dedicated tool.
-  - Don't use when: a structured tool exists (prefer query_instances / mutate_instances for
-    reading and editing instances — they return cleaner, safer data).
-
-Error Handling:
-  - Returns ok=false with the Luau traceback if the script errors.
-  - Returns "Error: Roblox Studio plugin is not connected…" if no Studio session is attached.`,
+      description:
+        "Run Luau in the connected Studio session and capture output. Full plugin privileges; " +
+        "print/warn is captured as 'output'; end with `return <value>` to send data back.\n" +
+        "Args: code (Luau source), timeout_ms (100-60000, default 5000).\n" +
+        "Returns: { ok, returns:any[], output:string, error? } (ok=false carries the traceback).\n" +
+        "Prefer query_instances/mutate_instances/describe_instance for plain reads & edits.",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: false,
@@ -94,7 +74,8 @@ function renderSuccess(result: ExecuteResult): string {
   const parts: string[] = [];
   if (result.output) parts.push("Output:\n" + result.output);
   if (result.returns.length > 0) {
-    parts.push("Returned:\n" + JSON.stringify(result.returns, null, 2));
+    // Compact JSON — pretty-printing return values just burns tokens.
+    parts.push("Returned: " + JSON.stringify(result.returns));
   }
   if (parts.length === 0) parts.push("Script ran successfully (no output or return value).");
   return parts.join("\n\n");

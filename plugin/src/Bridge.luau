@@ -75,6 +75,66 @@ function Bridge.postEvent(event: { [string]: any })
 	end)
 end
 
+-- Drive the shared sync engine on the broker from the plugin UI.
+--   action = "start" | "stop" | "status" | "pull" | "push"
+--   mode   = "two-way" | "studio-to-disk" | "disk-to-studio"  (for "start")
+-- Returns: result table (sync status) on success, or nil + error message.
+function Bridge.syncControl(action: string, mode: string?, roots: { string }?): (any, string?)
+	local ok, response = pcall(function()
+		return HttpService:RequestAsync({
+			Url = baseUrl .. "/plugin/sync",
+			Method = "POST",
+			Headers = headers(),
+			Body = HttpService:JSONEncode({ action = action, mode = mode, roots = roots }),
+		})
+	end)
+	if not ok then
+		return nil, tostring(response)
+	end
+	if response.StatusCode == 200 then
+		local decoded = HttpService:JSONDecode(response.Body)
+		if decoded.ok then
+			return decoded.result, nil
+		end
+		return nil, tostring(decoded.error)
+	elseif response.StatusCode == 404 then
+		return nil, "This server version doesn't support plugin-driven sync (update the MCP server)."
+	end
+	return nil, ("HTTP %d"):format(response.StatusCode)
+end
+
+-- Fetch current sync status from the broker.
+function Bridge.syncStatus(): (any, string?)
+	local ok, response = pcall(function()
+		return HttpService:RequestAsync({
+			Url = baseUrl .. "/plugin/sync",
+			Method = "GET",
+			Headers = headers(),
+		})
+	end)
+	if not ok then
+		return nil, tostring(response)
+	end
+	if response.StatusCode == 200 then
+		local decoded = HttpService:JSONDecode(response.Body)
+		return decoded.result, nil
+	end
+	return nil, ("HTTP %d"):format(response.StatusCode)
+end
+
+-- Tell the broker we just connected/disconnected so the dashboard updates
+-- immediately instead of waiting out the long-poll liveness window.
+function Bridge.notifyPresence(connected: boolean)
+	pcall(function()
+		HttpService:RequestAsync({
+			Url = baseUrl .. "/plugin/status",
+			Method = "POST",
+			Headers = headers(),
+			Body = HttpService:JSONEncode({ connected = connected }),
+		})
+	end)
+end
+
 -- Check server reachability. Returns true if /health responds.
 function Bridge.health(): boolean
 	local ok, response = pcall(function()

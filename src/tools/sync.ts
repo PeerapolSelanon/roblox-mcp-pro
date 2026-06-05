@@ -10,6 +10,7 @@ import { ok, fail } from "../services/format.js";
 /** Shape returned by the broker-side sync engine. */
 interface SyncStatus {
   running: boolean;
+  mode: string;
   roots: string[];
   placeId: number | null;
   scriptCount: number;
@@ -33,6 +34,14 @@ const InputSchema = z
         "For 'start': instance paths to mirror (default: ServerScriptService, " +
           "ReplicatedStorage, StarterGui, StarterPlayer, ServerStorage). Add 'Workspace' to include it.",
       ),
+    mode: z
+      .enum(["two-way", "studio-to-disk", "disk-to-studio"])
+      .optional()
+      .describe(
+        "For 'start': sync direction. two-way (default) = disk<->Studio; " +
+          "studio-to-disk = Studio is source of truth (mirror live edits to files, ignore disk edits); " +
+          "disk-to-studio = files are source of truth (push file edits to Studio, ignore Studio edits).",
+      ),
   })
   .strict();
 
@@ -43,28 +52,14 @@ export function registerSyncTools(server: McpServer): void {
     "manage_sync",
     {
       title: "Manage Studio <-> Local Sync",
-      description: `Mirror the Roblox Studio DataModel to local files and keep them in sync both ways.
-
-Scripts are written as .server/.client/.module.luau, other instances as {Name}.props.json
-under roblox-mcp-sync/place_{placeId}/explorer/, plus a sourcemap.json for luau-lsp.
-Editing a .luau file updates the script in Studio; editing a script in Studio updates the file.
-
-Args:
-  - action ('start'|'stop'|'status'|'pull'|'push'): operation to perform.
-  - roots (string[], optional): for 'start', which subtrees to mirror.
-
-Returns (structured):
-  { "running": boolean, "roots": string[], "placeId": number|null,
-    "scriptCount": number, "syncDir": string, "pushed"?: number }
-
-Examples:
-  - Begin syncing defaults: action: "start"
-  - Sync gameplay folder too: action: "start", roots: ["ServerScriptService","Workspace.Systems"]
-  - Re-pull everything from Studio: action: "pull"
-
-Error Handling:
-  - Returns "Error: …not connected" if no Studio session is attached.
-  - 'pull'/'push'/'stop' require sync to have been started first.`,
+      description:
+        "Mirror the Studio DataModel to local files and keep them in sync (scripts as " +
+        ".server/.client/.module.luau under roblox-mcp-sync/place_{id}/explorer/, plus sourcemap.json " +
+        "for luau-lsp). Runs in the shared broker.\n" +
+        "Args: action (start|stop|status|pull|push), roots? (subtrees for 'start'; default the " +
+        "script services), mode? (two-way [default] | studio-to-disk | disk-to-studio).\n" +
+        "Returns: { running, mode, roots, placeId, scriptCount, syncDir, pushed? }. " +
+        "pull/push/stop require sync to be started first.",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: false,
@@ -82,7 +77,7 @@ Error Handling:
           case "start":
             return ok(
               structured,
-              `Sync started. Mirroring ${status.roots.join(", ")} ` +
+              `Sync started (${status.mode}). Mirroring ${status.roots.join(", ")} ` +
                 `(${status.scriptCount} scripts) to ${status.syncDir}.`,
             );
           case "stop":

@@ -44,8 +44,27 @@ interface SnapshotResponse {
   roots: SnapshotRoot[];
 }
 
+/**
+ * Sync direction:
+ *  - two-way:        disk <-> Studio (default)
+ *  - studio-to-disk: Studio -> disk only (Studio is the source of truth; live
+ *                    edits mirror to files, disk edits are ignored)
+ *  - disk-to-studio: disk -> Studio only (files are the source of truth; file
+ *                    edits push to Studio, Studio edits are ignored)
+ */
+export type SyncMode = "two-way" | "studio-to-disk" | "disk-to-studio";
+
+const SYNC_MODES: readonly SyncMode[] = ["two-way", "studio-to-disk", "disk-to-studio"];
+
+function normalizeMode(mode: unknown): SyncMode {
+  return typeof mode === "string" && SYNC_MODES.includes(mode as SyncMode)
+    ? (mode as SyncMode)
+    : "two-way";
+}
+
 interface SyncStatus {
   running: boolean;
+  mode: SyncMode;
   roots: string[];
   placeId: number | null;
   scriptCount: number;
@@ -75,6 +94,7 @@ function classFromFile(file: string): string | null {
 
 class SyncEngine {
   private running = false;
+  private mode: SyncMode = "two-way";
   private roots: string[] = [];
   private placeId: number | null = null;
   private placeDir = "";
@@ -94,6 +114,7 @@ class SyncEngine {
   status(): SyncStatus {
     return {
       running: this.running,
+      mode: this.mode,
       roots: this.roots,
       placeId: this.placeId,
       scriptCount: this.instanceToFile.size,
@@ -102,8 +123,9 @@ class SyncEngine {
   }
 
   /** Start syncing the given roots (defaults to the script-bearing services). */
-  async start(roots?: string[]): Promise<SyncStatus> {
+  async start(roots?: string[], mode?: SyncMode): Promise<SyncStatus> {
     if (this.running) await this.stop();
+    this.mode = normalizeMode(mode);
     this.roots = roots && roots.length > 0 ? roots : DEFAULT_ROOTS;
 
     const info = await callStudio<{ placeId?: number }>("system_info", {});
@@ -111,11 +133,15 @@ class SyncEngine {
     this.placeDir = path.join(syncRootDir(), `place_${this.placeId}`);
     this.explorerDir = path.join(this.placeDir, "explorer");
 
+    // pull() rebuilds the mirror and (unless Studio-only) starts the file watcher.
     await this.pull();
-    await this.startStudioWatch();
+    // Studio -> disk live mirroring, unless we're pushing disk -> Studio only.
+    if (this.mode !== "disk-to-studio") {
+      await this.startStudioWatch();
+    }
 
     this.running = true;
-    log(`started: ${this.roots.join(", ")} -> ${this.explorerDir}`);
+    log(`started (${this.mode}): ${this.roots.join(", ")} -> ${this.explorerDir}`);
     return this.status();
   }
 
@@ -140,7 +166,10 @@ class SyncEngine {
       this.index(scripts);
     }
     await writeSourcemap(this.placeDir, this.explorerDir);
-    await this.startFileWatcher();
+    // disk -> Studio live mirroring, unless we're mirroring Studio -> disk only.
+    if (this.mode !== "studio-to-disk") {
+      await this.startFileWatcher();
+    }
     log(`pulled ${this.instanceToFile.size} scripts from Studio`);
   }
 

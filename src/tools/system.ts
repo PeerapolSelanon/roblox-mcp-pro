@@ -22,21 +22,10 @@ export function registerSystemTools(server: McpServer): void {
     "system_info",
     {
       title: "Roblox MCP System Info",
-      description: `Report connection status between the MCP server and Roblox Studio.
-
-Use this first to confirm the Studio plugin is connected before running other tools.
-
-Args: none
-
-Returns (structured):
-  {
-    "bridge": { "ok", "pluginConnected", "queued", "inflight", "lastPollAt" },
-    "studio"?: { "placeId", "placeName", "studioVersion", "isRunning" }  // when connected
-  }
-
-Error Handling:
-  - Always succeeds. If the plugin is not connected, 'studio' is omitted and
-    bridge.pluginConnected is false.`,
+      description:
+        "Connection status between the MCP server and Studio. Call first to confirm the plugin is attached.\n" +
+        "Args: none. Returns: { bridge:{ok,pluginConnected,queued,inflight,lastPollAt}, " +
+        "studio?:{placeId,placeName,studioVersion,isRunning} }. Always succeeds; studio omitted when not connected.",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: true,

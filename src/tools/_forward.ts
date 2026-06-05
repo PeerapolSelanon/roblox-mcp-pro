@@ -28,7 +28,10 @@ export function forwardTool(
   server.registerTool(name, config, async (input: Record<string, unknown>) => {
     try {
       const result = await callStudio<Record<string, unknown>>(name, input);
-      return ok(result, JSON.stringify(result, null, 2));
+      // Compact JSON (not pretty-printed) — the agent reads this text, so the
+      // indentation/newlines of a pretty dump are pure wasted tokens. The full
+      // typed object still rides along in structuredContent for clients that use it.
+      return ok(result, JSON.stringify(result));
     } catch (error) {
       return fail(describeError(error));
     }

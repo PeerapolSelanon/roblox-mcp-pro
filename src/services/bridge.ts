@@ -63,6 +63,12 @@ export class Bridge {
   private readonly waiters: Waiter[] = [];
   private readonly eventListeners = new Set<EventListener>();
   private lastPollAt: number | null = null;
+  /**
+   * Set true when the plugin explicitly told us it disconnected, so the
+   * dashboard reflects it immediately instead of waiting out the long-poll
+   * liveness window. Cleared as soon as the plugin polls again.
+   */
+  private forcedOffline = false;
 
   /**
    * Optional hook the broker sets to serve its own routes (`/rpc/*`, the
@@ -114,9 +120,19 @@ export class Bridge {
   /** True if the plugin polled recently enough to be considered live. */
   isPluginConnected(): boolean {
     return (
+      !this.forcedOffline &&
       this.lastPollAt !== null &&
       Date.now() - this.lastPollAt < PLUGIN_LIVENESS_MS
     );
+  }
+
+  /**
+   * Explicit connect/disconnect signal from the plugin, so the dashboard updates
+   * within ~1s instead of waiting out the liveness window on disconnect.
+   */
+  setPluginPresence(connected: boolean): void {
+    this.forcedOffline = !connected;
+    if (connected) this.lastPollAt = Date.now();
   }
 
   status(): BridgeStatus {
@@ -139,7 +155,7 @@ export class Bridge {
    * Queue a command for the plugin and await its result.
    * Fails fast with an actionable message if the plugin is not connected.
    */
-  enqueue(tool: string, args: unknown): Promise<unknown> {
+  enqueue(tool: string, args: unknown, opts?: { internal?: boolean }): Promise<unknown> {
     if (!this.isPluginConnected()) {
       return Promise.reject(
         new StudioError(
@@ -148,7 +164,13 @@ export class Bridge {
         ),
       );
     }
-    const command: Command = { id: randomUUID(), tool, args, createdAt: Date.now() };
+    const command: Command = {
+      id: randomUUID(),
+      tool,
+      args,
+      createdAt: Date.now(),
+      internal: opts?.internal,
+    };
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.inflight.delete(command.id);
@@ -210,6 +232,7 @@ export class Bridge {
 
     if (req.method === "GET" && path === "/dequeue") {
       this.lastPollAt = Date.now();
+      this.forcedOffline = false;
       if (this.pending.length > 0) {
         const command = this.pending.shift()!;
         this.sendJson(res, 200, command);
@@ -248,6 +271,7 @@ export class Bridge {
 
     if (req.method === "POST" && path === "/event") {
       this.lastPollAt = Date.now();
+      this.forcedOffline = false;
       const body = await this.readBody(req);
       const event = JSON.parse(body) as StudioEvent;
       for (const listener of this.eventListeners) listener(event);

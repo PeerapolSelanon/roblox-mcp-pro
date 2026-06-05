@@ -6,6 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerSystemTools } from "./system.js";
 import { registerExecuteTools } from "./execute.js";
 import { registerInstanceTools } from "./instances.js";
+import { registerOverviewTools } from "./overview.js";
 import { registerSyncTools } from "./sync.js";
 import { registerBatchTools } from "./batch.js";
 import { registerSpatialTools } from "./spatial.js";
@@ -23,6 +24,7 @@ export function registerAllTools(server: McpServer): void {
   registerCaptureTools(server);
   registerExecuteTools(server);
   registerInstanceTools(server);
+  registerOverviewTools(server);
   registerSyncTools(server);
   registerBatchTools(server);
   registerSpatialTools(server);

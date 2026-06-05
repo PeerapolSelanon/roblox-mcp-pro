@@ -19,13 +19,13 @@ function Serialize.value(v: any): any
 	if t == "nil" or t == "boolean" or t == "number" or t == "string" then
 		return v
 	elseif t == "Vector3" then
-		return { x = v.X, y = v.Y, z = v.Z }
+		return { v.X, v.Y, v.Z } -- compact [x,y,z]; coerce accepts this back
 	elseif t == "Vector2" then
-		return { x = v.X, y = v.Y }
+		return { v.X, v.Y } -- [x,y]
 	elseif t == "CFrame" then
 		return { v:GetComponents() }
 	elseif t == "Color3" then
-		return { r = v.R, g = v.G, b = v.B }
+		return { v.R, v.G, v.B } -- [r,g,b]
 	elseif t == "BrickColor" then
 		return v.Name
 	elseif t == "UDim" then
@@ -80,10 +80,12 @@ function Serialize.resolve(path: string): Instance?
 	return current
 end
 
--- Read a curated set of readable properties from an instance.
-function Serialize.properties(inst: Instance): { [string]: any }
+-- Read readable properties from an instance. Pass `propList` to read only those
+-- (field projection — fewer tokens); otherwise a curated common set is read.
+function Serialize.properties(inst: Instance, propList: { string }?): { [string]: any }
+	local names = (propList and #propList > 0) and propList or CANDIDATE_PROPS
 	local out: { [string]: any } = {}
-	for _, name in CANDIDATE_PROPS do
+	for _, name in names do
 		local ok, val = pcall(function()
 			return (inst :: any)[name]
 		end)

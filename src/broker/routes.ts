@@ -14,9 +14,18 @@
 import type http from "node:http";
 import type { Bridge } from "../services/bridge.js";
 import { StudioError } from "../services/errors.js";
-import { syncEngine } from "../sync/engine.js";
+import { BRIDGE_PORT } from "../constants.js";
+import { syncEngine, type SyncMode } from "../sync/engine.js";
 import { BrokerState } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
+
+/** Studio session details, polled from the plugin for the dashboard. */
+interface StudioInfo {
+  placeId?: number;
+  placeName?: string;
+  studioVersion?: string;
+  isRunning?: boolean;
+}
 
 export interface BrokerRoutes {
   handle: (
@@ -31,10 +40,10 @@ export interface BrokerRoutes {
 
 /** Run a `manage_sync` action against the shared engine; throws on failure. */
 async function runSync(args: unknown): Promise<Record<string, unknown>> {
-  const a = (args ?? {}) as { action?: string; roots?: string[] };
+  const a = (args ?? {}) as { action?: string; roots?: string[]; mode?: SyncMode };
   switch (a.action) {
     case "start":
-      return (await syncEngine.start(a.roots)) as unknown as Record<string, unknown>;
+      return (await syncEngine.start(a.roots, a.mode)) as unknown as Record<string, unknown>;
     case "stop":
       await syncEngine.stop();
       return syncEngine.status() as unknown as Record<string, unknown>;
@@ -58,11 +67,45 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
   const state = new BrokerState();
   const sseClients = new Set<http.ServerResponse>();
   let totalCommands = 0;
+  const startedAt = Date.now();
+
+  // Studio session details for the dashboard, refreshed from the plugin on a
+  // throttle. Polled via bridge.enqueue directly (not /rpc/call) so these
+  // internal probes never show up in the agent command log.
+  let studio: StudioInfo | null = null;
+  let studioAt = 0;
+  let studioInflight = false;
+  const STUDIO_TTL_MS = 8000;
+
+  async function refreshStudio(): Promise<void> {
+    if (!bridge.status().pluginConnected) {
+      if (studio) {
+        studio = null;
+        broadcast();
+      }
+      return;
+    }
+    if (studioInflight || Date.now() - studioAt < STUDIO_TTL_MS) return;
+    studioInflight = true;
+    try {
+      // internal: keep this probe out of the plugin's activity log.
+      studio = (await bridge.enqueue("system_info", {}, { internal: true })) as StudioInfo;
+      studioAt = Date.now();
+      broadcast();
+    } catch {
+      // Plugin dropped mid-probe; leave the last value until it reconnects.
+    } finally {
+      studioInflight = false;
+    }
+  }
 
   function buildSnapshot(): Record<string, unknown> {
     const snap = state.snapshot();
     return {
+      brokerStartedAt: startedAt,
+      port: BRIDGE_PORT,
       plugin: bridge.status(),
+      studio,
       sync: syncEngine.status(),
       totalCommands,
       agents: snap.agents,
@@ -129,6 +172,33 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       res.write(`data: ${JSON.stringify(buildSnapshot())}\n\n`);
       sseClients.add(res);
       req.on("close", () => sseClients.delete(res));
+      return true;
+    }
+
+    // --- Studio plugin sync control ---------------------------------------
+    // The plugin uses these to drive the shared sync engine from its own UI
+    // (start/stop + direction), independent of any AI agent.
+    if (method === "GET" && path === "/plugin/sync") {
+      sendJson(res, 200, { ok: true, result: syncEngine.status() });
+      return true;
+    }
+    if (method === "POST" && path === "/plugin/sync") {
+      const body = await readJson(req);
+      try {
+        const result = await runSync(body);
+        sendJson(res, 200, { ok: true, result });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+      return true;
+    }
+    // Explicit connect/disconnect signal so the dashboard updates instantly.
+    if (method === "POST" && path === "/plugin/status") {
+      const body = await readJson(req);
+      bridge.setPluginPresence(body.connected === true);
+      void refreshStudio();
+      broadcast();
+      sendJson(res, 200, { ok: true });
       return true;
     }
 
@@ -210,6 +280,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
 
   function tick(): void {
     state.prune();
+    void refreshStudio();
     broadcast();
   }
 

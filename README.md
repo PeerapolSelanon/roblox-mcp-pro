@@ -103,7 +103,7 @@ npm run build      # compile the server to dist/
 When working **in this repo** with Claude Code, a project `.mcp.json` is already included — just
 approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 
-## Tools (24)
+## Tools (26)
 
 **Core**
 
@@ -112,6 +112,8 @@ approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 | `system_info`       | Connection + Studio session status.                   |
 | `execute_luau`      | Run Luau in Studio; capture output and return values. |
 | `query_instances`   | Search the DataModel; serialize matching instances.   |
+| `scene_overview`    | One-call DataModel map: class histogram + shallow tree. |
+| `describe_instance` | One instance's properties + children + ancestry in one call. |
 | `mutate_instances`  | Create / edit / move / clone / delete instances.      |
 | `manage_properties` | Read or write properties on any instance.             |
 | `batch_execute`     | Run many operations in one round-trip + one undo.     |

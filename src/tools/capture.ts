@@ -26,31 +26,12 @@ export function registerCaptureTools(server: McpServer): void {
     "capture_studio",
     {
       title: "Capture Roblox Studio Window",
-      description: `Take a screenshot of the live Roblox Studio window and return it as an image.
-
-Use this to visually inspect the actual rendered scene or UI — lighting, materials,
-meshes, textures, layout — instead of reasoning only from instance coordinates. Capture
-after building or arranging something to judge how it looks, then iterate.
-
-The capture is performed by the MCP server at the OS level (Windows), so it does NOT
-require the Studio plugin connection — only that Roblox Studio is open. It briefly brings
-the Studio window to the foreground.
-
-Args:
-  - fullscreen (boolean): capture the entire primary screen rather than just the Studio
-    window (default false).
-
-Returns:
-  - An image (PNG) content block with the screenshot, plus structured
-    { ok, width, height, windowTitle }.
-
-Examples:
-  - "Show me what the scene looks like" -> capture_studio
-  - "Did the UI land where I expect?" -> capture_studio
-
-Error Handling:
-  - Returns an error if Roblox Studio is not running / has no open window, or if the
-    OS screen capture fails. Windows only.`,
+      description:
+        "Screenshot the live Studio window (OS-level, Windows only; needs Studio open, NOT the plugin). " +
+        "Use to visually inspect the real render — lighting, materials, meshes, layout — after building. " +
+        "Briefly foregrounds the Studio window.\n" +
+        "Args: fullscreen (default false = just the Studio window, true = whole primary screen).\n" +
+        "Returns: a PNG image block + { ok, width, height, windowTitle }. Errors if Studio isn't open.",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: true,

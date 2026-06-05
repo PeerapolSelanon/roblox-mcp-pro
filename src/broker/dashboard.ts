@@ -6,7 +6,8 @@
  *
  * Design goal: the connection state of the two things that can break — the
  * Studio plugin and the AI agents — must be impossible to misread, and when
- * either is down the page says exactly what to do about it.
+ * either is down the page says exactly what to do about it. Everything the
+ * broker knows (Studio session, broker, sync, agents, activity) is shown.
  */
 
 export const DASHBOARD_HTML = `<!doctype html>
@@ -31,8 +32,9 @@ export const DASHBOARD_HTML = `<!doctype html>
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
     padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--panel);
   }
-  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
-  header h1 small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .02em; }
+  header small { font-size: 12px; }
+  header .spacer { flex: 1; }
   .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
     border-radius: 999px; border: 1px solid var(--border); font-size: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
@@ -51,7 +53,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   .banner ul { margin: 10px 0 0; padding-left: 22px; }
   .banner li { margin: 3px 0; }
   .banner .problem { margin-top: 12px; }
-  .banner .problem:first-of-type { margin-top: 8px; }
   .banner .ptitle { font-weight: 600; }
 
   /* Hero status cards */
@@ -71,10 +72,19 @@ export const DASHBOARD_HTML = `<!doctype html>
   .hero .sub { color: var(--muted); font-size: 13px; min-height: 20px; }
   .hero .sub b { color: var(--text); font-weight: 600; }
 
-  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
   .card .clabel { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
   .card .cvalue { font-size: 22px; font-weight: 600; margin-top: 2px; }
+
+  /* Details panels */
+  .details { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .panel h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: minmax(96px, auto) 1fr; gap: 4px 14px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; color: var(--text); word-break: break-all; }
+  .kv dd.good { color: var(--green); } .kv dd.bad2 { color: var(--red); }
 
   section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
@@ -89,10 +99,11 @@ export const DASHBOARD_HTML = `<!doctype html>
 </head>
 <body>
 <header>
-  <h1>roblox-mcp-pro <small>broker monitor · :3690</small></h1>
-  <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
+  <h1>roblox-mcp-pro</h1>
+  <small id="hdrsub" class="muted">broker monitor</small>
   <div class="spacer"></div>
   <span class="badge muted" id="clock"></span>
+  <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
 </header>
 <main>
   <div id="banner" class="banner warn"><div class="head">Loading…</div></div>
@@ -111,17 +122,55 @@ export const DASHBOARD_HTML = `<!doctype html>
   </div>
 
   <div class="cards">
+    <div class="card"><div class="clabel">Agents</div><div class="cvalue" id="mAgents">0</div></div>
     <div class="card"><div class="clabel">Queued</div><div class="cvalue" id="queued">0</div></div>
     <div class="card"><div class="clabel">In flight</div><div class="cvalue" id="inflight">0</div></div>
     <div class="card"><div class="clabel">Commands</div><div class="cvalue" id="totalCmds">0</div></div>
     <div class="card"><div class="clabel">Sync</div><div class="cvalue" id="syncState">off</div></div>
+    <div class="card"><div class="clabel">Uptime</div><div class="cvalue" id="uptime">—</div></div>
+  </div>
+
+  <div class="details">
+    <div class="panel">
+      <h3>Studio session</h3>
+      <dl class="kv">
+        <dt>Plugin</dt><dd id="dPlugin">—</dd>
+        <dt>Place</dt><dd id="dPlace">—</dd>
+        <dt>Place ID</dt><dd id="dPlaceId">—</dd>
+        <dt>Version</dt><dd id="dVer">—</dd>
+        <dt>Mode</dt><dd id="dMode">—</dd>
+        <dt>Last poll</dt><dd id="dPoll">—</dd>
+      </dl>
+    </div>
+    <div class="panel">
+      <h3>Broker</h3>
+      <dl class="kv">
+        <dt>Status</dt><dd class="good">running</dd>
+        <dt>Port</dt><dd id="dPort">—</dd>
+        <dt>Uptime</dt><dd id="dUptime">—</dd>
+        <dt>Started</dt><dd id="dStarted">—</dd>
+        <dt>Commands</dt><dd id="dCmds">0</dd>
+        <dt>Queue</dt><dd id="dQueue">0 queued · 0 in flight</dd>
+      </dl>
+    </div>
+    <div class="panel">
+      <h3>Sync (Studio ↔ disk)</h3>
+      <dl class="kv">
+        <dt>State</dt><dd id="dSyncState">off</dd>
+        <dt>Direction</dt><dd id="dSyncMode">—</dd>
+        <dt>Roots</dt><dd id="dRoots">—</dd>
+        <dt>Scripts</dt><dd id="dScripts">0</dd>
+        <dt>Place ID</dt><dd id="dSyncPlace">—</dd>
+        <dt>Folder</dt><dd id="dDir">—</dd>
+      </dl>
+    </div>
   </div>
 
   <section>
     <h2>Connected agents</h2>
     <table>
-      <thead><tr><th>Agent</th><th>Version</th><th>PID</th><th>Commands</th><th>Connected</th><th>Last seen</th></tr></thead>
-      <tbody id="agents"><tr><td class="empty" colspan="6">No agents connected.</td></tr></tbody>
+      <thead><tr><th>Agent</th><th>Version</th><th>PID</th><th>Client ID</th><th>Commands</th><th>Connected</th><th>Last seen</th></tr></thead>
+      <tbody id="agents"><tr><td class="empty" colspan="7">No agents connected.</td></tr></tbody>
     </table>
   </section>
 
@@ -143,7 +192,14 @@ const ago = (ts) => {
   const m = Math.floor(s / 60); if (m < 60) return m + "m ago";
   return Math.floor(m / 60) + "h ago";
 };
+const dur = (ms) => {
+  let s = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60); s -= m * 60;
+  return (h ? h + "h " : "") + (h || m ? m + "m " : "") + s + "s";
+};
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const set = (id, v) => { $(id).textContent = v; };
 
 // The Studio plugin long-polls every ~25s, so an age up to ~25s is healthy.
 // Past ~28s with no poll, it's likely dropping; past the broker's liveness
@@ -158,12 +214,11 @@ function pluginState(p) {
 }
 
 function setHero(prefix, level, big, sub) {
-  const cls = level; // ok | bad | warn
-  $(prefix + "Hero").className = "hero " + cls;
-  $(prefix + "BigDot").className = "bigdot";
-  $(prefix + "BigDot").style.background = level === "ok" ? "var(--green)" : level === "warn" ? "var(--amber)" : "var(--red)";
-  $(prefix + "BigDot").style.boxShadow = "0 0 8px " + ($(prefix + "BigDot").style.background);
-  $(prefix + "Big").className = "big " + cls;
+  $(prefix + "Hero").className = "hero " + level;
+  const color = level === "ok" ? "var(--green)" : level === "warn" ? "var(--amber)" : "var(--red)";
+  $(prefix + "BigDot").style.background = color;
+  $(prefix + "BigDot").style.boxShadow = "0 0 8px " + color;
+  $(prefix + "Big").className = "big " + level;
   $(prefix + "Big").textContent = big;
   $(prefix + "Sub").innerHTML = sub;
 }
@@ -201,13 +256,19 @@ function renderBanner(problems) {
 
 function render(state) {
   const plugin = state.plugin || {};
+  const studio = state.studio || null;
+  const sync = state.sync || {};
   const agents = state.agents || [];
   const problems = [];
 
-  // ① plugin hero
+  // ① plugin hero + Studio details
   const ps = pluginState(plugin);
+  const studioBits = studio
+    ? "<b>" + esc(studio.placeName || "?") + "</b> · v" + esc(studio.studioVersion || "?") +
+      " · " + (studio.isRunning ? "Play mode" : "Edit mode")
+    : "";
   if (ps.level === "ok") {
-    setHero("plugin", "ok", "CONNECTED", "Studio is responding · <b>" + ago(plugin.lastPollAt) + "</b>");
+    setHero("plugin", "ok", "CONNECTED", (studioBits ? studioBits + " · " : "") + "responding " + ago(plugin.lastPollAt));
   } else if (ps.level === "warn") {
     setHero("plugin", "warn", "RECONNECTING…", "No response for <b>" + ago(plugin.lastPollAt) + "</b> — Studio may be busy.");
     problems.push({ sev: "warn", title: "Studio plugin is slow to respond", detail: "Last response " + ago(plugin.lastPollAt) + ". If this persists, reconnect:", steps: PLUGIN_FIX });
@@ -215,6 +276,14 @@ function render(state) {
     setHero("plugin", "bad", "DISCONNECTED", ps.never ? "Has <b>never</b> connected since the broker started." : "Last response <b>" + ago(plugin.lastPollAt) + "</b>.");
     problems.push({ sev: "bad", title: ps.never ? "Studio plugin has never connected" : "Studio plugin disconnected", detail: ps.never ? "The broker is up but no plugin has attached." : "Studio may have closed or lost the connection.", steps: PLUGIN_FIX });
   }
+
+  $("dPlugin").textContent = ps.label;
+  $("dPlugin").className = ps.level === "ok" ? "good" : "bad2";
+  set("dPlace", studio && studio.placeName ? studio.placeName : "—");
+  set("dPlaceId", studio && studio.placeId != null ? String(studio.placeId) : "—");
+  set("dVer", studio && studio.studioVersion ? studio.studioVersion : "—");
+  set("dMode", studio ? (studio.isRunning ? "Play (running)" : "Edit") : "—");
+  set("dPoll", plugin.lastPollAt ? ago(plugin.lastPollAt) : "never");
 
   // ② agents hero
   if (agents.length > 0) {
@@ -227,18 +296,39 @@ function render(state) {
 
   renderBanner(problems);
 
-  $("queued").textContent = plugin.queued ?? 0;
-  $("inflight").textContent = plugin.inflight ?? 0;
-  $("totalCmds").textContent = state.totalCommands ?? 0;
-  const sync = state.sync || {};
-  $("syncState").textContent = sync.running ? sync.scriptCount + " scripts" : "off";
+  // metric cards
+  set("mAgents", agents.length);
+  set("queued", plugin.queued ?? 0);
+  set("inflight", plugin.inflight ?? 0);
+  set("totalCmds", state.totalCommands ?? 0);
+  set("syncState", sync.running ? (sync.scriptCount + " scripts") : "off");
+  set("uptime", state.brokerStartedAt ? dur(Date.now() - state.brokerStartedAt) : "—");
 
+  // broker details
+  set("dPort", state.port ?? "—");
+  set("dUptime", state.brokerStartedAt ? dur(Date.now() - state.brokerStartedAt) : "—");
+  set("dStarted", state.brokerStartedAt ? new Date(state.brokerStartedAt).toLocaleString() : "—");
+  set("dCmds", state.totalCommands ?? 0);
+  set("dQueue", (plugin.queued ?? 0) + " queued · " + (plugin.inflight ?? 0) + " in flight");
+
+  // sync details
+  const MODE_LABEL = { "two-way": "Two-way (disk ↔ Studio)", "studio-to-disk": "Studio → disk", "disk-to-studio": "disk → Studio" };
+  $("dSyncState").textContent = sync.running ? "running" : "off";
+  $("dSyncState").className = sync.running ? "good" : "";
+  set("dSyncMode", sync.running ? (MODE_LABEL[sync.mode] || sync.mode || "—") : "—");
+  set("dRoots", sync.roots && sync.roots.length ? sync.roots.join(", ") : "—");
+  set("dScripts", sync.scriptCount ?? 0);
+  set("dSyncPlace", sync.placeId != null ? String(sync.placeId) : "—");
+  set("dDir", sync.syncDir || "—");
+
+  // agents table
   $("agents").innerHTML = agents.length ? agents.map((a) =>
     "<tr><td class=agentcell><span class='dot on'></span>" + esc(a.name) + "</td><td class=muted>" + esc(a.version || "—") +
-    "</td><td class=muted>" + (a.pid ?? "—") + "</td><td>" + a.commandCount +
-    "</td><td class=muted>" + ago(a.connectedAt) + "</td><td class=muted>" + ago(a.lastSeenAt) + "</td></tr>"
-  ).join("") : "<tr><td class=empty colspan=6>No agents connected.</td></tr>";
+    "</td><td class=muted>" + (a.pid ?? "—") + "</td><td class=muted>" + esc((a.clientId || "").slice(0, 8)) +
+    "</td><td>" + a.commandCount + "</td><td class=muted>" + ago(a.connectedAt) + "</td><td class=muted>" + ago(a.lastSeenAt) + "</td></tr>"
+  ).join("") : "<tr><td class=empty colspan=7>No agents connected.</td></tr>";
 
+  // activity table
   const recent = state.recent || [];
   $("activity").innerHTML = recent.length ? recent.map((c) =>
     "<tr><td class=muted>" + fmtTime(c.ts) + "</td><td>" + esc(c.agent) +
@@ -246,6 +336,7 @@ function render(state) {
     "</td><td class=muted>" + c.durationMs + "</td></tr>"
   ).join("") : "<tr><td class=empty colspan=5>No activity yet.</td></tr>";
 
+  $("hdrsub").textContent = "broker monitor · :" + (state.port ?? "3690");
   $("clock").textContent = "updated " + new Date().toLocaleTimeString();
 }
 

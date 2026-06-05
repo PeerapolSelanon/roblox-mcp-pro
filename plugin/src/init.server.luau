@@ -12,10 +12,14 @@ local UI = require(script.UI)
 local DEFAULT_URL = "http://127.0.0.1:3690"
 local SETTING_URL = "roblox_mcp_pro_url"
 local SETTING_TOKEN = "roblox_mcp_pro_token"
+local SETTING_AUTOCONNECT = "roblox_mcp_pro_autoconnect"
+local SETTING_SYNCMODE = "roblox_mcp_pro_syncmode"
 
 -- Resolve config from saved plugin settings (falls back to defaults).
 local url = plugin:GetSetting(SETTING_URL) or DEFAULT_URL
 local token = plugin:GetSetting(SETTING_TOKEN)
+local autoConnect = plugin:GetSetting(SETTING_AUTOCONNECT) == true
+local syncMode = plugin:GetSetting(SETTING_SYNCMODE) or "two-way"
 Bridge.configure(url, token)
 
 local toolbar = plugin:CreateToolbar("Roblox MCP Pro")
@@ -40,9 +44,10 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 local widget = plugin:CreateDockWidgetPluginGui("RobloxMcpProPanel", widgetInfo)
 
 -- Create the UI panel inside the widget
-UI.create(widget, { url = url, token = token })
+UI.create(widget, { url = url, token = token, autoConnect = autoConnect, syncMode = syncMode })
 
 local connected = false
+local isSyncing = false
 
 local function log(message: string)
 	print("[roblox-mcp-pro] " .. message)
@@ -60,6 +65,13 @@ local function pollLoop()
 	local reachable = true
 	local announcedDown = false
 
+	-- Reflect reachability immediately. Otherwise the panel sits on "Connecting"
+	-- until the first /dequeue returns, which the long-poll can hold open for up
+	-- to ~25s when no command is waiting.
+	if connected and Bridge.health() then
+		UI.setStatus("Connected")
+	end
+
 	while connected do
 		local command, err = Bridge.dequeue()
 		if not connected then break end -- Safeguard against connection closed while yielding
@@ -74,9 +86,12 @@ local function pollLoop()
 			
 			local ok, result, errMsg = Dispatcher.dispatch(command.tool, command.args)
 			Bridge.respond(command.id, ok, result, errMsg)
-			
-			-- Feed execution result to UI console
-			UI.addLog(command.tool, ok, if ok then nil else errMsg)
+
+			-- Feed execution result to UI console (but not broker-internal probes
+			-- like the dashboard's periodic system_info — only real agent commands).
+			if not command.internal then
+				UI.addLog(command.tool, ok, if ok then nil else errMsg)
+			end
 		elseif err then
 			-- Transport error (server down, HTTP disabled). Warn once per outage.
 			reachable = false
@@ -104,24 +119,88 @@ local function pollLoop()
 	end
 end
 
-local SETTING_ACTIVE = "roblox_mcp_pro_active"
+-- Reflect a sync-status result from the broker in the UI.
+local function applySyncResult(result: any)
+	isSyncing = result.running == true
+	UI.setSyncStatus(isSyncing, result.mode, result.scriptCount)
+end
+
+-- While connected, poll the broker's sync status so the Sync card stays in step
+-- (including sync started by an AI agent rather than this panel).
+local function startSyncRefresher()
+	task.spawn(function()
+		while connected do
+			local st = Bridge.syncStatus()
+			if st then
+				applySyncResult(st)
+			end
+			task.wait(5)
+		end
+	end)
+end
 
 local function setConnected(value: boolean)
 	connected = value
-	plugin:SetSetting(SETTING_ACTIVE, value) -- remember across reloads
+	-- Tell the broker right away so the dashboard reflects it within ~1s.
+	task.spawn(function()
+		Bridge.notifyPresence(value)
+	end)
 	if value then
 		log("connecting to " .. url)
 		UI.setStatus("Connecting")
 		task.spawn(pollLoop)
+		startSyncRefresher()
 	else
 		log("disconnected")
 		UI.setStatus("Disconnected")
+		isSyncing = false
+		UI.setSyncStatus(false, syncMode, 0)
 	end
 end
 
 -- Connect UI Callbacks
 UI.onConnectionToggled = function(connect: boolean)
 	setConnected(connect)
+end
+
+UI.onAutoConnectChanged = function(enabled: boolean)
+	plugin:SetSetting(SETTING_AUTOCONNECT, enabled)
+	log("auto-connect " .. (if enabled then "enabled" else "disabled"))
+end
+
+UI.onSyncModeChanged = function(mode: string)
+	syncMode = mode
+	plugin:SetSetting(SETTING_SYNCMODE, mode)
+	-- If sync is already running, restart it in the new direction.
+	if connected and isSyncing then
+		task.spawn(function()
+			local result, err = Bridge.syncControl("start", mode)
+			if result then
+				applySyncResult(result)
+			else
+				warn("[roblox-mcp-pro] sync mode change failed: " .. tostring(err))
+			end
+		end)
+	end
+end
+
+UI.onSyncToggled = function(enabled: boolean, mode: string)
+	if not connected then
+		UI.setSyncStatus(false, mode, 0)
+		warn("[roblox-mcp-pro] Connect to the server before enabling sync.")
+		return
+	end
+	task.spawn(function()
+		local action = if enabled then "start" else "stop"
+		local result, err = Bridge.syncControl(action, mode)
+		if result then
+			applySyncResult(result)
+		else
+			isSyncing = false
+			UI.setSyncStatus(false, mode, 0)
+			warn("[roblox-mcp-pro] sync " .. action .. " failed: " .. tostring(err))
+		end
+	end)
 end
 
 UI.onSettingsSaved = function(newUrl: string, newToken: string?)
@@ -152,13 +231,19 @@ end)
 button:SetActive(widget.Enabled)
 
 plugin.Unloading:Connect(function()
+	-- Best-effort: tell the broker we're going so the dashboard updates fast
+	-- (Studio closing may cut this off; the liveness timeout is the fallback).
+	if connected then
+		Bridge.notifyPresence(false)
+	end
 	connected = false
 end)
 
--- Restore active connection if it was on before reload
+-- Auto-connect only when the user opted in (default off). Fixes the old
+-- behavior where the plugin reconnected on its own after a single connect.
 log(("loaded %d tools."):format(Dispatcher.toolCount))
-if plugin:GetSetting(SETTING_ACTIVE) == true then
-	log("restoring previous connection…")
+if autoConnect then
+	log("auto-connect is on; connecting…")
 	setConnected(true)
 else
 	log("click the 'MCP' button on the toolbar or open the panel to connect.")

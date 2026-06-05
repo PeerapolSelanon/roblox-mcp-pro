@@ -11,7 +11,9 @@ return function(args: any): any
 	if recursive == nil then
 		recursive = true
 	end
-	local includeProps = args.include_properties == true
+	local props = args.props -- optional { string } projection
+	local hasProjection = type(props) == "table" and #props > 0
+	local includeProps = args.include_properties == true or hasProjection
 	local limit = args.limit or 100
 	local offset = args.offset or 0
 
@@ -44,7 +46,7 @@ return function(args: any): any
 			childCount = #inst:GetChildren(),
 		}
 		if includeProps then
-			dto.properties = Serialize.properties(inst)
+			dto.properties = Serialize.properties(inst, if hasProjection then props else nil)
 		end
 		table.insert(instances, dto)
 	end

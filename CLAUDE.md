@@ -89,10 +89,14 @@ Each MCP tool has a matching plugin handler. To add or change behavior you almos
 
 **Conventions for server tools:** every tool returns via the `ok(structured, text)` / `fail(text)`
 helpers in `src/services/format.ts` — both human-readable `content` text and machine-readable
-`structuredContent`, auto-truncated at `CHARACTER_LIMIT` (25k). Descriptions are verbose and
-include Args / Returns / Error Handling sections (see `src/tools/system.ts` as the template).
-Tools declare MCP annotations (`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`).
-`PROTECTED_SERVICES` in `src/constants.ts` must never be mutated/deleted.
+`structuredContent`, auto-truncated at `CHARACTER_LIMIT` (25k). **Token discipline:** the `content`
+text is what the agent reads, so keep it compact — emit compact JSON (never `JSON.stringify(x, null, 2)`;
+`forwardTool` already does this) and write **concise** descriptions (one-line summary + one-line
+Args + one-line Returns; see `src/tools/overview.ts` / `world.ts` as the template — tool defs ship
+in every request). Tools declare MCP annotations
+(`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`).
+`PROTECTED_SERVICES` in `src/constants.ts` must never be mutated/deleted. Studio values serialize
+compactly: Vector3/Vector2/Color3 as arrays (`[x,y,z]`), and read tools accept a `props` projection.
 
 All server logging goes to **stderr** (`stdout` is reserved for the MCP protocol).
 

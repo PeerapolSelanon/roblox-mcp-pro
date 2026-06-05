@@ -34,6 +34,14 @@ const QueryInputSchema = z
       .boolean()
       .default(false)
       .describe("Include a serialized property map for each matched instance."),
+    props: z
+      .array(z.string().min(1))
+      .max(40)
+      .optional()
+      .describe(
+        "Field projection: read only these property names (implies " +
+          "include_properties). Fewer props = fewer tokens. Default reads a common set.",
+      ),
     ...pagination,
   })
   .strict();
@@ -131,32 +139,12 @@ export function registerInstanceTools(server: McpServer): void {
     "query_instances",
     {
       title: "Query Studio Instances",
-      description: `Search the Roblox Studio DataModel and return matching instances.
-
-Args:
-  - path (string): Root to search from (default 'game').
-  - class_name (string, optional): Filter by exact ClassName.
-  - name (string, optional): Filter by Name substring (case-sensitive).
-  - recursive (boolean): Descendants vs direct children (default true).
-  - include_properties (boolean): Attach a serialized property map (default false).
-  - limit / offset (number): Pagination (default 100 / 0).
-
-Returns (structured):
-  {
-    "total": number,                 // total matches before pagination
-    "instances": [
-      { "path": string, "name": string, "className": string,
-        "childCount": number, "properties"?: object }
-    ]
-  }
-
-Examples:
-  - "List every Part in Workspace" -> path: "Workspace", class_name: "Part"
-  - "Find instances named 'Spawn'" -> name: "Spawn"
-
-Error Handling:
-  - Returns "Error: …not connected" if no Studio session is attached.
-  - Returns total=0 with an empty list when nothing matches.`,
+      description:
+        "Search the DataModel; return matching instances. For a broad map prefer scene_overview; " +
+        "for one instance's full detail prefer describe_instance.\n" +
+        "Args: path (default 'game'), class_name? (exact), name? (substring), recursive (default true), " +
+        "include_properties (default false), props? (only these properties), limit/offset (default 100/0).\n" +
+        "Returns: { total, instances:[{path,name,className,childCount,properties?}] }.",
       inputSchema: QueryInputSchema.shape,
       annotations: {
         readOnlyHint: true,
@@ -189,36 +177,13 @@ Error Handling:
     "mutate_instances",
     {
       title: "Mutate Studio Instances",
-      description: `Create, edit, move, clone, or delete instances in the Studio DataModel.
-
-Each operation is one of: create | set_properties | rename | reparent | delete | clone.
-Operations run in order; each reports its own success/failure.
-
-Args:
-  - operations (array): Each item:
-      { action, path?, class_name?, name?, parent?, properties? }
-    - create:         class_name + parent (+ name, properties)
-    - set_properties: path + properties
-    - rename:         path + name
-    - reparent:       path + parent
-    - delete:         path
-    - clone:          path (+ parent, name)
-  Property values accept primitives, [x,y,z] arrays for Vector3/Size, and color names.
-
-Returns (structured):
-  { "results": [ { "ok": boolean, "action": string, "path"?: string,
-                   "resultPath"?: string, "error"?: string } ] }
-
-Examples:
-  - Make a red anchored part:
-      operations: [{ action: "create", class_name: "Part", parent: "Workspace",
-                     name: "Block", properties: { Anchored: true, BrickColor: "Bright red" } }]
-  - Move a model: operations: [{ action: "reparent", path: "Workspace.Old",
-                                 parent: "ServerStorage" }]
-
-Error Handling:
-  - Refuses to delete/reparent/edit protected services (CoreGui, CorePackages, …).
-  - Per-operation failures appear as ok=false with an 'error' string; other ops still run.`,
+      description:
+        "Create/edit/move/clone/delete instances; ops run in order, each reports its own result.\n" +
+        "Args: operations:[{action:create|set_properties|rename|reparent|delete|clone, path?, class_name?, " +
+        "name?, parent?, properties?}]. create=class_name+parent; set_properties=path+properties; " +
+        "rename=path+name; reparent=path+parent; delete=path; clone=path(+parent,name). " +
+        "Property values accept primitives, [x,y,z] arrays, and color names.\n" +
+        "Returns: { results:[{ok,action,path?,resultPath?,error?}] }. Refuses to mutate protected services.",
       inputSchema: MutateInputSchema.shape,
       annotations: {
         readOnlyHint: false,
