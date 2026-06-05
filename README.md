@@ -31,7 +31,7 @@ queue, live activity, and sync status in real time.
 
 ### Super Easy Install (Windows - Private Repo)
 
-Open PowerShell and run the following command (requires GitHub CLI `gh` to be installed and authenticated) to automatically download the Roblox Studio plugin and register the MCP server in your AI clients:
+Open PowerShell and run the following command (requires GitHub CLI `gh` to be installed and authenticated). It downloads the Roblox Studio plugin, installs the agent skills (so your AI knows how to drive the server **in any project**, not just this repo), and registers the MCP server in your AI clients:
 
 ```powershell
 gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | Out-String | iex

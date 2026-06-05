@@ -12,8 +12,8 @@ Write-Host "     Roblox MCP Pro Installer for Windows     " -ForegroundColor Cya
 Write-Host "==============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# [1/3] Detect Node.js
-Write-Host "[1/3] Checking Prerequisites..." -ForegroundColor Cyan
+# [1/4] Detect Node.js
+Write-Host "[1/4] Checking Prerequisites..." -ForegroundColor Cyan
 try {
     $nodeVersion = node -v 2>$null
     if ($nodeVersion -match "^v(\d+)") {
@@ -33,8 +33,8 @@ try {
     exit 1
 }
 
-# [2/3] Install Roblox Studio Plugin
-Write-Host "`n[2/3] Installing Roblox Studio Plugin..." -ForegroundColor Cyan
+# [2/4] Install Roblox Studio Plugin
+Write-Host "`n[2/4] Installing Roblox Studio Plugin..." -ForegroundColor Cyan
 $pluginsFolder = Join-Path $env:LOCALAPPDATA "Roblox\Plugins"
 if (-not (Test-Path $pluginsFolder)) {
     New-Item -ItemType Directory -Path $pluginsFolder -Force | Out-Null
@@ -93,8 +93,50 @@ try {
     Write-Host "  https://github.com/PeerapolSelanon/roblox-mcp-pro/releases" -ForegroundColor Yellow
 }
 
-# [3/3] Register MCP Server
-Write-Host "`n[3/3] Registering MCP Server..." -ForegroundColor Cyan
+# [3/4] Install agent skills (so AI assistants know how to drive this server in
+# any project — not just this repo). Skills live in ~/.claude/skills/<name>/.
+Write-Host "`n[3/4] Installing agent skills..." -ForegroundColor Cyan
+$skills = @("roblox-mcp-pro", "roblox-ui-from-image")
+$skillsRoot = Join-Path $env:USERPROFILE ".claude\skills"
+$repo = "PeerapolSelanon/roblox-mcp-pro"
+$skillCount = 0
+$ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+foreach ($skill in $skills) {
+    $destDir = Join-Path $skillsRoot $skill
+    $destFile = Join-Path $destDir "SKILL.md"
+    $apiPath = ".agents/skills/$skill/SKILL.md"
+    try {
+        $content = $null
+        if ($ghCommand) {
+            # gh api streams raw file content (works for the private repo).
+            $content = & gh api "repos/$repo/contents/$apiPath" -H "Accept: application/vnd.github.v3.raw" 2>$null | Out-String
+        }
+        if (-not $content) {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $raw = "https://raw.githubusercontent.com/$repo/main/$apiPath"
+            $content = (Invoke-WebRequest -Uri $raw -Headers @{"User-Agent"="Roblox-Mcp-Pro-Installer"}).Content
+        }
+        if ($content -and $content.Trim()) {
+            if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+            # Write UTF-8 without BOM so the skill loader parses the frontmatter.
+            [System.IO.File]::WriteAllText($destFile, $content, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "[OK] Installed skill '$skill'" -ForegroundColor Green
+            $skillCount++
+        } else {
+            Write-Host "[WARN] Could not fetch skill '$skill' (empty response)." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "[WARN] Failed to install skill '$skill': $_" -ForegroundColor Yellow
+    }
+}
+if ($skillCount -gt 0) {
+    Write-Host "[OK] $skillCount skill(s) installed to $skillsRoot" -ForegroundColor Green
+} else {
+    Write-Host "[WARN] No skills installed (the AI will still work, just without the guides)." -ForegroundColor Yellow
+}
+
+# [4/4] Register MCP Server
+Write-Host "`n[4/4] Registering MCP Server..." -ForegroundColor Cyan
 
 # Define candidate config paths
 $configs = @(
