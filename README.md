@@ -103,7 +103,7 @@ npm run build      # compile the server to dist/
 When working **in this repo** with Claude Code, a project `.mcp.json` is already included — just
 approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 
-## Tools (27)
+## Tools (28)
 
 **Core**
 
@@ -136,6 +136,7 @@ approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 | Tool                | Description                                          |
 | ------------------- | --------------------------------------------------- |
 | `manage_ui`         | Build/edit GUI hierarchies (UDim2/Color coercion).  |
+| `ui_preview`        | Show a GUI on a clean backdrop for a comparison screenshot. |
 | `manage_audio`      | Create, configure, and preview Sounds.              |
 | `manage_animation`  | Manage Animation instances; best-effort preview.    |
 | `manage_assets`     | Insert marketplace assets; read product info.       |

@@ -38,8 +38,27 @@ const InputSchema = z
       .describe("create: build a tree · set: apply properties to a path · delete: destroy a path."),
     parent: InstancePath.optional().describe("Parent for 'create' (default 'StarterGui')."),
     tree: UINode.optional().describe("UI tree spec for 'create'."),
+    replace: z
+      .boolean()
+      .default(false)
+      .describe("For 'create': if a child with the same name exists under parent, delete it first (clean rebuild while iterating)."),
     path: InstancePath.optional().describe("Target instance for 'set'/'delete'."),
     properties: z.record(z.unknown()).optional().describe("Properties for 'set'."),
+  })
+  .strict();
+
+const PreviewSchema = z
+  .object({
+    action: z
+      .enum(["show", "hide"])
+      .default("show")
+      .describe("show: render the GUI full-screen on a solid backdrop · hide: remove the preview."),
+    path: InstancePath.optional().describe("GUI to preview (ScreenGui/Frame/...). Required for 'show'."),
+    background: z
+      .array(z.number())
+      .length(3)
+      .optional()
+      .describe("Backdrop color [r,g,b] 0-1 (default dark grey)."),
   })
   .strict();
 
@@ -88,6 +107,39 @@ Error Handling:
         const text = result.ok
           ? `UI ${input.action} ok: ${result.rootPath ?? result.path ?? ""}`
           : `UI ${input.action} failed: ${result.error ?? "unknown"}`;
+        return ok(result, text);
+      } catch (error) {
+        return fail(describeError(error));
+      }
+    },
+  );
+
+  server.registerTool(
+    "ui_preview",
+    {
+      title: "Preview GUI (clean capture)",
+      description:
+        "Render a GUI full-screen on a solid backdrop in edit mode so capture_studio gets a clean, " +
+        "isolated shot (no 3D scene behind it) to compare against a mockup. The design loop: " +
+        "manage_ui -> ui_preview show -> capture_studio -> compare to mockup -> manage_ui set -> repeat -> ui_preview hide.\n" +
+        "Args: action (show[default]|hide), path (GUI to preview, required for show), background ([r,g,b] 0-1).\n" +
+        "Returns: { ok, showing, cloned?, error? }. Originals are untouched (a clone is shown).",
+      inputSchema: PreviewSchema.shape,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input: z.infer<typeof PreviewSchema>) => {
+      try {
+        const result = await callStudio<Record<string, unknown>>("ui_preview", input);
+        const text = result.ok
+          ? input.action === "hide"
+            ? "Preview hidden."
+            : `Preview shown (${result.cloned ?? 0} element(s)). Now call capture_studio, compare to the mockup, then ui_preview hide.`
+          : `ui_preview failed: ${result.error ?? "unknown"}`;
         return ok(result, text);
       } catch (error) {
         return fail(describeError(error));

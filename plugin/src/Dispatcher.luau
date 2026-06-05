@@ -21,6 +21,7 @@ local HANDLER_NAMES = {
 	spatial_query = "Spatial",
 	manage_terrain = "Terrain",
 	manage_ui = "UI",
+	ui_preview = "UIPreview",
 	manage_audio = "Audio",
 	manage_animation = "Animation",
 	manage_lighting = "Lighting",

@@ -44,6 +44,13 @@ return function(args: any): any
 		elseif type(args.tree) ~= "table" then
 			result = { ok = false, error = "create requires a 'tree' spec" }
 		else
+			-- Optional clean rebuild: drop an existing same-named child first.
+			if args.replace and args.tree.name then
+				local existing = parent:FindFirstChild(args.tree.name)
+				if existing then
+					existing:Destroy()
+				end
+			end
 			local inst, err = build(args.tree, parent)
 			result = inst and { ok = true, rootPath = Serialize.path(inst) }
 				or { ok = false, error = err }

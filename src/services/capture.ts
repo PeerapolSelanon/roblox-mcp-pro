@@ -30,9 +30,11 @@ using System.Runtime.InteropServices;
 public class W {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 }
 "@
@@ -40,28 +42,44 @@ public class W {
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
-$proc = Get-Process -Name RobloxStudioBeta -ErrorAction SilentlyContinue |
-  Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+$procs = @(Get-Process -Name RobloxStudioBeta -ErrorAction SilentlyContinue |
+  Where-Object { $_.MainWindowHandle -ne 0 })
+# Prefer the place-editor window (title "<Place> - Roblox Studio") over the
+# Start/Home page (title exactly "Roblox Studio"), which has no viewport/UI.
+$proc = $procs | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne "Roblox Studio" } | Select-Object -First 1
+if (-not $proc) { $proc = $procs | Select-Object -First 1 }
 if (-not $proc) { Write-Error "Roblox Studio window not found (is Studio open with a place loaded?)"; exit 3 }
 $h = $proc.MainWindowHandle
 $title = $proc.MainWindowTitle
-if ([W]::IsIconic($h)) { [void][W]::ShowWindow($h, 9) }  # SW_RESTORE
-[void][W]::SetForegroundWindow($h)
-Start-Sleep -Milliseconds 400
+if ([W]::IsIconic($h)) { [void][W]::ShowWindow($h, 9); Start-Sleep -Milliseconds 250 }  # SW_RESTORE
 
 if ($Fullscreen -eq 1) {
+  # Whole primary screen — captures whatever is actually on screen.
   $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-  $x = $b.X; $y = $b.Y; $w = $b.Width; $hh = $b.Height
+  $w = $b.Width; $hh = $b.Height
+  $bmp = New-Object System.Drawing.Bitmap $w, $hh
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.CopyFromScreen($b.X, $b.Y, 0, 0, (New-Object System.Drawing.Size($w, $hh)))
 } else {
+  # Capture the Studio window's own pixels via PrintWindow, which reads the
+  # window's content directly — no need to bring it to the foreground (Windows
+  # 10/11 blocks SetForegroundWindow from a background process, which made the
+  # old CopyFromScreen approach grab whatever window was covering Studio).
+  # PW_RENDERFULLCONTENT (2) captures hardware-accelerated content too.
   $r = New-Object W+RECT
   [void][W]::GetWindowRect($h, [ref]$r)
-  $x = $r.Left; $y = $r.Top; $w = $r.Right - $r.Left; $hh = $r.Bottom - $r.Top
+  $w = $r.Right - $r.Left; $hh = $r.Bottom - $r.Top
+  if ($w -le 0 -or $hh -le 0) { Write-Error "invalid window bounds"; exit 4 }
+  $bmp = New-Object System.Drawing.Bitmap $w, $hh
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $hdc = $g.GetHdc()
+  $okPrint = $false
+  try { $okPrint = [W]::PrintWindow($h, $hdc, 2) } finally { $g.ReleaseHdc($hdc) }
+  if (-not $okPrint) {
+    # Fallback: copy the screen region (works when Studio isn't covered).
+    $g.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size($w, $hh)))
+  }
 }
-if ($w -le 0 -or $hh -le 0) { Write-Error "invalid window bounds"; exit 4 }
-
-$bmp = New-Object System.Drawing.Bitmap $w, $hh
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size($w, $hh)))
 $bmp.Save($OutPath, [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $bmp.Dispose()
 [Console]::Out.Write((@{ width = $w; height = $hh; title = $title } | ConvertTo-Json -Compress))
