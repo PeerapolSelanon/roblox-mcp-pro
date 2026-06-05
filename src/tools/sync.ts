@@ -4,9 +4,18 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { describeError } from "../services/studio.js";
+import { callStudio, describeError } from "../services/studio.js";
 import { ok, fail } from "../services/format.js";
-import { syncEngine } from "../sync/engine.js";
+
+/** Shape returned by the broker-side sync engine. */
+interface SyncStatus {
+  running: boolean;
+  roots: string[];
+  placeId: number | null;
+  scriptCount: number;
+  syncDir: string;
+  pushed?: number;
+}
 
 const InputSchema = z
   .object({
@@ -66,47 +75,29 @@ Error Handling:
     },
     async (input: Input) => {
       try {
+        // Sync runs in the shared broker process (one engine for all agents).
+        const status = await callStudio<SyncStatus>("manage_sync", input);
+        const structured = status as unknown as Record<string, unknown>;
         switch (input.action) {
-          case "start": {
-            const status = await syncEngine.start(input.roots);
+          case "start":
             return ok(
-              status as unknown as Record<string, unknown>,
+              structured,
               `Sync started. Mirroring ${status.roots.join(", ")} ` +
                 `(${status.scriptCount} scripts) to ${status.syncDir}.`,
             );
-          }
-          case "stop": {
-            await syncEngine.stop();
+          case "stop":
+            return ok(structured, "Sync stopped.");
+          case "status":
             return ok(
-              syncEngine.status() as unknown as Record<string, unknown>,
-              "Sync stopped.",
-            );
-          }
-          case "status": {
-            const status = syncEngine.status();
-            return ok(
-              status as unknown as Record<string, unknown>,
+              structured,
               status.running
                 ? `Sync running: ${status.roots.join(", ")} (${status.scriptCount} scripts) at ${status.syncDir}.`
                 : "Sync is not running.",
             );
-          }
-          case "pull": {
-            if (!syncEngine.isRunning()) return fail("Error: start sync before pulling.");
-            await syncEngine.pull();
-            return ok(
-              syncEngine.status() as unknown as Record<string, unknown>,
-              "Pulled latest from Studio to disk.",
-            );
-          }
-          case "push": {
-            if (!syncEngine.isRunning()) return fail("Error: start sync before pushing.");
-            const pushed = await syncEngine.push();
-            return ok(
-              { ...syncEngine.status(), pushed },
-              `Pushed ${pushed} scripts from disk to Studio.`,
-            );
-          }
+          case "pull":
+            return ok(structured, "Pulled latest from Studio to disk.");
+          case "push":
+            return ok(structured, `Pushed ${status.pushed ?? 0} scripts from disk to Studio.`);
           default:
             return fail("Error: unknown action.");
         }

@@ -1,8 +1,10 @@
 /**
- * Thin helper around the bridge for invoking Studio-side handlers from tools.
+ * Thin helper tools use to invoke Studio-side handlers. Routes through the
+ * client transport to the shared broker, which forwards to the Studio plugin.
  */
 
-import { bridge, StudioError } from "./bridge.js";
+import { StudioError } from "./errors.js";
+import { call } from "../client/transport.js";
 
 /**
  * Run a handler in Studio and return its result.
@@ -12,7 +14,7 @@ export async function callStudio<T = unknown>(
   tool: string,
   args: unknown,
 ): Promise<T> {
-  return (await bridge.enqueue(tool, args)) as T;
+  return call<T>(tool, args);
 }
 
 /** Convert any thrown value into a clear, actionable error string for tools. */

@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 /**
- * roblox-mcp-pro — MCP server entry point.
+ * roblox-mcp-pro — MCP server entry point (client mode).
  *
- * Boots the localhost bridge (for the Studio plugin) and serves MCP over stdio.
+ * Each AI agent spawns its own copy of this process. Instead of binding the
+ * bridge port directly (which let only one agent run at a time), it connects to
+ * a shared broker — auto-spawning one if none is running — so Claude Code,
+ * Codex, Antigravity, etc. can all drive the same Studio session concurrently.
  * All logging goes to stderr; stdout is reserved for the MCP protocol.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { bridge } from "./services/bridge.js";
 import { registerAllTools } from "./tools/index.js";
+import { ensureBroker, register, identify, deregister } from "./client/transport.js";
 import { BRIDGE_HOST, BRIDGE_PORT } from "./constants.js";
 
 function log(message: string): void {
@@ -25,17 +28,22 @@ async function main(): Promise<void> {
   registerAllTools(server);
 
   try {
-    await bridge.start();
-    log(`bridge listening on http://${BRIDGE_HOST}:${BRIDGE_PORT}`);
+    await ensureBroker();
+    await register(process.env.ROBLOX_MCP_CLIENT_NAME ?? "agent");
+    log(`connected to broker at http://${BRIDGE_HOST}:${BRIDGE_PORT} (monitor at /)`);
   } catch (error) {
     log(
-      `FATAL: could not bind bridge on ${BRIDGE_HOST}:${BRIDGE_PORT} — ` +
-        `${error instanceof Error ? error.message : String(error)}. ` +
-        "Is another roblox-mcp-pro instance already running? " +
-        "Set ROBLOX_MCP_PORT to use a different port.",
+      `FATAL: could not reach the roblox-mcp-pro broker — ` +
+        `${error instanceof Error ? error.message : String(error)}`,
     );
     process.exit(1);
   }
+
+  // Once the MCP handshake completes we know which agent connected; label it.
+  server.server.oninitialized = () => {
+    const info = server.server.getClientVersion();
+    if (info?.name) identify(info.name, info.version);
+  };
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -43,7 +51,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (): Promise<void> => {
     log("shutting down…");
-    await bridge.stop();
+    await deregister();
     process.exit(0);
   };
   process.on("SIGINT", () => void shutdown());

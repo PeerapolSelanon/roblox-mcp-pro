@@ -13,8 +13,15 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import { bridge } from "../services/bridge.js";
-import { callStudio } from "../services/studio.js";
 import type { StudioEvent } from "../types.js";
+
+/**
+ * The sync engine runs *inside the broker process*, so it talks to Studio
+ * directly via the local bridge queue rather than the client transport.
+ */
+function callStudio<T = unknown>(tool: string, args: unknown): Promise<T> {
+  return bridge.enqueue(tool, args) as Promise<T>;
+}
 import {
   writeTree,
   type ScriptFile,

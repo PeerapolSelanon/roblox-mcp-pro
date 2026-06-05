@@ -28,6 +28,9 @@ import type {
   CommandResponse,
   StudioEvent,
 } from "../types.js";
+import { StudioError } from "./errors.js";
+
+export { StudioError };
 
 interface InflightEntry {
   resolve: (value: unknown) => void;
@@ -42,13 +45,16 @@ interface Waiter {
 
 type EventListener = (event: StudioEvent) => void;
 
-/** Raised when a command fails on the plugin side or never completes. */
-export class StudioError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "StudioError";
-  }
-}
+/**
+ * Handler for routes the bridge itself doesn't serve (the broker layers its
+ * client RPC API and monitoring dashboard on top via this hook). Returns true
+ * if it handled the request, in which case the bridge skips its 404.
+ */
+export type UnhandledRoute = (
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+) => boolean | Promise<boolean>;
 
 export class Bridge {
   private server: http.Server | null = null;
@@ -57,6 +63,12 @@ export class Bridge {
   private readonly waiters: Waiter[] = [];
   private readonly eventListeners = new Set<EventListener>();
   private lastPollAt: number | null = null;
+
+  /**
+   * Optional hook the broker sets to serve its own routes (`/rpc/*`, the
+   * dashboard, `/api/*`) on the same socket. Left null in any other context.
+   */
+  onUnhandled: UnhandledRoute | null = null;
 
   /** Start listening. Resolves once the socket is bound. */
   async start(): Promise<void> {
@@ -176,8 +188,17 @@ export class Bridge {
     const url = new URL(req.url ?? "/", `http://${BRIDGE_HOST}`);
     const path = url.pathname;
 
+    // The monitoring dashboard is meant to be opened in a browser, which can't
+    // attach the shared token — exempt its read-only routes from auth.
+    const isDashboard =
+      req.method === "GET" && (path === "/" || path.startsWith("/api/"));
+
     // Auth (optional shared token).
-    if (BRIDGE_TOKEN && req.headers["x-auth-token"] !== BRIDGE_TOKEN) {
+    if (
+      BRIDGE_TOKEN &&
+      !isDashboard &&
+      req.headers["x-auth-token"] !== BRIDGE_TOKEN
+    ) {
       this.sendJson(res, 401, { error: "Invalid or missing x-auth-token" });
       return;
     }
@@ -232,6 +253,11 @@ export class Bridge {
       for (const listener of this.eventListeners) listener(event);
       this.sendJson(res, 200, { ok: true });
       return;
+    }
+
+    if (this.onUnhandled) {
+      const handled = await this.onUnhandled(req, res, url);
+      if (handled) return;
     }
 
     this.sendJson(res, 404, { error: `Unknown route ${req.method} ${path}` });

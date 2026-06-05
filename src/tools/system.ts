@@ -4,8 +4,8 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { bridge } from "../services/bridge.js";
 import { callStudio } from "../services/studio.js";
+import { status as brokerStatus } from "../client/transport.js";
 import { ok } from "../services/format.js";
 
 const InputSchema = z.object({}).strict();
@@ -46,7 +46,7 @@ Error Handling:
       },
     },
     async () => {
-      const status = bridge.status();
+      const status = await brokerStatus();
       const out: Record<string, unknown> = { bridge: status };
       let text = [
         "# Roblox MCP — System Info",

@@ -10,14 +10,22 @@ keep a bidirectional Studio ↔ local-filesystem mirror.
 ## How it works
 
 ```
-AI Agent ──MCP stdio──▶ MCP Server (Node/TS) ──HTTP 127.0.0.1:3690──▶ Studio Plugin (Luau)
-                          tool registry            long-poll /dequeue        dispatch handlers
-                          bridge (queue)           POST /respond             execute via Studio API
+AI Agent A ─MCP stdio─▶ MCP client ─┐
+AI Agent B ─MCP stdio─▶ MCP client ─┼─HTTP 127.0.0.1:3690─▶ Broker ◀─long-poll─ Studio Plugin (Luau)
+AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + dashboard    dispatch handlers
 ```
 
-1. **MCP server** (`src/`) exposes tools over stdio.
-2. **Bridge** holds a localhost HTTP server; each tool enqueues a command and awaits a result.
-3. **Studio plugin** (`plugin/`) long-polls the bridge, runs the command in Studio, posts the result back.
+1. **MCP client** (`src/`) exposes tools over stdio. Each AI agent spawns its own.
+2. **Broker** is one shared localhost process that owns port 3690, queues commands, and talks to
+   the plugin. The first client to start auto-spawns it; the rest just connect — so **multiple AI
+   agents (Claude Code, Codex, Antigravity, …) can drive the same Studio session at once**.
+3. **Studio plugin** (`plugin/`) long-polls the broker, runs each command in Studio, posts the
+   result back.
+
+### Monitor dashboard
+
+Open **http://127.0.0.1:3690/** in a browser to watch connected agents, plugin status, the command
+queue, live activity, and sync status in real time.
 
 ## Install (end users)
 
