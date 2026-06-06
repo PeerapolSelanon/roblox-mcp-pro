@@ -16,7 +16,8 @@ import { ensureBroker, register, identify, deregister } from "./client/transport
 import { BRIDGE_HOST, BRIDGE_PORT } from "./constants.js";
 import { resolveLicense } from "./licensing/license.js";
 import { installLicenseGate } from "./licensing/gate.js";
-import { installPlugin } from "./install-plugin.js";
+import { installPlugin, ensurePluginInstalled } from "./install-plugin.js";
+import { VERSION } from "./version.js";
 
 function log(message: string): void {
   process.stderr.write(`[roblox-mcp-pro] ${message}\n`);
@@ -27,6 +28,24 @@ async function main(): Promise<void> {
   if (process.argv[2] === "install-plugin") {
     await installPlugin();
     return;
+  }
+  if (process.argv[2] === "--version" || process.argv[2] === "-v") {
+    process.stdout.write(`${VERSION}\n`);
+    return;
+  }
+
+  log(`roblox-mcp-pro v${VERSION}`);
+
+  // Keep the Studio plugin up to date automatically — copy the bundled plugin
+  // into the Roblox Plugins folder when it's missing or out of date, so a server
+  // update also updates the plugin with no action from the user.
+  if (process.env.ROBLOX_MCP_NO_PLUGIN_AUTOINSTALL !== "1") {
+    const sync = await ensurePluginInstalled();
+    if (sync.status === "installed") {
+      log(`installed Studio plugin → ${sync.dest} (open Studio and click MCP)`);
+    } else if (sync.status === "updated") {
+      log(`updated Studio plugin → restart Roblox Studio to load the new version`);
+    }
   }
 
   const server = new McpServer({

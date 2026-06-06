@@ -8,6 +8,7 @@ import { callStudio } from "../services/studio.js";
 import { status as brokerStatus } from "../client/transport.js";
 import { ok } from "../services/format.js";
 import { currentLicense } from "../licensing/license.js";
+import { VERSION } from "../version.js";
 
 const InputSchema = z.object({}).strict();
 
@@ -38,10 +39,11 @@ export function registerSystemTools(server: McpServer): void {
     async () => {
       const status = await brokerStatus();
       const license = currentLicense();
-      const out: Record<string, unknown> = { bridge: status, license };
+      const out: Record<string, unknown> = { version: VERSION, bridge: status, license };
       let text = [
         "# Roblox MCP — System Info",
         "",
+        `- Version: ${VERSION}`,
         `- License: ${license.status} — ${license.message}`,
         `- Plugin connected: ${status.pluginConnected ? "yes ✅" : "no ❌"}`,
         `- Queued commands: ${status.queued}`,

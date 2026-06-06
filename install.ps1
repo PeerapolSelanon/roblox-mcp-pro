@@ -238,7 +238,7 @@ if (typeof cfg !== "object" || cfg === null || Array.isArray(cfg)) cfg = {};
 if (typeof cfg.mcpServers !== "object" || cfg.mcpServers === null || Array.isArray(cfg.mcpServers)) {
   cfg.mcpServers = {};
 }
-cfg.mcpServers["roblox-mcp-pro"] = { command: "npx", args: ["-y", "roblox-mcp-pro"] };
+cfg.mcpServers["roblox-mcp-pro"] = { command: "npx", args: ["-y", "roblox-mcp-pro@latest"] };
 fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + "\n");
 '@
 
@@ -275,7 +275,7 @@ function Register-McpToml($configPath, $appName) {
         $codexBlock = @'
 [mcp_servers.roblox-mcp-pro]
 command = "npx"
-args = ["-y", "roblox-mcp-pro"]
+args = ["-y", "roblox-mcp-pro@latest"]
 '@
         $existing = ""
         if (Test-Path $configPath) {
@@ -295,7 +295,7 @@ args = ["-y", "roblox-mcp-pro"]
         Write-Host "  Add this to $configPath manually:" -ForegroundColor Yellow
         Write-Host '  [mcp_servers.roblox-mcp-pro]' -ForegroundColor Gray
         Write-Host '  command = "npx"' -ForegroundColor Gray
-        Write-Host '  args = ["-y", "roblox-mcp-pro"]' -ForegroundColor Gray
+        Write-Host '  args = ["-y", "roblox-mcp-pro@latest"]' -ForegroundColor Gray
         return $false
     }
 }
@@ -322,7 +322,7 @@ if (Test-Path $mergeScriptFile) {
 
 if ($registeredCount -eq 0) {
     Write-Host "[WARN] No active AI app directories found. Please configure manually or register using:" -ForegroundColor Yellow
-    Write-Host "  claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro" -ForegroundColor Yellow
+    Write-Host "  claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest" -ForegroundColor Yellow
 } else {
     Write-Host "[OK] Registered MCP server in $registeredCount client configurations." -ForegroundColor Green
 }

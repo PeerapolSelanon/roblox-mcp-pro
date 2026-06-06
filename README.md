@@ -44,9 +44,9 @@ Two commands get you running:
 
 ```bash
 # 1) Register the server with your AI agent (Claude Code shown; see below for others)
-claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro
+claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest
 # 2) Install the Studio plugin
-npx roblox-mcp-pro install-plugin
+npx roblox-mcp-pro@latest install-plugin
 ```
 
 Then open Roblox Studio, click the **MCP** button, and ask your agent to run `system_info`.
@@ -64,12 +64,16 @@ only *where* you write it down changes. The command is always:
 
 ```
 command:  npx
-args:     -y  roblox-mcp-pro
+args:     -y  roblox-mcp-pro@latest
 ```
 
-`npx` downloads and runs the published package on demand — no clone, no build. (Prefer a pinned
-copy? Run `npm i -g roblox-mcp-pro` once, then use `roblox-mcp-pro` as the command instead of
-`npx`.)
+`npx` downloads and runs the published package on demand — no clone, no build. The `@latest` tag
+means you **always get the newest version automatically** — updates need zero effort on your part.
+
+> **Updates are automatic.** Because the command uses `@latest`, each time your AI client starts
+> the server it fetches the newest release. The Studio plugin also self-updates: the server copies
+> the latest bundled plugin into your Plugins folder on startup (just restart Studio when it tells
+> you a new plugin was installed). You never have to reinstall anything by hand.
 
 ### Part 1 — Install the MCP server
 
@@ -78,26 +82,26 @@ copy? Run `npm i -g roblox-mcp-pro` once, then use `roblox-mcp-pro` as the comma
 **Claude Code**
 
 ```bash
-claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro
+claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest
 ```
 
 **Codex**
 
 ```bash
-codex mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro
+codex mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest
 ```
 
 > If `codex mcp add` isn't available in your version, add this to `~/.codex/config.toml` instead:
 > ```toml
 > [mcp_servers.roblox-mcp-pro]
 > command = "npx"
-> args = ["-y", "roblox-mcp-pro"]
+> args = ["-y", "roblox-mcp-pro@latest"]
 > ```
 
 **Antigravity / Gemini CLI**
 
 ```bash
-gemini mcp add roblox-mcp-pro npx -y roblox-mcp-pro
+gemini mcp add roblox-mcp-pro npx -y roblox-mcp-pro@latest
 ```
 
 > If that doesn't work, add the JSON block below to `~/.gemini/config/mcp_config.json`.
@@ -111,7 +115,7 @@ These don't have a CLI command, so you paste the **same JSON** into the client's
   "mcpServers": {
     "roblox-mcp-pro": {
       "command": "npx",
-      "args": ["-y", "roblox-mcp-pro"]
+      "args": ["-y", "roblox-mcp-pro@latest"]
     }
   }
 }
@@ -143,7 +147,7 @@ in that client's config file):
   "mcpServers": {
     "roblox-mcp-pro": {
       "command": "npx",
-      "args": ["-y", "roblox-mcp-pro"],
+      "args": ["-y", "roblox-mcp-pro@latest"],
       "env": { "ROBLOX_MCP_LICENSE": "YOUR-LICENSE-KEY" }
     }
   }
@@ -155,7 +159,7 @@ For **Codex** (TOML), add the env under the server block:
 ```toml
 [mcp_servers.roblox-mcp-pro]
 command = "npx"
-args = ["-y", "roblox-mcp-pro"]
+args = ["-y", "roblox-mcp-pro@latest"]
 env = { ROBLOX_MCP_LICENSE = "YOUR-LICENSE-KEY" }
 ```
 
@@ -173,13 +177,18 @@ Don't want it in a config file? Save the key to **`%USERPROFILE%\.roblox-mcp-pro
 
 ### Part 2 — Install the Studio plugin
 
-The plugin ships **inside the npm package**. One command copies it into your Roblox Plugins folder:
+**Usually automatic** — the first time your AI client starts the server, it copies the plugin into
+your Roblox Plugins folder for you (and keeps it updated on every launch). In most cases you can
+skip straight to Part 3.
+
+Want to install it right now without starting a client? Run:
 
 ```bash
-npx roblox-mcp-pro install-plugin
+npx roblox-mcp-pro@latest install-plugin
 ```
 
-That's it — it works on Windows and macOS and tells you where it put the file.
+It works on Windows and macOS and tells you where it put the file. (To disable the automatic
+behavior, set the env var `ROBLOX_MCP_NO_PLUGIN_AUTOINSTALL=1`.)
 
 **Prefer to do it by hand?** The file lives in the installed package at
 `node_modules/roblox-mcp-pro/plugin/RobloxMcpPro.rbxmx` — copy it into:
