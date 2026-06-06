@@ -4,13 +4,9 @@
   "description": "MCP server that lets AI agents control Roblox Studio: live Luau execution, instance query/mutate, UI/terrain/lighting, and bidirectional Studio<->local sync. Paid subscription with a free trial.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "Peerapol",
-  "homepage": "https://github.com/PeerapolSelanon/roblox-mcp-pro#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/PeerapolSelanon/roblox-mcp-pro.git"
-  },
+  "homepage": "https://peerapolselanon.github.io/roblox-mcp-pro-web/",
   "bugs": {
-    "url": "https://github.com/PeerapolSelanon/roblox-mcp-pro/issues"
+    "url": "mailto:peerapolselanon@gmail.com"
   },
   "keywords": [
     "roblox",
