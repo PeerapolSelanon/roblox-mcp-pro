@@ -25,7 +25,7 @@ import {
   LEMONSQUEEZY_PRODUCT_ID,
   OWNERSHIP_CHECK_ENABLED,
 } from "./config.js";
-import { readStore, writeStore } from "./store.js";
+import { readStore, writeStore, type LicenseStore } from "./store.js";
 import { activate, validate, type LsResult } from "./lemonsqueezy.js";
 
 export type LicenseStatus = "licensed" | "trial" | "locked";
@@ -70,53 +70,13 @@ async function readLicenseFile(): Promise<string | undefined> {
   }
 }
 
-async function resolveWithKey(key: string): Promise<LicenseState | "no-key"> {
-  const store = await readStore();
-  // If the key changed since last activation, drop the stale instance binding.
-  let instanceId = store.licenseKey === key ? store.instanceId : undefined;
+/** A subscription/key status that still grants access. */
+function isLive(status?: string): boolean {
+  return status !== "expired" && status !== "disabled";
+}
 
-  // Activate this machine the first time we see this key.
-  if (!instanceId) {
-    const act = await activate(key, os.hostname() || "device");
-    if (act.reachable) {
-      if (act.valid && act.instanceId && ownsKey(act)) {
-        instanceId = act.instanceId;
-        await writeStore({ instanceId, licenseKey: key });
-      } else if (act.reachable && !ownsKey(act)) {
-        return "no-key"; // key belongs to a different store/product
-      }
-      // else: reachable but invalid → fall through to validate for a clear status
-    }
-    // If unreachable, fall through to the offline-grace path below.
-  }
-
-  const val = await validate(key, instanceId);
-
-  if (val.reachable) {
-    if (!ownsKey(val)) return "no-key";
-    if (val.valid && val.status !== "expired" && val.status !== "disabled") {
-      await writeStore({
-        licenseKey: key,
-        lastValidatedAt: new Date().toISOString(),
-        lastValidationOk: true,
-      });
-      return {
-        status: "licensed",
-        message: `Licensed ✅ (${PRODUCT_NAME}).`,
-        expiresAt: val.expiresAt ?? null,
-      };
-    }
-    await writeStore({ lastValidationOk: false });
-    return {
-      status: "locked",
-      message:
-        `Your ${PRODUCT_NAME} subscription is ${val.status ?? "inactive"}. ` +
-        `Renew at ${PURCHASE_URL}`,
-      expiresAt: val.expiresAt ?? null,
-    };
-  }
-
-  // Network failure — honor an offline grace window for known-good licenses.
+/** Result when Lemon Squeezy is unreachable: offline grace window, else locked. */
+function offlineResult(store: LicenseStore): LicenseState {
   if (store.lastValidationOk && store.lastValidatedAt) {
     const used = daysBetween(store.lastValidatedAt, Date.now());
     if (used <= OFFLINE_GRACE_DAYS) {
@@ -132,6 +92,79 @@ async function resolveWithKey(key: string): Promise<LicenseState | "no-key"> {
     message:
       `Couldn't verify your ${PRODUCT_NAME} license (no internet). ` +
       "Connect to the internet and try again.",
+  };
+}
+
+const licensed = (expiresAt?: string | null): LicenseState => ({
+  status: "licensed",
+  message: `Licensed ✅ (${PRODUCT_NAME}).`,
+  expiresAt: expiresAt ?? null,
+});
+
+/**
+ * Resolve a license key. The activation limit is enforced by REQUIRING a bound
+ * activation instance: a machine either re-validates its own instance, or it
+ * must successfully ACTIVATE a new one. If activation fails because the limit is
+ * full, we lock — we never fall back to a bare key check (which would let one key
+ * run on unlimited machines).
+ */
+async function resolveWithKey(key: string): Promise<LicenseState | "no-key"> {
+  const store = await readStore();
+  const boundInstance = store.licenseKey === key ? store.instanceId : undefined;
+
+  // 1) Returning machine — re-validate its own activation instance.
+  if (boundInstance) {
+    const val = await validate(key, boundInstance);
+    if (!val.reachable) return offlineResult(store);
+    if (!ownsKey(val)) return "no-key";
+    if (val.valid && isLive(val.status)) {
+      await writeStore({
+        licenseKey: key,
+        lastValidatedAt: new Date().toISOString(),
+        lastValidationOk: true,
+      });
+      return licensed(val.expiresAt);
+    }
+    if (!isLive(val.status)) {
+      await writeStore({ lastValidationOk: false });
+      return {
+        status: "locked",
+        message: `Your ${PRODUCT_NAME} subscription is ${val.status}. Renew at ${PURCHASE_URL}`,
+        expiresAt: val.expiresAt ?? null,
+      };
+    }
+    // Instance was deactivated elsewhere — forget it and try to re-activate below.
+    await writeStore({ instanceId: undefined });
+  }
+
+  // 2) New machine — MUST activate. This is what enforces the activation limit.
+  const act = await activate(key, os.hostname() || "device");
+  if (!act.reachable) return offlineResult(store);
+
+  if (act.valid && act.instanceId && ownsKey(act)) {
+    await writeStore({
+      instanceId: act.instanceId,
+      licenseKey: key,
+      lastValidatedAt: new Date().toISOString(),
+      lastValidationOk: true,
+    });
+    return licensed(act.expiresAt);
+  }
+
+  // Activation failed — classify why.
+  if (!ownsKey(act)) return "no-key"; // wrong store/product or key not found → trial
+  if (!isLive(act.status)) {
+    return {
+      status: "locked",
+      message: `Your ${PRODUCT_NAME} subscription is ${act.status}. Renew at ${PURCHASE_URL}`,
+    };
+  }
+  // Key is valid & ours, but this machine couldn't be activated → device limit hit.
+  return {
+    status: "locked",
+    message:
+      `This license is already active on another device (activation limit reached). ` +
+      `Deactivate the other device, or get another license at ${PURCHASE_URL}`,
   };
 }
 
