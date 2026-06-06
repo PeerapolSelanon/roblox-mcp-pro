@@ -12,8 +12,8 @@ Write-Host "     Roblox MCP Pro Installer for Windows     " -ForegroundColor Cya
 Write-Host "==============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# [1/5] Detect Node.js
-Write-Host "[1/5] Checking Prerequisites..." -ForegroundColor Cyan
+# [1/4] Detect Node.js
+Write-Host "[1/4] Checking Prerequisites..." -ForegroundColor Cyan
 try {
     $nodeVersion = node -v 2>$null
     if ($nodeVersion -match "^v(\d+)") {
@@ -33,8 +33,8 @@ try {
     exit 1
 }
 
-# [2/5] Install Roblox Studio Plugin
-Write-Host "`n[2/5] Installing Roblox Studio Plugin..." -ForegroundColor Cyan
+# [2/4] Install Roblox Studio Plugin
+Write-Host "`n[2/4] Installing Roblox Studio Plugin..." -ForegroundColor Cyan
 $pluginsFolder = Join-Path $env:LOCALAPPDATA "Roblox\Plugins"
 if (-not (Test-Path $pluginsFolder)) {
     New-Item -ItemType Directory -Path $pluginsFolder -Force | Out-Null
@@ -93,19 +93,79 @@ try {
     Write-Host "  https://github.com/PeerapolSelanon/roblox-mcp-pro/releases" -ForegroundColor Yellow
 }
 
-# [3/5] Install agent skills (so AI assistants know how to drive this server in
-# any project — not just this repo). Skills live in ~/.claude/skills/<name>/ and
-# ~/.codex/skills/<name>/ when those clients are present.
-Write-Host "`n[3/5] Installing agent skills..." -ForegroundColor Cyan
-$skills = @("roblox-mcp-pro", "roblox-ui-from-image", "roblox-ui-animation", "roblox-studio-plugin")
-$skillRoots = @(
-    (Join-Path $env:USERPROFILE ".claude\skills"),
-    (Join-Path $env:USERPROFILE ".codex\skills")
+# --------------------------------------------------------------------------
+# Supported AI agents — single source of truth for BOTH the skill install
+# ([3/4]) and the MCP registration ([4/4]) below. Each entry is only acted on
+# when the agent is actually present on this machine (we Test-Path the relevant
+# parent dir), so nothing is created for agents the user doesn't have.
+#   McpPath / McpFormat — where/how to register the MCP server ("json"|"toml").
+#   SkillDir            — the agent's skills/ root, or $null if the agent has no
+#                         skills mechanism (only Claude Code & Codex do today).
+# --------------------------------------------------------------------------
+$agents = @(
+    @{
+        Name = "Claude Desktop"
+        McpPath = Join-Path $env:APPDATA "Claude\claude_desktop_config.json"
+        McpFormat = "json"
+        SkillDir = $null
+    },
+    @{
+        Name = "Claude Code"
+        McpPath = Join-Path $env:USERPROFILE ".claude.json"
+        McpFormat = "json"
+        SkillDir = Join-Path $env:USERPROFILE ".claude\skills"
+    },
+    @{
+        Name = "Gemini / Antigravity"
+        McpPath = Join-Path $env:USERPROFILE ".gemini\config\mcp_config.json"
+        McpFormat = "json"
+        SkillDir = $null
+    },
+    @{
+        Name = "Cursor"
+        McpPath = Join-Path $env:APPDATA "Cursor\User\globalStorage\moose-coder.cursor-mcp\mcp.json"
+        McpFormat = "json"
+        SkillDir = $null
+    },
+    @{
+        Name = "Cline / VS Code Extension"
+        McpPath = Join-Path $env:APPDATA "Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json"
+        McpFormat = "json"
+        SkillDir = $null
+    },
+    @{
+        Name = "Windsurf"
+        McpPath = Join-Path $env:USERPROFILE ".codeium\windsurf\mcp_config.json"
+        McpFormat = "json"
+        SkillDir = $null
+    },
+    @{
+        Name = "Codex"
+        McpPath = Join-Path $env:USERPROFILE ".codex\config.toml"
+        McpFormat = "toml"
+        SkillDir = Join-Path $env:USERPROFILE ".codex\skills"
+    }
 )
+
+# [3/4] Install agent skills (so AI assistants know how to drive this server in
+# any project — not just this repo). Only agents that (a) have a skills/ folder
+# mechanism and (b) are actually installed get the skills.
+Write-Host "`n[3/4] Installing agent skills..." -ForegroundColor Cyan
+$skills = @("roblox-mcp-pro", "roblox-ui-from-image", "roblox-ui-animation", "roblox-studio-plugin")
+# Skill destinations = skill-capable agents that are present on this machine.
+$skillRoots = @()
+foreach ($agent in $agents) {
+    if ($agent.SkillDir -and (Test-Path (Split-Path $agent.SkillDir -Parent))) {
+        $skillRoots += $agent.SkillDir
+    }
+}
+if ($skillRoots.Count -eq 0) {
+    Write-Host "[WARN] No skill-capable agents (Claude Code / Codex) found. Skipping skill install." -ForegroundColor Yellow
+}
 $repo = "PeerapolSelanon/roblox-mcp-pro"
 $skillCount = 0
 $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
-foreach ($skill in $skills) {
+foreach ($skill in $(if ($skillRoots.Count -gt 0) { $skills } else { @() })) {
     $apiPath = ".agents/skills/$skill/SKILL.md"
     try {
         $content = $null
@@ -141,36 +201,11 @@ if ($skillCount -gt 0) {
     Write-Host "[WARN] No skills installed (the AI will still work, just without the guides)." -ForegroundColor Yellow
 }
 
-# [4/5] Register MCP Server in JSON-based clients
-Write-Host "`n[4/5] Registering MCP Server..." -ForegroundColor Cyan
-
-# Define candidate config paths
-$configs = @(
-    @{
-        Name = "Claude Desktop"
-        Path = Join-Path $env:APPDATA "Claude\claude_desktop_config.json"
-    },
-    @{
-        Name = "Claude CLI"
-        Path = Join-Path $env:USERPROFILE ".claude.json"
-    },
-    @{
-        Name = "Gemini / Antigravity"
-        Path = Join-Path $env:USERPROFILE ".gemini\config\mcp_config.json"
-    },
-    @{
-        Name = "Cursor"
-        Path = Join-Path $env:APPDATA "Cursor\User\globalStorage\moose-coder.cursor-mcp\mcp.json"
-    },
-    @{
-        Name = "Cline / VS Code Extension"
-        Path = Join-Path $env:APPDATA "Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json"
-    },
-    @{
-        Name = "Windsurf"
-        Path = Join-Path $env:USERPROFILE ".codeium\windsurf\mcp_config.json"
-    }
-)
+# [4/4] Register MCP Server in all supported clients (driven by the shared
+# $agents list above). Most clients share the same JSON `mcpServers` shape;
+# Codex uses a TOML config and needs a different writer — the loop dispatches on
+# McpFormat so it's all one step.
+Write-Host "`n[4/4] Registering MCP Server..." -ForegroundColor Cyan
 
 $registeredCount = 0
 
@@ -232,11 +267,48 @@ function Register-Mcp($configPath, $appName) {
     }
 }
 
-foreach ($cfg in $configs) {
-    # Check if app is likely installed by looking at the parent folder
-    $parent = Split-Path $cfg.Path -Parent
+# Helper to inject config into Codex's TOML file. Codex uses a different format
+# than the JSON clients above, so we splice the [mcp_servers.roblox-mcp-pro] block
+# by regex (replacing any existing one) rather than reusing the Node JSON merge.
+function Register-McpToml($configPath, $appName) {
+    try {
+        $codexBlock = @'
+[mcp_servers.roblox-mcp-pro]
+command = "npx"
+args = ["-y", "roblox-mcp-pro"]
+'@
+        $existing = ""
+        if (Test-Path $configPath) {
+            $existing = [System.IO.File]::ReadAllText($configPath)
+        }
+
+        $pattern = '(?ms)^\[mcp_servers\.roblox-mcp-pro\]\r?\n.*?(?=^\[|\z)'
+        $updated = [System.Text.RegularExpressions.Regex]::Replace($existing, $pattern, "")
+        $updated = $updated.TrimEnd() + "`r`n`r`n" + $codexBlock + "`r`n"
+        [System.IO.File]::WriteAllText($configPath, $updated, (New-Object System.Text.UTF8Encoding($false)))
+
+        Write-Host "[OK] Registered with $($appName) ($configPath)" -ForegroundColor Green
+        Write-Host "     Restart Codex for the new MCP server to load." -ForegroundColor Gray
+        return $true
+    } catch {
+        Write-Host "[WARN] Failed to register with $($appName). Error: $_" -ForegroundColor Yellow
+        Write-Host "  Add this to $configPath manually:" -ForegroundColor Yellow
+        Write-Host '  [mcp_servers.roblox-mcp-pro]' -ForegroundColor Gray
+        Write-Host '  command = "npx"' -ForegroundColor Gray
+        Write-Host '  args = ["-y", "roblox-mcp-pro"]' -ForegroundColor Gray
+        return $false
+    }
+}
+
+foreach ($agent in $agents) {
+    # Check if the agent is likely installed by looking at the parent folder
+    $parent = Split-Path $agent.McpPath -Parent
     if (Test-Path $parent) {
-        $registered = Register-Mcp $cfg.Path $cfg.Name
+        if ($agent.McpFormat -eq "toml") {
+            $registered = Register-McpToml $agent.McpPath $agent.Name
+        } else {
+            $registered = Register-Mcp $agent.McpPath $agent.Name
+        }
         if ($registered) {
             $registeredCount++
         }
@@ -253,40 +325,6 @@ if ($registeredCount -eq 0) {
     Write-Host "  claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro" -ForegroundColor Yellow
 } else {
     Write-Host "[OK] Registered MCP server in $registeredCount client configurations." -ForegroundColor Green
-}
-
-# [5/5] Register MCP Server in Codex
-Write-Host "`n[5/5] Registering Codex MCP Server..." -ForegroundColor Cyan
-$codexConfig = Join-Path $env:USERPROFILE ".codex\config.toml"
-$codexDir = Split-Path $codexConfig -Parent
-if (Test-Path $codexDir) {
-    try {
-        $codexBlock = @'
-[mcp_servers.roblox-mcp-pro]
-command = "npx"
-args = ["-y", "roblox-mcp-pro"]
-'@
-        $existing = ""
-        if (Test-Path $codexConfig) {
-            $existing = [System.IO.File]::ReadAllText($codexConfig)
-        }
-
-        $pattern = '(?ms)^\[mcp_servers\.roblox-mcp-pro\]\r?\n.*?(?=^\[|\z)'
-        $updated = [System.Text.RegularExpressions.Regex]::Replace($existing, $pattern, "")
-        $updated = $updated.TrimEnd() + "`r`n`r`n" + $codexBlock + "`r`n"
-        [System.IO.File]::WriteAllText($codexConfig, $updated, (New-Object System.Text.UTF8Encoding($false)))
-
-        Write-Host "[OK] Registered with Codex ($codexConfig)" -ForegroundColor Green
-        Write-Host "     Restart Codex for the new MCP server to load." -ForegroundColor Gray
-    } catch {
-        Write-Host "[WARN] Failed to register with Codex. Error: $_" -ForegroundColor Yellow
-        Write-Host "  Add this to $codexConfig manually:" -ForegroundColor Yellow
-        Write-Host '  [mcp_servers.roblox-mcp-pro]' -ForegroundColor Gray
-        Write-Host '  command = "npx"' -ForegroundColor Gray
-        Write-Host '  args = ["-y", "roblox-mcp-pro"]' -ForegroundColor Gray
-    }
-} else {
-    Write-Host "[WARN] Codex config directory not found at $codexDir. Skipped Codex registration." -ForegroundColor Yellow
 }
 
 Write-Host "`n==============================================" -ForegroundColor Green

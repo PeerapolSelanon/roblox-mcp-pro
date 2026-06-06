@@ -14,16 +14,31 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerAllTools } from "./tools/index.js";
 import { ensureBroker, register, identify, deregister } from "./client/transport.js";
 import { BRIDGE_HOST, BRIDGE_PORT } from "./constants.js";
+import { resolveLicense } from "./licensing/license.js";
+import { installLicenseGate } from "./licensing/gate.js";
+import { installPlugin } from "./install-plugin.js";
 
 function log(message: string): void {
   process.stderr.write(`[roblox-mcp-pro] ${message}\n`);
 }
 
 async function main(): Promise<void> {
+  // One-shot CLI subcommands (run, then exit — not the MCP stdio server).
+  if (process.argv[2] === "install-plugin") {
+    await installPlugin();
+    return;
+  }
+
   const server = new McpServer({
     name: "roblox-studio-mcp-server",
     version: "0.1.0",
   });
+
+  // Resolve the license first, then put the gate in place before any tool
+  // registers so locked sessions short-circuit cleanly.
+  const license = await resolveLicense();
+  log(`license: ${license.status} — ${license.message}`);
+  installLicenseGate(server);
 
   registerAllTools(server);
 

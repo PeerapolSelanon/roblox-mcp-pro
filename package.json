@@ -2,7 +2,7 @@
   "name": "roblox-mcp-pro",
   "version": "0.1.13",
   "description": "Open MCP server that lets AI agents control Roblox Studio: live execution, instance query/mutate, and bidirectional Studio<->local sync.",
-  "license": "AGPL-3.0-or-later",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "Peerapol",
   "homepage": "https://github.com/PeerapolSelanon/roblox-mcp-pro#readme",
   "repository": {
@@ -31,6 +31,7 @@
     "dist",
     "plugin/src",
     "plugin/default.project.json",
+    "plugin/RobloxMcpPro.rbxmx",
     "README.md",
     "LICENSE"
   ],

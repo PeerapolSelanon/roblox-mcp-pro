@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 that lets AI agents drive a live Roblox Studio session: run Luau, query/mutate the DataModel, and
 keep a bidirectional Studio ↔ local-filesystem mirror. **Original, clean-room project** — do not
 copy from any commercial vendor; the string "weppy"/"WEPPY" must never appear in this repo.
-Licensed AGPL-3.0-or-later.
+**Proprietary** — All Rights Reserved; a paid commercial license is required to use it (see `LICENSE`).
 
 ## Commands
 
@@ -99,6 +99,24 @@ in every request). Tools declare MCP annotations
 compactly: Vector3/Vector2/Color3 as arrays (`[x,y,z]`), and read tools accept a `props` projection.
 
 All server logging goes to **stderr** (`stdout` is reserved for the MCP protocol).
+
+### Licensing (paid product)
+
+This is sold software, not open source (see `LICENSE`, `SELLING.md`). `src/licensing/*` enforces it
+in the **client** (`src/index.ts`): `resolveLicense()` runs once at startup and
+`installLicenseGate(server)` wraps `McpServer.registerTool` so every tool except `system_info`
+short-circuits with a "buy a license" `fail()` when the state is `locked`. States: `licensed` /
+`trial` / `locked`.
+- **`license.ts`** — the resolver. Key from `ROBLOX_MCP_LICENSE` or `~/.roblox-mcp-pro/license.key`.
+  With a key it activates+validates via Lemon Squeezy; valid→licensed, expired/disabled→locked,
+  offline-but-recently-valid→licensed (7-day grace), key-not-ours→falls through to trial. No key →
+  14-day local trial tracked in `~/.roblox-mcp-pro/state.json`.
+- **`lemonsqueezy.ts`** — calls the LS License API (`/activate`, `/validate`). These endpoints take
+  only the customer's key (no secret API key ships).
+- **`config.ts`** — `LEMONSQUEEZY_STORE_ID`/`PRODUCT_ID` must be set for a real release (env
+  `RMP_LS_STORE_ID`/`RMP_LS_PRODUCT_ID` or hardcode); while 0 the ownership check is skipped (dev
+  mode only). `system_info` reports the license state. Owner test tool: `scripts/check-license.mjs`.
+The broker is **not** gated — licensing belongs to each agent's client process.
 
 ### Sync engine
 

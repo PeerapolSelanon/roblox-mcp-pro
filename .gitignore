@@ -3,6 +3,10 @@ dist/
 *.log
 .DS_Store
 
+# Local secrets — Lemon Squeezy API key etc. NEVER commit.
+.secrets/
+*.key
+
 # Built Studio plugin artifact
 plugin/*.rbxmx
 plugin/*.rbxm
@@ -21,4 +25,7 @@ roblox-mcp-sync/
 !.agents/skills/roblox-ui-from-image/
 !.agents/skills/roblox-ui-animation/
 .claude/
+
+.github/skills/*
+
 skills-lock.json

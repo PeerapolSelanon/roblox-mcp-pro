@@ -1,58 +1,110 @@
 # roblox-mcp-pro
 
-An open-source **Model Context Protocol (MCP) server** that lets AI agents (Claude, Cursor,
-etc.) control a live **Roblox Studio** session: run Luau, query and mutate the DataModel, and
-keep a bidirectional Studio ↔ local-filesystem mirror.
+An open-source **Model Context Protocol (MCP) server** that lets AI agents (Claude, Codex,
+Cursor, Antigravity, …) control a live **Roblox Studio** session — run Luau, query and mutate
+the DataModel, build UI/terrain/lighting, and keep a two-way Studio ↔ local-file mirror.
 
-> Original, independent project. All code is written from scratch and licensed under
-> AGPL-3.0-or-later.
-
-## How it works
-
-```
-AI Agent A ─MCP stdio─▶ MCP client ─┐
-AI Agent B ─MCP stdio─▶ MCP client ─┼─HTTP 127.0.0.1:3690─▶ Broker ◀─long-poll─ Studio Plugin (Luau)
-AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + dashboard    dispatch handlers
-```
-
-1. **MCP client** (`src/`) exposes tools over stdio. Each AI agent spawns its own.
-2. **Broker** is one shared localhost process that owns port 3690, queues commands, and talks to
-   the plugin. The first client to start auto-spawns it; the rest just connect — so **multiple AI
-   agents (Claude Code, Codex, Antigravity, …) can drive the same Studio session at once**.
-3. **Studio plugin** (`plugin/`) long-polls the broker, runs each command in Studio, posts the
-   result back.
-
-### Monitor dashboard
-
-Open **http://127.0.0.1:3690/** in a browser to watch connected agents, plugin status, the command
-queue, live activity, and sync status in real time.
-
-## Install (end users)
-
-### Super Easy Install (Windows - Private Repo)
-
-Open PowerShell and run the following command (requires GitHub CLI `gh` to be installed and authenticated). It downloads the Roblox Studio plugin, installs the agent skills (so your AI knows how to drive the server **in any project**, not just this repo), and registers the MCP server in your AI clients:
-
-```powershell
-gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | Out-String | iex
-```
+> Original, independent project. All code is written from scratch by the author.
+> **Proprietary software** — a paid commercial license is required to use it. See
+> [`LICENSE`](LICENSE).
 
 ---
 
-### Manual Install
+## What you install
 
-You need two pieces: the **MCP server** (a CLI you register with your agent) and the **Studio
-plugin** (a file Studio loads).
+There are **three pieces**. Most people only need the first two.
 
-### 1. Register the server with your agent
+| # | Piece | What it is | Required? |
+|---|-------|-----------|-----------|
+| 1 | **MCP server** | An npm package (`roblox-mcp-pro`) you register with your AI agent. | ✅ Yes |
+| 2 | **Studio plugin** | A file (`RobloxMcpPro.rbxmx`) you drop into Roblox Studio. | ✅ Yes |
+| 3 | **Agent skills** | Guides that teach your AI *how* to drive the server well. | ⭐ Recommended |
 
-Claude Code, one command:
+```
+Your AI agent ──MCP──▶ roblox-mcp-pro ──HTTP 127.0.0.1:3690──▶ Studio plugin ──▶ Roblox Studio
+   (1)                      (server)                              (2)
+```
+
+You **never start the server by hand** — your AI agent launches it automatically using the
+command you register below. Multiple agents (Claude Code, Codex, Antigravity, …) can drive the
+**same** Studio session at once.
+
+### 💳 License
+
+Roblox MCP Pro is a paid product with a **14-day free trial** — no key needed to try it. After the
+trial you need a license key (see [pricing/buy](https://roblox-mcp-pro.lemonsqueezy.com/checkout/buy/91ab6fc2-cbd5-42b8-8125-483bed295faa)). Once you
+have a key, add it as shown in **[Part 1 → Add your license key](#add-your-license-key)**. Check
+status anytime by asking your agent to run `system_info`.
+
+---
+
+## 🚀 Quick install
+
+Two commands get you running:
+
+```bash
+# 1) Register the server with your AI agent (Claude Code shown; see below for others)
+claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro
+# 2) Install the Studio plugin
+npx roblox-mcp-pro install-plugin
+```
+
+Then open Roblox Studio, click the **MCP** button, and ask your agent to run `system_info`.
+For other AI clients and license-key setup, see the manual steps below.
+
+> _Maintainer note:_ collaborators with repo access can run the all-in-one Windows installer
+> `gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | Out-String | iex`.
+
+---
+
+## 🔧 Manual install
+
+The server is a single npm package. **Every AI client uses the exact same launch command** —
+only *where* you write it down changes. The command is always:
+
+```
+command:  npx
+args:     -y  roblox-mcp-pro
+```
+
+`npx` downloads and runs the published package on demand — no clone, no build. (Prefer a pinned
+copy? Run `npm i -g roblox-mcp-pro` once, then use `roblox-mcp-pro` as the command instead of
+`npx`.)
+
+### Part 1 — Install the MCP server
+
+#### A. CLI agents (one command each) — Claude Code · Codex · Antigravity / Gemini
+
+**Claude Code**
 
 ```bash
 claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro
 ```
 
-Or add it to any client's MCP config manually:
+**Codex**
+
+```bash
+codex mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro
+```
+
+> If `codex mcp add` isn't available in your version, add this to `~/.codex/config.toml` instead:
+> ```toml
+> [mcp_servers.roblox-mcp-pro]
+> command = "npx"
+> args = ["-y", "roblox-mcp-pro"]
+> ```
+
+**Antigravity / Gemini CLI**
+
+```bash
+gemini mcp add roblox-mcp-pro npx -y roblox-mcp-pro
+```
+
+> If that doesn't work, add the JSON block below to `~/.gemini/config/mcp_config.json`.
+
+#### B. Other clients (edit one config file) — Claude Desktop · Cursor · Windsurf · Cline
+
+These don't have a CLI command, so you paste the **same JSON** into the client's config file:
 
 ```json
 {
@@ -65,53 +117,116 @@ Or add it to any client's MCP config manually:
 }
 ```
 
-`npx` downloads and runs the published package — no clone or build needed. (Prefer a pinned global
-install? `npm i -g roblox-mcp-pro`, then use `"command": "roblox-mcp-pro"`.)
+> If the file already has other servers, just add the `"roblox-mcp-pro"` entry **inside** the
+> existing `"mcpServers"` object — don't replace the whole file.
 
-Codex uses TOML. Add this to `%USERPROFILE%\.codex\config.toml`:
+Where each file lives:
+
+| Client | Config file (Windows) |
+|--------|------------------------|
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `%APPDATA%\Cursor\User\globalStorage\moose-coder.cursor-mcp\mcp.json` |
+| Windsurf | `%USERPROFILE%\.codeium\windsurf\mcp_config.json` |
+| Cline (VS Code) | `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json` |
+
+After editing, **restart the client** so it picks up the new server.
+
+<a id="add-your-license-key"></a>
+#### Add your license key
+
+During the 14-day trial you can skip this. After buying, you get a license key — add it to your
+client config in an **`env`** block next to the command. Example (works for any client; just put it
+in that client's config file):
+
+```json
+{
+  "mcpServers": {
+    "roblox-mcp-pro": {
+      "command": "npx",
+      "args": ["-y", "roblox-mcp-pro"],
+      "env": { "ROBLOX_MCP_LICENSE": "YOUR-LICENSE-KEY" }
+    }
+  }
+}
+```
+
+For **Codex** (TOML), add the env under the server block:
 
 ```toml
 [mcp_servers.roblox-mcp-pro]
 command = "npx"
 args = ["-y", "roblox-mcp-pro"]
+env = { ROBLOX_MCP_LICENSE = "YOUR-LICENSE-KEY" }
 ```
 
-Optional environment variables:
+Don't want it in a config file? Save the key to **`%USERPROFILE%\.roblox-mcp-pro\license.key`**
+(one line, just the key). Restart the client, then run `system_info` — it should show
+`license: licensed`.
 
-| Variable           | Default | Meaning                                  |
-| ------------------ | ------- | ---------------------------------------- |
-| `ROBLOX_MCP_PORT`  | `3690`  | Bridge port (plugin must match).         |
-| `ROBLOX_MCP_TOKEN` | _(none)_| Shared secret; also set it in the plugin.|
+#### Optional environment variables
 
-### 2. Install the Studio plugin
+| Variable             | Default  | Meaning                                    |
+| -------------------- | -------- | ------------------------------------------ |
+| `ROBLOX_MCP_LICENSE` | _(none)_ | Your license key (after the free trial).   |
+| `ROBLOX_MCP_PORT`    | `3690`   | Bridge port (the plugin must match).       |
+| `ROBLOX_MCP_TOKEN`   | _(none)_ | Shared secret; also set it in the plugin.  |
 
-Download **`RobloxMcpPro.rbxmx`** from the
-[latest release](https://github.com/PeerapolSelanon/roblox-mcp-pro/releases/latest) and drop it
-into your local plugins folder:
+### Part 2 — Install the Studio plugin
 
-- Windows: `%LOCALAPPDATA%\Roblox\Plugins`
-- macOS: `~/Documents/Roblox/Plugins`
+The plugin ships **inside the npm package**. One command copies it into your Roblox Plugins folder:
 
-Open Studio — you'll see a **Roblox MCP Pro** toolbar. (Studio enables HTTP requests automatically
-on connect; if needed, set `HttpService.HttpEnabled = true`.)
-
-### 3. Connect
-
-In Studio, click the **MCP** toolbar button so it's highlighted. Ask your agent to call
-`system_info` — it should report `pluginConnected: true`.
-
-## Build from source (developers)
-
-```powershell
-npm install
-npm run build      # compile the server to dist/
-.\build.ps1        # build the plugin .rbxmx and install it to the Plugins folder
+```bash
+npx roblox-mcp-pro install-plugin
 ```
 
-When working **in this repo** with Claude Code, a project `.mcp.json` is already included — just
-approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
+That's it — it works on Windows and macOS and tells you where it put the file.
 
-## Tools (28)
+**Prefer to do it by hand?** The file lives in the installed package at
+`node_modules/roblox-mcp-pro/plugin/RobloxMcpPro.rbxmx` — copy it into:
+
+- **Windows:** `%LOCALAPPDATA%\Roblox\Plugins`
+- **macOS:** `~/Documents/Roblox/Plugins`
+
+Open Roblox Studio — a **Roblox MCP Pro** button appears in the toolbar. (Studio turns on HTTP
+requests automatically when you connect; if needed, set `HttpService.HttpEnabled = true`.)
+
+### Part 3 — Install the agent skills (recommended)
+
+Skills are short guides that teach your AI how to use the tools well (building UI from an image,
+animating GUIs, writing Studio plugins, etc.). **Only Claude Code and Codex read skills today** —
+other clients still work fine, just without the extra guidance.
+
+The Windows quick-installer above does this for you. To do it manually, copy each folder from this
+repo's `.agents/skills/` into your agent's skills directory:
+
+| Agent | Skills folder |
+|-------|----------------|
+| Claude Code | `%USERPROFILE%\.claude\skills\` |
+| Codex | `%USERPROFILE%\.codex\skills\` |
+
+Skills to copy: `roblox-mcp-pro`, `roblox-ui-from-image`, `roblox-ui-animation`,
+`roblox-studio-plugin`. Each ends up as `…\skills\<name>\SKILL.md`.
+
+### Part 4 — Connect & verify
+
+1. In Studio, click the **MCP** toolbar button so it's highlighted (this connects the plugin).
+2. Ask your AI agent to call **`system_info`**.
+3. You should see `pluginConnected: true` and a `license:` line (`trial`, `licensed`, or
+   `locked`). 🎉
+
+If `license` shows `locked`, your trial ended or your key is missing/expired — see
+[Add your license key](#add-your-license-key).
+
+---
+
+## 🖥️ Monitor dashboard
+
+While anything is connected, open **http://127.0.0.1:3690/** in a browser to watch connected
+agents, plugin status, the command queue, live activity, and sync status in real time.
+
+---
+
+## 🧰 Tools (28)
 
 **Core**
 
@@ -161,7 +276,20 @@ approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 | `workspace_state`  | High-level read-only session snapshot.                |
 | `capture_studio`   | Screenshot the Studio window so the agent sees the real render. |
 
-## Development
+---
+
+## 🛠️ Build from source (developers)
+
+```powershell
+npm install
+npm run build      # compile the server to dist/
+.\build.ps1        # build the plugin .rbxmx and install it to the Plugins folder
+```
+
+When working **in this repo** with Claude Code, a project `.mcp.json` is already included — just
+approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
+
+### Development
 
 ```powershell
 npm run dev          # server with auto-reload (tsx watch)
@@ -169,9 +297,9 @@ npm run inspector    # exercise tools with the MCP Inspector
 .\build.ps1 -NoInstall
 ```
 
-## Releasing
+### Releasing
 
-Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the plugin and attaches
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the plugin, attaches
 `RobloxMcpPro.rbxmx` to a GitHub Release, then publishes the server to npm.
 
 ```bash
@@ -182,6 +310,25 @@ git push --follow-tags   # push commit + tag -> Actions cuts the release
 npm publishing needs an `NPM_TOKEN` repository secret (Settings → Secrets → Actions). Until it's
 set, the plugin/GitHub-Release half still succeeds; only the npm job fails.
 
+---
+
+## How it works (under the hood)
+
+```
+AI Agent A ─MCP stdio─▶ MCP client ─┐
+AI Agent B ─MCP stdio─▶ MCP client ─┼─HTTP 127.0.0.1:3690─▶ Broker ◀─long-poll─ Studio Plugin (Luau)
+AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + dashboard    dispatch handlers
+```
+
+1. **MCP client** exposes the tools over stdio. Each AI agent spawns its own.
+2. **Broker** is one shared localhost process that owns port 3690, queues commands, and talks to
+   the plugin. The first client to start auto-spawns it; the rest just connect — so multiple
+   agents can drive one Studio session concurrently.
+3. **Studio plugin** long-polls the broker, runs each command in Studio, and posts the result back.
+
+---
+
 ## License
 
-AGPL-3.0-or-later. See `LICENSE`.
+**Proprietary — All Rights Reserved.** This software requires a paid commercial license to use.
+See [`LICENSE`](LICENSE). To purchase a license, contact **peerapolselanon@gmail.com**.
