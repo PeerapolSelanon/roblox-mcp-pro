@@ -17,6 +17,7 @@ import { BRIDGE_HOST, BRIDGE_PORT } from "./constants.js";
 import { resolveLicense } from "./licensing/license.js";
 import { installLicenseGate } from "./licensing/gate.js";
 import { installPlugin, ensurePluginInstalled } from "./install-plugin.js";
+import { ensureSkillsInstalled } from "./install-skills.js";
 import { VERSION } from "./version.js";
 
 function log(message: string): void {
@@ -45,6 +46,14 @@ async function main(): Promise<void> {
       log(`installed Studio plugin → ${sync.dest} (open Studio and click MCP)`);
     } else if (sync.status === "updated") {
       log(`updated Studio plugin → restart Roblox Studio to load the new version`);
+    }
+  }
+
+  // Keep agent skills up to date for skill-capable clients (Claude Code, Codex).
+  if (process.env.ROBLOX_MCP_NO_SKILL_AUTOINSTALL !== "1") {
+    const skills = await ensureSkillsInstalled();
+    if (skills.changed > 0) {
+      log(`installed/updated ${skills.changed} agent skill file(s)`);
     }
   }
 

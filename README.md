@@ -199,22 +199,16 @@ behavior, set the env var `ROBLOX_MCP_NO_PLUGIN_AUTOINSTALL=1`.)
 Open Roblox Studio — a **Roblox MCP Pro** button appears in the toolbar. (Studio turns on HTTP
 requests automatically when you connect; if needed, set `HttpService.HttpEnabled = true`.)
 
-### Part 3 — Install the agent skills (recommended)
+### Part 3 — Agent skills (automatic)
 
 Skills are short guides that teach your AI how to use the tools well (building UI from an image,
-animating GUIs, writing Studio plugins, etc.). **Only Claude Code and Codex read skills today** —
-other clients still work fine, just without the extra guidance.
+animating GUIs, writing Studio plugins, etc.). **You don't need to do anything** — the server
+installs them for you on startup, the same way it installs the plugin. Only **Claude Code**
+(`~/.claude/skills`) and **Codex** (`~/.codex/skills`) have a skills mechanism, so skills are
+copied there when those clients are present; other clients still work fine, just without the extra
+guidance.
 
-The Windows quick-installer above does this for you. To do it manually, copy each folder from this
-repo's `.agents/skills/` into your agent's skills directory:
-
-| Agent | Skills folder |
-|-------|----------------|
-| Claude Code | `%USERPROFILE%\.claude\skills\` |
-| Codex | `%USERPROFILE%\.codex\skills\` |
-
-Skills to copy: `roblox-mcp-pro`, `roblox-ui-from-image`, `roblox-ui-animation`,
-`roblox-studio-plugin`. Each ends up as `…\skills\<name>\SKILL.md`.
+(To opt out, set `ROBLOX_MCP_NO_SKILL_AUTOINSTALL=1`.)
 
 ### Part 4 — Connect & verify
 
