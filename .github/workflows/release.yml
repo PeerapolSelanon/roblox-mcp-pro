@@ -38,6 +38,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Rojo
+        uses: ok-nick/setup-aftman@v0.4.2
+
+      - name: Build Studio plugin (so RobloxMcpPro.rbxmx ships in the npm package)
+        run: |
+          cd plugin
+          rojo build default.project.json --output RobloxMcpPro.rbxmx
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
