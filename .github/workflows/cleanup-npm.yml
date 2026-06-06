@@ -1,0 +1,27 @@
+name: Cleanup old npm versions
+
+# Manual one-shot: unpublish the old free (0.1.x) versions from npm using the
+# repo's NPM_TOKEN (same automation token CI publishes with, so it bypasses 2FA).
+# Run from the Actions tab or: gh workflow run cleanup-npm.yml
+on:
+  workflow_dispatch:
+
+jobs:
+  unpublish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - name: Unpublish 0.1.x versions
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for v in 0.1.1 0.1.2 0.1.3 0.1.4 0.1.5 0.1.6 0.1.7 0.1.8 0.1.9 0.1.10 0.1.11 0.1.12 0.1.13; do
+            echo "::group::unpublish roblox-mcp-pro@$v"
+            npm unpublish "roblox-mcp-pro@$v" && echo "removed $v" || echo "skip/fail $v"
+            echo "::endgroup::"
+          done
+          echo "Remaining versions:"
+          npm view roblox-mcp-pro versions || true
