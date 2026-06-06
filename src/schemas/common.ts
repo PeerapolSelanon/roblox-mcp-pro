@@ -3,7 +3,6 @@
  */
 
 import { z } from "zod";
-import { ResponseFormat } from "../types.js";
 
 /** A dotted instance path rooted at `game`, e.g. "game.Workspace.Baseplate". */
 export const InstancePath = z
@@ -20,14 +19,6 @@ export const Vec3 = z
   .array(z.number())
   .length(3)
   .describe("A 3-number [x, y, z] vector.");
-
-/** Output format selector (markdown for humans, json for machines). */
-export const responseFormat = z
-  .nativeEnum(ResponseFormat)
-  .default(ResponseFormat.MARKDOWN)
-  .describe(
-    "Output format: 'markdown' for human-readable text or 'json' for machine-readable.",
-  );
 
 /** Standard pagination fragment. */
 export const pagination = {

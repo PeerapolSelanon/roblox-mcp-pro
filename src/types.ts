@@ -39,12 +39,6 @@ export interface BridgeStatus {
   lastPollAt: number | null;
 }
 
-/** Output format shared by many tools. */
-export enum ResponseFormat {
-  MARKDOWN = "markdown",
-  JSON = "json",
-}
-
 /** A change event pushed from Studio -> server (used by sync). */
 export interface StudioEvent {
   /** Event kind, e.g. "added" | "removing" | "changed". */

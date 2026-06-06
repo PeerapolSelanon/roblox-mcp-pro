@@ -148,7 +148,7 @@ property edits in Studio mirror only on resync, not live.
 ## Testing against Studio
 
 There is no unit-test harness. To verify a change end-to-end:
-1. Spawn `node dist/index.js` (or a Node MCP-stdio client harness; see `evals/`). It auto-spawns
+1. Spawn `node dist/index.js` (or a Node MCP-stdio client harness). It auto-spawns
    the broker on 3690 if one isn't already running — no need to manage the port manually. The
    broker logs to `%TEMP%/roblox-mcp-pro-broker.log` and idle-exits ~2 min after the last agent
    and plugin disconnect.
