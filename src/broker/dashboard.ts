@@ -16,90 +16,102 @@ export const DASHBOARD_HTML = `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>roblox-mcp-pro · monitor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23e8633a'/><rect x='30' y='30' width='40' height='40' rx='6' fill='%23150f0c'/></svg>" />
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149;
-    --amber: #d29922; --accent: #58a6ff;
-    --green-bg: rgba(63,185,80,.12); --red-bg: rgba(248,81,73,.12); --amber-bg: rgba(210,153,34,.12);
+    --bg: oklch(0.165 0.012 45); --panel: oklch(0.205 0.014 45); --panel2: oklch(0.245 0.016 45);
+    --border: oklch(0.30 0.016 45); --border-soft: oklch(0.26 0.015 45);
+    --text: oklch(0.96 0.008 70); --muted: oklch(0.745 0.014 55); --faint: oklch(0.60 0.012 55);
+    --accent: oklch(0.70 0.19 45);
+    --green: oklch(0.80 0.15 155); --red: oklch(0.66 0.20 25); --amber: oklch(0.80 0.15 80);
+    --green-bg: color-mix(in oklch, var(--green) 12%, transparent);
+    --red-bg: color-mix(in oklch, var(--red) 12%, transparent);
+    --amber-bg: color-mix(in oklch, var(--amber) 12%, transparent);
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased;
   }
   header {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--panel);
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 24px; border-bottom: 1px solid var(--border-soft);
+    background: color-mix(in oklch, var(--bg) 80%, transparent); backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 10;
   }
-  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .02em; }
-  header small { font-size: 12px; }
-  header .spacer { flex: 1; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
-    border-radius: 999px; border: 1px solid var(--border); font-size: 12px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
-  .dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .dot.off { background: var(--red); box-shadow: 0 0 6px var(--red); }
-  .dot.warn { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  header .mark { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; flex: none; }
+  header .mark span { width: 9px; height: 9px; background: var(--bg); border-radius: 2px; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+  header small { font-size: 12px; font-family: var(--mono); }
+  .badge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px;
+    border-radius: 999px; border: 1px solid var(--border-soft); font-size: 12px; font-family: var(--mono); color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .dot.on { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .dot.off { background: var(--red); box-shadow: 0 0 7px var(--red); }
+  .dot.warn { background: var(--amber); box-shadow: 0 0 7px var(--amber); }
   .spacer { flex: 1; }
   main { padding: 24px; display: grid; gap: 22px; max-width: 1100px; margin: 0 auto; }
 
   /* Diagnostics banner */
-  .banner { border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
-  .banner.ok { background: var(--green-bg); border-color: var(--green); }
-  .banner.bad { background: var(--red-bg); border-color: var(--red); }
-  .banner.warn { background: var(--amber-bg); border-color: var(--amber); }
+  .banner { border: 1px solid var(--border); border-radius: 12px; padding: 15px 18px; }
+  .banner.ok { background: var(--green-bg); border-color: color-mix(in oklch, var(--green) 45%, var(--border)); }
+  .banner.bad { background: var(--red-bg); border-color: color-mix(in oklch, var(--red) 45%, var(--border)); }
+  .banner.warn { background: var(--amber-bg); border-color: color-mix(in oklch, var(--amber) 45%, var(--border)); }
   .banner .head { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
   .banner ul { margin: 10px 0 0; padding-left: 22px; }
-  .banner li { margin: 3px 0; }
+  .banner li { margin: 3px 0; color: var(--muted); }
   .banner .problem { margin-top: 12px; }
   .banner .ptitle { font-weight: 600; }
 
-  /* Hero status cards */
+  /* Hero status cards — full border + status tint (no side-stripe) */
   .heroes { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-  .hero { background: var(--panel); border: 1px solid var(--border); border-left-width: 5px;
-    border-radius: 12px; padding: 18px 20px; }
-  .hero.ok { border-left-color: var(--green); }
-  .hero.bad { border-left-color: var(--red); }
-  .hero.warn { border-left-color: var(--amber); }
-  .hero .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
-  .hero .state { display: flex; align-items: center; gap: 12px; margin: 8px 0 4px; }
-  .hero .state .big { font-size: 26px; font-weight: 700; letter-spacing: .01em; }
+  .hero { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 14px; padding: 18px 20px; transition: border-color .2s; }
+  .hero.ok { border-color: color-mix(in oklch, var(--green) 35%, var(--border)); background: color-mix(in oklch, var(--green) 5%, var(--panel)); }
+  .hero.bad { border-color: color-mix(in oklch, var(--red) 35%, var(--border)); background: color-mix(in oklch, var(--red) 5%, var(--panel)); }
+  .hero.warn { border-color: color-mix(in oklch, var(--amber) 35%, var(--border)); background: color-mix(in oklch, var(--amber) 5%, var(--panel)); }
+  .hero .label { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .hero .state { display: flex; align-items: center; gap: 12px; margin: 10px 0 5px; }
+  .hero .state .big { font-size: 27px; font-weight: 700; letter-spacing: -.01em; }
   .hero .state .big.ok { color: var(--green); }
   .hero .state .big.bad { color: var(--red); }
   .hero .state .big.warn { color: var(--amber); }
-  .hero .bigdot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .hero .bigdot { width: 13px; height: 13px; border-radius: 50%; flex: none; }
   .hero .sub { color: var(--muted); font-size: 13px; min-height: 20px; }
   .hero .sub b { color: var(--text); font-weight: 600; }
 
-  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-  .card .clabel { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-  .card .cvalue { font-size: 22px; font-weight: 600; margin-top: 2px; }
+  .cards { display: grid; gap: 13px; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; padding: 13px 15px; }
+  .card .clabel { color: var(--muted); font-size: 11px; font-family: var(--mono); letter-spacing: .02em; }
+  .card .cvalue { font-size: 23px; font-weight: 700; margin-top: 3px; letter-spacing: -.01em; }
 
   /* Details panels */
   .details { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-  .panel h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-  .kv { display: grid; grid-template-columns: minmax(96px, auto) 1fr; gap: 4px 14px; font-size: 13px; }
+  .panel { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; padding: 15px 17px; }
+  .panel h3 { margin: 0 0 12px; font-size: 12px; font-family: var(--mono); letter-spacing: .02em; color: var(--accent); font-weight: 500; }
+  .kv { display: grid; grid-template-columns: minmax(96px, auto) 1fr; gap: 6px 14px; font-size: 13px; }
   .kv dt { color: var(--muted); }
-  .kv dd { margin: 0; color: var(--text); word-break: break-all; }
+  .kv dd { margin: 0; color: var(--text); word-break: break-all; font-family: var(--mono); font-size: 12.5px; }
   .kv dd.good { color: var(--green); } .kv dd.bad2 { color: var(--red); }
 
-  section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
-  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  section h2 { font-size: 12px; font-family: var(--mono); letter-spacing: .02em; color: var(--muted); margin: 0 0 11px; font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
+  td { font-family: var(--mono); font-size: 12.5px; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; font-family: var(--mono); letter-spacing: .02em; }
   tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--panel2); }
   td.tool { color: var(--accent); }
   td.agentcell { display: flex; align-items: center; gap: 8px; }
   .ok { color: var(--green); } .err { color: var(--red); } .muted { color: var(--muted); }
-  .empty { color: var(--muted); padding: 16px; text-align: center; }
+  .empty { color: var(--faint); padding: 18px; text-align: center; font-family: var(--sans); }
 </style>
 </head>
 <body>
 <header>
-  <h1>roblox-mcp-pro</h1>
+  <span class="mark"><span></span></span>
+  <h1>Roblox MCP Pro</h1>
   <small id="hdrsub" class="muted">broker monitor</small>
   <div class="spacer"></div>
   <span class="badge muted" id="clock"></span>
