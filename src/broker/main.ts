@@ -33,14 +33,15 @@ function log(message: string): void {
 const IDLE_SHUTDOWN_MS = 120_000;
 
 /**
- * Open the monitoring dashboard in the default browser, but only when
- * ROBLOX_MCP_OPEN_DASHBOARD is set to a truthy value ("1"/"true"/"yes").
- * Opt-in so the broker — which can be spawned repeatedly by any agent — never
- * pops a browser window uninvited. Best-effort: a failure is logged, not fatal.
+ * Open the monitoring dashboard in the default browser once, when the broker
+ * first binds the port. On by default; set ROBLOX_MCP_NO_OPEN_DASHBOARD to a
+ * truthy value ("1"/"true"/"yes") to disable. Only the broker that wins the bind
+ * race reaches here, so the dashboard opens at most once per broker (not once
+ * per agent). Best-effort: a failure is logged, not fatal.
  */
 function maybeOpenDashboard(url: string): void {
-  const flag = (process.env.ROBLOX_MCP_OPEN_DASHBOARD ?? "").toLowerCase();
-  if (flag !== "1" && flag !== "true" && flag !== "yes") {
+  const off = (process.env.ROBLOX_MCP_NO_OPEN_DASHBOARD ?? "").toLowerCase();
+  if (off === "1" || off === "true" || off === "yes") {
     return;
   }
   try {
@@ -52,7 +53,7 @@ function maybeOpenDashboard(url: string): void {
         : process.platform === "darwin"
           ? (["open", [url]] as const)
           : (["xdg-open", [url]] as const);
-    const child = spawn(command, [...args], { detached: true, stdio: "ignore" });
+    const child = spawn(command, [...args], { detached: true, stdio: "ignore", windowsHide: true });
     child.on("error", (error) => log(`could not open dashboard: ${String(error)}`));
     child.unref();
     log(`opening dashboard in browser: ${url}`);

@@ -224,8 +224,10 @@ If `license` shows `locked`, your trial ended or your key is missing/expired —
 
 ## 🖥️ Monitor dashboard
 
-While anything is connected, open **http://127.0.0.1:3690/** in a browser to watch connected
-agents, plugin status, the command queue, live activity, and sync status in real time.
+The dashboard opens in your browser automatically the first time the server starts, at
+**http://127.0.0.1:3690/** — watch connected agents, plugin status, the command queue, live
+activity, and sync status in real time. (Don't want it to open on its own? Set
+`ROBLOX_MCP_NO_OPEN_DASHBOARD=1`; you can still open the URL manually anytime.)
 
 ---
 
