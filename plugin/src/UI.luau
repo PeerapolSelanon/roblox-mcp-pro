@@ -532,7 +532,7 @@ function UI.create(
 	registerTheme(verStroke, "Color", Enum.StudioStyleGuideColor.Border)
 
 	local verText = Instance.new("TextLabel")
-	verText.Text = "v1.0.5"
+	verText.Text = "v1.0.6"
 	verText.TextSize = 9
 	verText.Font = Enum.Font.GothamMedium
 	verText.Size = UDim2.new(1, 0, 1, 0)

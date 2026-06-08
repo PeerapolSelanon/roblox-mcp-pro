@@ -77,7 +77,7 @@ function log(message: string): void {
 }
 
 function syncRootDir(): string {
-  return process.env.ROBLOX_MCP_SYNC_DIR ?? path.join(process.cwd(), "roblox-mcp-sync");
+  return process.env.ROBLOX_MCP_SYNC_DIR ?? process.cwd();
 }
 
 /** Reverse the name escaping done by the mirror (`~~` -> `~`). */
@@ -139,7 +139,7 @@ class SyncEngine {
     const info = await callStudio<{ placeId?: number }>("system_info", {});
     this.placeId = info.placeId ?? 0;
     
-    const isFlat = process.env.ROBLOX_MCP_FLAT_SYNC === "true";
+    const isFlat = process.env.ROBLOX_MCP_FLAT_SYNC !== "false";
     if (isFlat) {
       this.placeDir = syncRootDir();
     } else {
