@@ -75,7 +75,11 @@ export function registerSyncTools(server: McpServer): void {
     async (input: Input) => {
       try {
         // Sync runs in the shared broker process (one engine for all agents).
-        const status = await callStudio<SyncStatus>("manage_sync", input);
+        const payload = {
+          ...input,
+          syncDir: input.action === "start" ? process.cwd() : undefined,
+        };
+        const status = await callStudio<SyncStatus>("manage_sync", payload);
         const structured = status as unknown as Record<string, unknown>;
         switch (input.action) {
           case "start":

@@ -45,6 +45,7 @@ async function runSync(args: unknown): Promise<Record<string, unknown>> {
     roots?: string[];
     mode?: SyncMode;
     initialDirection?: "studio-to-disk" | "disk-to-studio";
+    syncDir?: string;
   };
   switch (a.action) {
     case "start":
@@ -52,6 +53,7 @@ async function runSync(args: unknown): Promise<Record<string, unknown>> {
         a.roots,
         a.mode,
         a.initialDirection,
+        a.syncDir,
       )) as unknown as Record<string, unknown>;
     case "stop":
       await syncEngine.stop();
@@ -194,6 +196,17 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     if (method === "POST" && path === "/plugin/sync") {
       const body = await readJson(req);
       try {
+        // Resolve syncDir from active agents if not provided
+        if (body.action === "start" && !body.syncDir) {
+          const agents = state.snapshot().agents;
+          if (agents.length > 0) {
+            const sorted = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+            const activeAgent = sorted.find((a) => a.cwd);
+            if (activeAgent?.cwd) {
+              body.syncDir = activeAgent.cwd;
+            }
+          }
+        }
         const result = await runSync(body);
         sendJson(res, 200, { ok: true, result });
       } catch (e) {
@@ -226,6 +239,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
         String(body.name ?? "agent"),
         body.version ? String(body.version) : undefined,
         typeof body.pid === "number" ? body.pid : undefined,
+        body.cwd ? String(body.cwd) : undefined,
       );
       sendJson(res, 200, { clientId });
       return true;

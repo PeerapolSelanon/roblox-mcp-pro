@@ -17,6 +17,7 @@ export interface Agent {
   name: string;
   version?: string;
   pid?: number;
+  cwd?: string;
   connectedAt: number;
   lastSeenAt: number;
   commandCount: number;
@@ -43,7 +44,7 @@ export class BrokerState {
   /** Set by the route layer to push a fresh snapshot to dashboard listeners. */
   onChange: (() => void) | null = null;
 
-  register(name: string, version: string | undefined, pid: number | undefined): string {
+  register(name: string, version: string | undefined, pid: number | undefined, cwd?: string): string {
     const clientId = randomUUID();
     const now = Date.now();
     this.agents.set(clientId, {
@@ -51,6 +52,7 @@ export class BrokerState {
       name: name || "agent",
       version,
       pid,
+      cwd,
       connectedAt: now,
       lastSeenAt: now,
       commandCount: 0,

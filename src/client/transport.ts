@@ -88,7 +88,7 @@ export async function register(name: string, version?: string): Promise<void> {
   const res = await fetch(`${BASE}/rpc/register`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ name, version, pid: process.pid }),
+    body: JSON.stringify({ name, version, pid: process.pid, cwd: process.cwd() }),
     signal: AbortSignal.timeout(3000),
   });
   const body = (await res.json()) as { clientId?: string };
