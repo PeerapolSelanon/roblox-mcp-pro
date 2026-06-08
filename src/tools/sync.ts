@@ -46,6 +46,10 @@ const InputSchema = z
       .enum(["studio-to-disk", "disk-to-studio"])
       .optional()
       .describe("For 'start': initial synchronization direction (pull vs push) at startup."),
+    syncDir: z
+      .string()
+      .optional()
+      .describe("For 'start': the absolute path to the directory where files should be synced. Defaults to process.cwd()"),
   })
   .strict();
 
@@ -77,7 +81,7 @@ export function registerSyncTools(server: McpServer): void {
         // Sync runs in the shared broker process (one engine for all agents).
         const payload = {
           ...input,
-          syncDir: input.action === "start" ? process.cwd() : undefined,
+          syncDir: input.action === "start" ? (input.syncDir || process.cwd()) : undefined,
         };
         const status = await callStudio<SyncStatus>("manage_sync", payload);
         const structured = status as unknown as Record<string, unknown>;

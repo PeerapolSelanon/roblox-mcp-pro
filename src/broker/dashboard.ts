@@ -106,6 +106,59 @@ export const DASHBOARD_HTML = `<!doctype html>
   td.agentcell { display: flex; align-items: center; gap: 8px; }
   .ok { color: var(--green); } .err { color: var(--red); } .muted { color: var(--muted); }
   .empty { color: var(--faint); padding: 18px; text-align: center; font-family: var(--sans); }
+  .control-input, select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .control-input:focus, select:focus {
+    border-color: var(--accent);
+    outline: none;
+  }
+  .btn-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn {
+    padding: 8px 12px;
+    background: var(--border-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .btn:hover {
+    background: var(--panel2);
+    border-color: var(--accent);
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: var(--bg);
+  }
+  .btn.primary:hover {
+    background: color-mix(in oklch, var(--accent) 80%, white);
+  }
+  .btn.danger {
+    background: var(--red-bg);
+    border-color: color-mix(in oklch, var(--red) 45%, var(--border));
+    color: var(--red);
+  }
+  .btn.danger:hover {
+    background: color-mix(in oklch, var(--red) 20%, var(--panel));
+  }
 </style>
 </head>
 <body>
@@ -114,6 +167,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <h1>Roblox MCP Pro</h1>
   <small id="hdrsub" class="muted">broker monitor</small>
   <div class="spacer"></div>
+  <span class="badge" id="portSwitcher"></span>
   <span class="badge muted" id="clock"></span>
   <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
 </header>
@@ -175,6 +229,37 @@ export const DASHBOARD_HTML = `<!doctype html>
         <dt>Place ID</dt><dd id="dSyncPlace">—</dd>
         <dt>Folder</dt><dd id="dDir">—</dd>
       </dl>
+    </div>
+    <div class="panel">
+      <h3>Sync Control</h3>
+      <div style="margin-top: 8px;">
+        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Sync folder (Absolute Path)</label>
+        <input type="text" id="inputSyncDir" placeholder="e.g. D:/RobloxProject/MyGame" class="control-input" />
+        
+        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Sync Mode</label>
+        <select id="selectMode">
+          <option value="two-way">Two-way (disk ↔ Studio)</option>
+          <option value="studio-to-disk">Studio → disk</option>
+          <option value="disk-to-studio">disk → Studio</option>
+        </select>
+        
+        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Initial Direction</label>
+        <select id="selectInitialDir">
+          <option value="studio-to-disk">Pull (Studio → disk)</option>
+          <option value="disk-to-studio">Push (disk → Studio)</option>
+        </select>
+        
+        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Roots (comma separated, optional)</label>
+        <input type="text" id="inputRoots" placeholder="e.g. ServerScriptService, StarterGui" class="control-input" />
+        
+        <div class="btn-group">
+          <button id="btnStart" class="btn primary" onclick="doSyncAction('start')">Start Sync</button>
+          <button id="btnStop" class="btn danger" onclick="doSyncAction('stop')">Stop Sync</button>
+          <button id="btnPull" class="btn" onclick="doSyncAction('pull')">Pull</button>
+          <button id="btnPush" class="btn" onclick="doSyncAction('push')">Push</button>
+        </div>
+        <div id="syncControlMsg" style="font-size: 12px; margin-top: 8px; font-family: var(--mono); min-height: 18px;"></div>
+      </div>
     </div>
   </div>
 
@@ -350,6 +435,71 @@ function render(state) {
 
   $("hdrsub").textContent = "broker monitor · :" + (state.port ?? "3690");
   $("clock").textContent = "updated " + new Date().toLocaleTimeString();
+
+  // Port Switcher
+  const currentPort = state.port || 3690;
+  let switcherHtml = 'Port: ';
+  for (let p = 3690; p <= 3695; p++) {
+    if (p === currentPort) {
+      switcherHtml += '<span style="color: var(--accent); font-weight: bold; margin: 0 4px;">' + p + '</span>';
+    } else {
+      switcherHtml += '<a href="http://127.0.0.1:' + p + '" style="color: var(--muted); text-decoration: none; margin: 0 4px;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--muted)\'">' + p + '</a>';
+    }
+  }
+  $('portSwitcher').innerHTML = switcherHtml;
+
+  // Autofill syncDir from running sync or active agents
+  if (!$('inputSyncDir').value) {
+    if (sync.syncDir) {
+      $('inputSyncDir').value = sync.syncDir;
+    } else if (agents.length > 0) {
+      const activeAgent = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
+      if (activeAgent?.cwd) {
+        $('inputSyncDir').value = activeAgent.cwd;
+      }
+    }
+  }
+}
+
+async function doSyncAction(action) {
+  const elMsg = $('syncControlMsg');
+  const showMsg = (msg, isErr = false) => {
+    elMsg.textContent = msg;
+    elMsg.style.color = isErr ? 'var(--red)' : 'var(--green)';
+  };
+  showMsg('Processing...');
+  
+  const payload = { action };
+  if (action === 'start') {
+    const syncDir = $('inputSyncDir').value.trim();
+    if (!syncDir) {
+      showMsg('Error: Sync folder path is required.', true);
+      return;
+    }
+    payload.syncDir = syncDir;
+    payload.mode = $('selectMode').value;
+    payload.initialDirection = $('selectInitialDir').value;
+    const rootsText = $('inputRoots').value.trim();
+    if (rootsText) {
+      payload.roots = rootsText.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+  
+  try {
+    const res = await fetch('/plugin/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showMsg(action === 'start' ? 'Sync started successfully.' : 'Sync action \'' + action + '\' completed.');
+    } else {
+      showMsg('Error: ' + data.error, true);
+    }
+  } catch (err) {
+    showMsg('Failed to connect to broker: ' + err, true);
+  }
 }
 
 function setStream(ok) {
