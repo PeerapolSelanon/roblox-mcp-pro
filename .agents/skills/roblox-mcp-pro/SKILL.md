@@ -97,3 +97,84 @@ Errors are returned as actionable text. Common ones: not connected (fix the plug
 "protected service" (CoreGui/CorePackages are intentionally off-limits), and per-operation errors
 inside `batch_execute`/`mutate_instances` results (other operations still ran). Read the `error`
 string and adjust rather than retrying the same call.
+
+## AI Agent Prompt Handling: Project Initialization
+
+If the user asks the AI agent to initialize a full Roblox project (e.g., "ช่วย init roblox หน่อย", "init roblox", "setup roblox workspace"), the agent should execute the following sequence of steps:
+
+1. **Create Explorer Folder Structure on Disk:**
+   Create the directory `explorer/` and the following subdirectories:
+   - `explorer/ReplicatedStorage`
+   - `explorer/ServerScriptService`
+   - `explorer/ServerStorage`
+   - `explorer/StarterGui`
+   - `explorer/StarterPlayer`
+   - `explorer/StarterPlayer/StarterCharacterScripts`
+   - `explorer/StarterPlayer/StarterPlayerScripts`
+
+2. **Create config files:**
+   - **`default.project.json`** with a tree mapping the above explorer folders and including Wally Package settings:
+     ```json
+     {
+       "name": "<projectName>",
+       "tree": {
+         "$className": "DataModel",
+         "ReplicatedStorage": {
+           "$path": "explorer/ReplicatedStorage",
+           "Packages": {
+             "$path": "Packages"
+           }
+         },
+         "ServerScriptService": {
+           "$path": "explorer/ServerScriptService",
+           "ServerPackages": {
+             "$path": "ServerPackages"
+           }
+         },
+         "StarterGui": {
+           "$path": "explorer/StarterGui"
+         },
+         "StarterPlayer": {
+           "$path": "explorer/StarterPlayer",
+           "StarterCharacterScripts": {
+             "$path": "explorer/StarterPlayer/StarterCharacterScripts"
+           },
+           "StarterPlayerScripts": {
+             "$path": "explorer/StarterPlayer/StarterPlayerScripts"
+           }
+         },
+         "ServerStorage": {
+           "$path": "explorer/ServerStorage"
+         }
+       }
+     }
+     ```
+   - **`wally.toml`** with default package settings:
+     ```toml
+     [package]
+     name = "peerapol/<projectName>"
+     version = "0.1.0"
+     registry = "https://github.com/UpliftGames/wally-index"
+     realm = "shared"
+
+     [dependencies]
+     # Add dependencies here
+     ```
+   - **`selene.toml`** with standard Roblox configuration:
+     ```toml
+     std = "roblox"
+     ```
+   - **`.gitignore`** ignoring unnecessary files:
+     ```gitignore
+     .rojo/
+     sourcemap.json
+     Packages/
+     ServerPackages/
+     node_modules/
+     dist/
+     *.log
+     ```
+
+3. **Generate sourcemap.json:**
+   Create a basic/empty `sourcemap.json` or run `rojo sourcemap default.project.json --output sourcemap.json` if Rojo is available.
+
