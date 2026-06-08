@@ -47,6 +47,8 @@ export const DASHBOARD_HTML = `<!doctype html>
   header small { font-size: 12px; font-family: var(--mono); }
   .badge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px;
     border-radius: 999px; border: 1px solid var(--border-soft); font-size: 12px; font-family: var(--mono); color: var(--muted); }
+  .portlink { color: var(--muted); text-decoration: none; margin: 0 4px; transition: color .15s; }
+  .portlink:hover { color: var(--accent); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
   .dot.on { background: var(--green); box-shadow: 0 0 7px var(--green); }
   .dot.off { background: var(--red); box-shadow: 0 0 7px var(--red); }
@@ -443,7 +445,7 @@ function render(state) {
     if (p === currentPort) {
       switcherHtml += '<span style="color: var(--accent); font-weight: bold; margin: 0 4px;">' + p + '</span>';
     } else {
-      switcherHtml += '<a href="http://127.0.0.1:' + p + '" style="color: var(--muted); text-decoration: none; margin: 0 4px;" onmouseover="this.style.color=\'var(--accent)\'" onmouseout="this.style.color=\'var(--muted)\'">' + p + '</a>';
+      switcherHtml += '<a class="portlink" href="http://127.0.0.1:' + p + '">' + p + '</a>';
     }
   }
   $('portSwitcher').innerHTML = switcherHtml;
@@ -493,7 +495,7 @@ async function doSyncAction(action) {
     });
     const data = await res.json();
     if (data.ok) {
-      showMsg(action === 'start' ? 'Sync started successfully.' : 'Sync action \'' + action + '\' completed.');
+      showMsg(action === 'start' ? 'Sync started successfully.' : 'Sync action ' + action + ' completed.');
     } else {
       showMsg('Error: ' + data.error, true);
     }
