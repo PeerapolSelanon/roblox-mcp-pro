@@ -42,6 +42,10 @@ const InputSchema = z
           "studio-to-disk = Studio is source of truth (mirror live edits to files, ignore disk edits); " +
           "disk-to-studio = files are source of truth (push file edits to Studio, ignore Studio edits).",
       ),
+    initialDirection: z
+      .enum(["studio-to-disk", "disk-to-studio"])
+      .optional()
+      .describe("For 'start': initial synchronization direction (pull vs push) at startup."),
   })
   .strict();
 

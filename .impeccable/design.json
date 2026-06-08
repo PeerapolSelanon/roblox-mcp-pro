@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-08T10:55:00Z",
+  "title": "Design System: Roblox MCP Pro Plugin",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Active Accent",
+        "canonical": "oklch(67.85% 0.15 250)",
+        "tonalRamp": [
+          "oklch(20% 0.05 250)",
+          "oklch(35% 0.08 250)",
+          "oklch(50% 0.12 250)",
+          "oklch(67.85% 0.15 250)",
+          "oklch(75% 0.12 250)",
+          "oklch(85% 0.08 250)",
+          "oklch(92% 0.05 250)",
+          "oklch(97% 0.02 250)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Header Title",
+        "purpose": "Main title at the top of the plugin."
+      },
+      "title": {
+        "displayName": "Section Title",
+        "purpose": "Uppercase labels for card sections."
+      },
+      "body": {
+        "displayName": "Standard Label",
+        "purpose": "Labels and generic text settings."
+      },
+      "label": {
+        "displayName": "Button Label",
+        "purpose": "Interactive option choices."
+      },
+      "code": {
+        "displayName": "Monospace / Console",
+        "purpose": "Logs, textbox inputs, and status displays."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)",
+        "purpose": "Buttery-smooth hover and active transitions for buttons."
+      },
+      {
+        "name": "ease-toggle",
+        "value": "TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)",
+        "purpose": "Smooth slider knob position and color change animation."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Branded Logo Mark",
+      "kind": "custom",
+      "refersTo": "logo",
+      "description": "Branded logo container containing 'M' in GothamBold font.",
+      "html": "<div class=\"ds-logo\">M</div>",
+      "css": ".ds-logo { width: 20px; height: 20px; background-color: #58a6ff; border-radius: 5px; color: #ffffff; font-family: 'GothamBold'; font-size: 12px; display: flex; align-items: center; justify-content: center; font-weight: bold; }"
+    },
+    {
+      "name": "Accent Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width primary button with smooth color hover.",
+      "html": "<button class=\"ds-btn-primary\">Connect</button>",
+      "css": ".ds-btn-primary { width: 100%; height: 32px; background-color: #58a6ff; border: none; border-radius: 6px; color: #ffffff; font-family: 'GothamBold'; font-size: 13px; font-weight: bold; cursor: pointer; transition: background-color 0.15s ease-out; } .ds-btn-primary:hover { background-color: #73b8ff; } .ds-btn-primary:active { background-color: #4285f4; }"
+    },
+    {
+      "name": "Toggle Switch",
+      "kind": "input",
+      "refersTo": "toggle",
+      "description": "Sliding toggle switch with animated knob.",
+      "html": "<div class=\"ds-toggle ds-toggle-active\"><div class=\"ds-knob\"></div></div>",
+      "css": ".ds-toggle { width: 40px; height: 22px; border-radius: 11px; border: 1px solid #border; background-color: #input-bg; position: relative; cursor: pointer; transition: background-color 0.18s, border-color 0.18s; } .ds-toggle-active { background-color: #58a6ff; border-color: #58a6ff; } .ds-knob { width: 14px; height: 14px; background-color: #ffffff; border-radius: 7px; position: absolute; top: 3px; left: 3px; transition: transform 0.18s; } .ds-toggle-active .ds-knob { transform: translateX(18px); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Studio-Native Terminal",
+    "overview": "Roblox MCP Pro is integrated directly into the Roblox Studio DockWidget layout. The visual design system matches the active Studio theme (light or dark mode) to look cohesive and native to the professional creator environment. It avoids decorative elements and excessive spacing, prioritizing high information density and developer-centric utility.",
+    "keyCharacteristics": [
+      "Theme-adaptability (seamlessly shifts colors with Studio Theme changes).",
+      "High information density with compact spacing (6px to 12px gaps) and neat alignments.",
+      "Subtle tactile cues on interactions.",
+      "Strong monospace accents for logs and console readouts."
+    ],
+    "rules": [
+      {
+        "name": "The Theme-Adaptability Rule",
+        "body": "Never hardcode text or container colors unless they are white/accent elements on a primary button. All interface colors must be fetched dynamically using Enum.StudioStyleGuideColor.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat-by-Default Rule",
+        "body": "Do not define shadows or glow effects. Layering is achieved solely through card backgrounds and borders to avoid visual noise.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do map all background and text colors to Enum.StudioStyleGuideColor to support light/dark modes.",
+      "Do keep spacing tight (8px to 12px) to maximize the amount of information displayed in the dock.",
+      "Do use uppercase and bold labels for card section headers."
+    ],
+    "donts": [
+      "Don't use large card radii above 8px (avoid childish rounding).",
+      "Don't use drop shadows or glassmorphism.",
+      "Don't write side-stripe borders or gradient texts."
+    ]
+  }
+}

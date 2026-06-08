@@ -79,13 +79,18 @@ end
 --   action = "start" | "stop" | "status" | "pull" | "push"
 --   mode   = "two-way" | "studio-to-disk" | "disk-to-studio"  (for "start")
 -- Returns: result table (sync status) on success, or nil + error message.
-function Bridge.syncControl(action: string, mode: string?, roots: { string }?): (any, string?)
+function Bridge.syncControl(action: string, mode: string?, initialDirection: string?, roots: { string }?): (any, string?)
 	local ok, response = pcall(function()
 		return HttpService:RequestAsync({
 			Url = baseUrl .. "/plugin/sync",
 			Method = "POST",
 			Headers = headers(),
-			Body = HttpService:JSONEncode({ action = action, mode = mode, roots = roots }),
+			Body = HttpService:JSONEncode({
+				action = action,
+				mode = mode,
+				initialDirection = initialDirection,
+				roots = roots,
+			}),
 		})
 	end)
 	if not ok then

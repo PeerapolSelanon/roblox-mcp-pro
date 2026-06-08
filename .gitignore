@@ -26,6 +26,10 @@ roblox-mcp-sync/
 !.agents/skills/roblox-ui-animation/
 .claude/
 
+skills-lock.json
+
 .github/skills/*
 
-skills-lock.json
+# Obsidian vault
+obsidian_vault/
+

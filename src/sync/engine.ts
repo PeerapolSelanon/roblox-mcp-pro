@@ -69,6 +69,7 @@ interface SyncStatus {
   placeId: number | null;
   scriptCount: number;
   syncDir: string;
+  initialDirection?: "studio-to-disk" | "disk-to-studio";
 }
 
 function log(message: string): void {
@@ -95,6 +96,7 @@ function classFromFile(file: string): string | null {
 class SyncEngine {
   private running = false;
   private mode: SyncMode = "two-way";
+  private initialDirection?: "studio-to-disk" | "disk-to-studio";
   private roots: string[] = [];
   private placeId: number | null = null;
   private placeDir = "";
@@ -119,13 +121,19 @@ class SyncEngine {
       placeId: this.placeId,
       scriptCount: this.instanceToFile.size,
       syncDir: this.explorerDir || syncRootDir(),
+      initialDirection: this.initialDirection,
     };
   }
 
   /** Start syncing the given roots (defaults to the script-bearing services). */
-  async start(roots?: string[], mode?: SyncMode): Promise<SyncStatus> {
+  async start(
+    roots?: string[],
+    mode?: SyncMode,
+    initialDirection?: "studio-to-disk" | "disk-to-studio",
+  ): Promise<SyncStatus> {
     if (this.running) await this.stop();
     this.mode = normalizeMode(mode);
+    this.initialDirection = initialDirection;
     this.roots = roots && roots.length > 0 ? roots : DEFAULT_ROOTS;
 
     const info = await callStudio<{ placeId?: number }>("system_info", {});
@@ -133,17 +141,84 @@ class SyncEngine {
     this.placeDir = path.join(syncRootDir(), `place_${this.placeId}`);
     this.explorerDir = path.join(this.placeDir, "explorer");
 
-    // pull() rebuilds the mirror and (unless Studio-only) starts the file watcher.
-    await this.pull();
+    if (initialDirection === "disk-to-studio") {
+      // disk-to-studio initial sync: do not clear local disk files.
+      // Scan disk folder structure to index them, then push to Studio.
+      await fs.mkdir(this.explorerDir, { recursive: true });
+      await this.scanDiskAndIndex();
+      await this.push();
+      // disk -> Studio live mirroring, unless we're mirroring Studio -> disk only.
+      if (this.mode !== "studio-to-disk") {
+        await this.startFileWatcher();
+      }
+    } else {
+      // Studio -> disk initial sync: pull everything.
+      // pull() rebuilds the mirror and (unless Studio-only) starts the file watcher.
+      await this.pull();
+    }
+
     // Studio -> disk live mirroring, unless we're pushing disk -> Studio only.
     if (this.mode !== "disk-to-studio") {
       await this.startStudioWatch();
     }
 
     this.running = true;
-    log(`started (${this.mode}): ${this.roots.join(", ")} -> ${this.explorerDir}`);
+    log(`started (${this.mode}, initial: ${initialDirection ?? "studio-to-disk"}): ${this.roots.join(", ")} -> ${this.explorerDir}`);
     return this.status();
   }
+
+  private async scanDiskAndIndex(): Promise<void> {
+    this.fileToInstance.clear();
+    this.instanceToFile.clear();
+
+    const scripts: ScriptFile[] = [];
+    const scan = async (dir: string, parentInstancePath: string) => {
+      try {
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const subDir = path.join(dir, entry.name);
+            let name = deEscape(entry.name);
+
+            // Try to read .props.json to get the exact Roblox name (with spaces, symbols, etc.)
+            const propsPath = path.join(subDir, `${entry.name}.props.json`);
+            try {
+              const propsContent = await fs.readFile(propsPath, "utf8");
+              const props = JSON.parse(propsContent) as { name?: string };
+              if (props.name) {
+                name = props.name;
+              }
+            } catch {
+              // Ignore and use de-escaped folder name
+            }
+
+            const instancePath = `${parentInstancePath}.${name}`;
+
+            // Look for any .luau script files in this subdirectory
+            const subEntries = await fs.readdir(subDir);
+            for (const subEntry of subEntries) {
+              if (subEntry.endsWith(".luau")) {
+                const absPath = path.join(subDir, subEntry);
+                scripts.push({ absPath, instancePath });
+              }
+            }
+
+            // Recursively scan children
+            await scan(subDir, instancePath);
+          }
+        }
+      } catch (err) {
+        log(`Error scanning directory ${dir}: ${String(err)}`);
+      }
+    };
+
+    await scan(this.explorerDir, "game");
+
+    // Now index them
+    this.index(scripts);
+    log(`Indexed ${this.instanceToFile.size} scripts from disk`);
+  }
+
 
   /**
    * Full Studio -> disk snapshot; rebuilds the file index and sourcemap.

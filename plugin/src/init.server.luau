@@ -13,13 +13,16 @@ local DEFAULT_URL = "http://127.0.0.1:3690"
 local SETTING_URL = "roblox_mcp_pro_url"
 local SETTING_TOKEN = "roblox_mcp_pro_token"
 local SETTING_AUTOCONNECT = "roblox_mcp_pro_autoconnect"
-local SETTING_SYNCMODE = "roblox_mcp_pro_syncmode"
+local SETTING_INITIAL_DIR = "roblox_mcp_pro_initial_dir"
+local SETTING_TWOWAY_ENABLED = "roblox_mcp_pro_twoway_enabled"
 
 -- Resolve config from saved plugin settings (falls back to defaults).
 local url = plugin:GetSetting(SETTING_URL) or DEFAULT_URL
 local token = plugin:GetSetting(SETTING_TOKEN)
 local autoConnect = plugin:GetSetting(SETTING_AUTOCONNECT) == true
-local syncMode = plugin:GetSetting(SETTING_SYNCMODE) or "two-way"
+local initialDir = plugin:GetSetting(SETTING_INITIAL_DIR) or "studio-to-disk"
+local twoWaySetting = plugin:GetSetting(SETTING_TWOWAY_ENABLED)
+local twoWayEnabled = if twoWaySetting ~= nil then twoWaySetting == true else true
 Bridge.configure(url, token)
 
 local toolbar = plugin:CreateToolbar("Roblox MCP Pro")
@@ -44,7 +47,13 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(
 local widget = plugin:CreateDockWidgetPluginGui("RobloxMcpProPanel", widgetInfo)
 
 -- Create the UI panel inside the widget
-UI.create(widget, { url = url, token = token, autoConnect = autoConnect, syncMode = syncMode })
+UI.create(widget, {
+	url = url,
+	token = token,
+	autoConnect = autoConnect,
+	initialDir = initialDir,
+	twoWayEnabled = twoWayEnabled,
+})
 
 local connected = false
 local isSyncing = false
@@ -122,7 +131,7 @@ end
 -- Reflect a sync-status result from the broker in the UI.
 local function applySyncResult(result: any)
 	isSyncing = result.running == true
-	UI.setSyncStatus(isSyncing, result.mode, result.scriptCount)
+	UI.setSyncStatus(isSyncing, result.mode, result.scriptCount, result.initialDirection)
 end
 
 -- While connected, poll the broker's sync status so the Sync card stays in step
@@ -154,7 +163,7 @@ local function setConnected(value: boolean)
 		log("disconnected")
 		UI.setStatus("Disconnected")
 		isSyncing = false
-		UI.setSyncStatus(false, syncMode, 0)
+		UI.setSyncStatus(false, if twoWayEnabled then "two-way" else initialDir, 0, initialDir)
 	end
 end
 
@@ -168,36 +177,40 @@ UI.onAutoConnectChanged = function(enabled: boolean)
 	log("auto-connect " .. (if enabled then "enabled" else "disabled"))
 end
 
-UI.onSyncModeChanged = function(mode: string)
-	syncMode = mode
-	plugin:SetSetting(SETTING_SYNCMODE, mode)
-	-- If sync is already running, restart it in the new direction.
+UI.onSyncOptionsChanged = function(dir: string, twoWay: boolean)
+	initialDir = dir
+	twoWayEnabled = twoWay
+	plugin:SetSetting(SETTING_INITIAL_DIR, dir)
+	plugin:SetSetting(SETTING_TWOWAY_ENABLED, twoWay)
+	-- If sync is already running, restart it with the new configuration.
 	if connected and isSyncing then
 		task.spawn(function()
-			local result, err = Bridge.syncControl("start", mode)
+			local mode = if twoWay then "two-way" else dir
+			local result, err = Bridge.syncControl("start", mode, dir)
 			if result then
 				applySyncResult(result)
 			else
-				warn("[roblox-mcp-pro] sync mode change failed: " .. tostring(err))
+				warn("[roblox-mcp-pro] sync restart failed: " .. tostring(err))
 			end
 		end)
 	end
 end
 
-UI.onSyncToggled = function(enabled: boolean, mode: string)
+UI.onSyncToggled = function(enabled: boolean, dir: string, twoWay: boolean)
+	local mode = if twoWay then "two-way" else dir
 	if not connected then
-		UI.setSyncStatus(false, mode, 0)
+		UI.setSyncStatus(false, mode, 0, dir)
 		warn("[roblox-mcp-pro] Connect to the server before enabling sync.")
 		return
 	end
 	task.spawn(function()
 		local action = if enabled then "start" else "stop"
-		local result, err = Bridge.syncControl(action, mode)
+		local result, err = Bridge.syncControl(action, mode, dir)
 		if result then
 			applySyncResult(result)
 		else
 			isSyncing = false
-			UI.setSyncStatus(false, mode, 0)
+			UI.setSyncStatus(false, mode, 0, dir)
 			warn("[roblox-mcp-pro] sync " .. action .. " failed: " .. tostring(err))
 		end
 	end)

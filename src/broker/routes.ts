@@ -40,10 +40,19 @@ export interface BrokerRoutes {
 
 /** Run a `manage_sync` action against the shared engine; throws on failure. */
 async function runSync(args: unknown): Promise<Record<string, unknown>> {
-  const a = (args ?? {}) as { action?: string; roots?: string[]; mode?: SyncMode };
+  const a = (args ?? {}) as {
+    action?: string;
+    roots?: string[];
+    mode?: SyncMode;
+    initialDirection?: "studio-to-disk" | "disk-to-studio";
+  };
   switch (a.action) {
     case "start":
-      return (await syncEngine.start(a.roots, a.mode)) as unknown as Record<string, unknown>;
+      return (await syncEngine.start(
+        a.roots,
+        a.mode,
+        a.initialDirection,
+      )) as unknown as Record<string, unknown>;
     case "stop":
       await syncEngine.stop();
       return syncEngine.status() as unknown as Record<string, unknown>;

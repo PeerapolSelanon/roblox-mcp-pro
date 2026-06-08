@@ -9,6 +9,7 @@
 
 local StudioService = game:GetService("StudioService")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 
 local UI = {}
 
@@ -28,8 +29,8 @@ local MODE_LABELS: { [string]: string } = {
 UI.onSettingsSaved = nil :: ((url: string, token: string?) -> ())?
 UI.onConnectionToggled = nil :: ((connect: boolean) -> ())?
 UI.onAutoConnectChanged = nil :: ((enabled: boolean) -> ())?
-UI.onSyncToggled = nil :: ((enabled: boolean, mode: string) -> ())?
-UI.onSyncModeChanged = nil :: ((mode: string) -> ())?
+UI.onSyncToggled = nil :: ((enabled: boolean, initialDir: string, twoWayEnabled: boolean) -> ())?
+UI.onSyncOptionsChanged = nil :: ((initialDir: string, twoWayEnabled: boolean) -> ())?
 
 -- UI references
 local statusIndicator: Frame? = nil
@@ -42,11 +43,13 @@ local logContainer: ScrollingFrame? = nil
 local syncStatusLabel: TextLabel? = nil
 local setSyncToggleVisual: ((on: boolean) -> ())? = nil
 local setSegmentedVisual: ((value: string) -> ())? = nil
+local setTwoWayToggleVisual: ((on: boolean) -> ())? = nil
 
 -- Activity stats
 local isConnected = false
 local syncRunning = false
-local syncMode = "two-way"
+local initialDir = "studio-to-disk"
+local twoWayEnabled = true
 local totalRequests = 0
 local successRequests = 0
 
@@ -185,6 +188,11 @@ local function spacer(parent: Instance, layoutOrder: number): Frame
 	return s
 end
 
+local function tweenColor(instance: Instance, property: string, targetColor: Color3, duration: number)
+	local info = TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(instance, info, { [property] = targetColor }):Play()
+end
+
 local function button(parent: Instance, text: string, width: number, layoutOrder: number): TextButton
 	local b = Instance.new("TextButton")
 	b.Text = text
@@ -200,13 +208,20 @@ local function button(parent: Instance, text: string, width: number, layoutOrder
 	registerTheme(b, "TextColor3", Enum.StudioStyleGuideColor.ButtonText)
 
 	b.MouseEnter:Connect(function()
-		b.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Hover)
+		local target = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Hover)
+		tweenColor(b, "BackgroundColor3", target, 0.15)
 	end)
 	b.MouseLeave:Connect(function()
-		b.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Default)
+		local target = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Default)
+		tweenColor(b, "BackgroundColor3", target, 0.15)
 	end)
 	b.MouseButton1Down:Connect(function()
-		b.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Pressed)
+		local target = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Pressed)
+		tweenColor(b, "BackgroundColor3", target, 0.08)
+	end)
+	b.MouseButton1Up:Connect(function()
+		local target = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Hover)
+		tweenColor(b, "BackgroundColor3", target, 0.15)
 	end)
 	return b
 end
@@ -225,11 +240,18 @@ local function primaryButton(parent: Instance, text: string, layoutOrder: number
 	b.TextColor3 = WHITE
 	b.Parent = parent
 	corner(b, 6)
+
 	b.MouseEnter:Connect(function()
-		b.BackgroundColor3 = ACCENT_HOVER
+		tweenColor(b, "BackgroundColor3", ACCENT_HOVER, 0.15)
 	end)
 	b.MouseLeave:Connect(function()
-		b.BackgroundColor3 = ACCENT
+		tweenColor(b, "BackgroundColor3", ACCENT, 0.15)
+	end)
+	b.MouseButton1Down:Connect(function()
+		tweenColor(b, "BackgroundColor3", Color3.fromRGB(66, 133, 244), 0.08)
+	end)
+	b.MouseButton1Up:Connect(function()
+		tweenColor(b, "BackgroundColor3", ACCENT_HOVER, 0.15)
 	end)
 	return b
 end
@@ -248,13 +270,29 @@ local function input(parent: Instance, placeholder: string, layoutOrder: number)
 	box.LayoutOrder = layoutOrder
 	box.Parent = parent
 	corner(box, 5)
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1
+	stroke.Parent = box
+	registerTheme(stroke, "Color", Enum.StudioStyleGuideColor.Border)
+
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 8)
 	pad.PaddingRight = UDim.new(0, 8)
 	pad.Parent = box
+
 	registerTheme(box, "BackgroundColor3", Enum.StudioStyleGuideColor.InputFieldBackground)
 	registerTheme(box, "TextColor3", Enum.StudioStyleGuideColor.MainText)
 	registerTheme(box, "PlaceholderColor3", Enum.StudioStyleGuideColor.DimmedText)
+
+	box.Focused:Connect(function()
+		local info = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		TweenService:Create(stroke, info, { Color = ACCENT }):Play()
+	end)
+	box.FocusLost:Connect(function()
+		local info = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		TweenService:Create(stroke, info, { Color = themeColor(Enum.StudioStyleGuideColor.Border) }):Play()
+	end)
 	return box
 end
 
@@ -267,7 +305,7 @@ local function card(parent: Instance, layoutOrder: number): Frame
 	c.Size = UDim2.new(1, 0, 0, 0)
 	c.AutomaticSize = Enum.AutomaticSize.Y
 	c.Parent = parent
-	registerTheme(c, "BackgroundColor3", Enum.StudioStyleGuideColor.MainBackground)
+	registerTheme(c, "BackgroundColor3", Enum.StudioStyleGuideColor.DocViewBackground)
 
 	corner(c, 8)
 	local stroke = Instance.new("UIStroke")
@@ -295,26 +333,33 @@ local function toggleSwitch(
 	track.Parent = parent
 	corner(track, 11)
 
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1
+	stroke.Parent = track
+	registerTheme(stroke, "Color", Enum.StudioStyleGuideColor.Border)
+
 	local knob = Instance.new("Frame")
 	knob.Name = "Knob"
-	knob.Size = UDim2.new(0, 16, 0, 16)
+	knob.Size = UDim2.new(0, 14, 0, 14)
 	knob.BorderSizePixel = 0
 	knob.BackgroundColor3 = WHITE
 	knob.Parent = track
-	corner(knob, 8)
+	corner(knob, 7)
 
 	local state = initialOn
 
-	local function apply()
-		if state then
-			track.BackgroundColor3 = ACCENT
-			knob.Position = UDim2.new(1, -19, 0.5, -8)
-		else
-			track.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Border)
-			knob.Position = UDim2.new(0, 3, 0.5, -8)
-		end
+	local function apply(animate: boolean)
+		local duration = if animate then 0.18 else 0
+		local targetPos = if state then UDim2.new(1, -17, 0.5, -7) else UDim2.new(0, 3, 0.5, -7)
+		local targetColor = if state then ACCENT else themeColor(Enum.StudioStyleGuideColor.InputFieldBackground)
+		local targetBorderColor = if state then ACCENT else themeColor(Enum.StudioStyleGuideColor.Border)
+
+		local info = TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		TweenService:Create(knob, info, { Position = targetPos }):Play()
+		TweenService:Create(track, info, { BackgroundColor3 = targetColor }):Play()
+		TweenService:Create(stroke, info, { Color = targetBorderColor }):Play()
 	end
-	apply()
+	apply(false)
 
 	local hit = Instance.new("TextButton")
 	hit.Text = ""
@@ -323,13 +368,14 @@ local function toggleSwitch(
 	hit.Parent = track
 	hit.MouseButton1Click:Connect(function()
 		state = not state
-		apply()
+		apply(true)
 		onChange(state)
 	end)
 
 	return function(on: boolean)
+		if state == on then return end
 		state = on
-		apply()
+		apply(true)
 	end
 end
 
@@ -353,15 +399,20 @@ local function segmented(
 	local buttons: { [string]: TextButton } = {}
 	local current = initial
 
-	local function apply()
+	local function apply(animate: boolean)
+		local duration = if animate then 0.15 else 0
 		for value, btn in buttons do
+			local targetBg, targetText
 			if value == current then
-				btn.BackgroundColor3 = ACCENT
-				btn.TextColor3 = WHITE
+				targetBg = ACCENT
+				targetText = WHITE
 			else
-				btn.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Button)
-				btn.TextColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonText)
+				targetBg = themeColor(Enum.StudioStyleGuideColor.Button)
+				targetText = themeColor(Enum.StudioStyleGuideColor.ButtonText)
 			end
+
+			local info = TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			TweenService:Create(btn, info, { BackgroundColor3 = targetBg, TextColor3 = targetText }):Play()
 		end
 	end
 
@@ -378,28 +429,50 @@ local function segmented(
 		corner(b, 5)
 		fill(b)
 		buttons[opt.value] = b
+
+		b.MouseEnter:Connect(function()
+			if current ~= opt.value then
+				local target = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Hover)
+				tweenColor(b, "BackgroundColor3", target, 0.12)
+			end
+		end)
+		b.MouseLeave:Connect(function()
+			if current ~= opt.value then
+				local target = themeColor(Enum.StudioStyleGuideColor.Button, Enum.StudioStyleGuideModifier.Default)
+				tweenColor(b, "BackgroundColor3", target, 0.12)
+			end
+		end)
 		b.MouseButton1Click:Connect(function()
+			if current == opt.value then return end
 			current = opt.value
-			apply()
+			apply(true)
 			onChange(opt.value)
 		end)
 	end
-	apply()
+	apply(false)
 
 	return function(value: string)
+		if current == value then return end
 		current = value
-		apply()
+		apply(true)
 	end
 end
 
 -- ── Build the panel ─────────────────────────────────────────────────────────────
 function UI.create(
 	widget: DockWidgetPluginGui,
-	initialSettings: { url: string, token: string?, autoConnect: boolean?, syncMode: string? }
+	initialSettings: {
+		url: string,
+		token: string?,
+		autoConnect: boolean?,
+		initialDir: string?,
+		twoWayEnabled: boolean?,
+	}
 )
 	widget.Title = "Roblox MCP Pro"
 	themeRegistry = {}
-	syncMode = initialSettings.syncMode or "two-way"
+	initialDir = initialSettings.initialDir or "studio-to-disk"
+	twoWayEnabled = if initialSettings.twoWayEnabled ~= nil then initialSettings.twoWayEnabled else true
 
 	-- Clear any previous build (Studio reloads re-run this module).
 	for _, child in widget:GetChildren() do
@@ -421,9 +494,51 @@ function UI.create(
 	listLayout(root, Enum.FillDirection.Vertical, 10)
 
 	-- ── Header ──
-	local header = row(root, 0, 24)
-	listLayout(header, Enum.FillDirection.Horizontal, 8, Enum.VerticalAlignment.Center)
-	label(header, "Roblox MCP Pro", 15, Enum.Font.GothamBold, Enum.StudioStyleGuideColor.MainText, 1)
+	local header = row(root, 0, 32)
+	listLayout(header, Enum.FillDirection.Horizontal, 6, Enum.VerticalAlignment.Center)
+
+	-- Branded logo mark
+	local logo = Instance.new("Frame")
+	logo.Name = "Logo"
+	logo.Size = UDim2.new(0, 20, 0, 20)
+	logo.BackgroundColor3 = ACCENT
+	logo.LayoutOrder = 1
+	logo.Parent = header
+	corner(logo, 5)
+
+	local logoText = Instance.new("TextLabel")
+	logoText.Text = "M"
+	logoText.TextSize = 12
+	logoText.Font = Enum.Font.GothamBold
+	logoText.TextColor3 = WHITE
+	logoText.Size = UDim2.new(1, 0, 1, 0)
+	logoText.BackgroundTransparency = 1
+	logoText.Parent = logo
+
+	label(header, "Roblox MCP Pro", 14, Enum.Font.GothamBold, Enum.StudioStyleGuideColor.MainText, 2)
+
+	-- Version badge
+	local verPill = Instance.new("Frame")
+	verPill.Name = "VersionBadge"
+	verPill.Size = UDim2.new(0, 42, 0, 16)
+	verPill.LayoutOrder = 3
+	verPill.Parent = header
+	corner(verPill, 8)
+	registerTheme(verPill, "BackgroundColor3", Enum.StudioStyleGuideColor.InputFieldBackground)
+
+	local verStroke = Instance.new("UIStroke")
+	verStroke.Thickness = 1
+	verStroke.Parent = verPill
+	registerTheme(verStroke, "Color", Enum.StudioStyleGuideColor.Border)
+
+	local verText = Instance.new("TextLabel")
+	verText.Text = "v1.0.3"
+	verText.TextSize = 9
+	verText.Font = Enum.Font.GothamMedium
+	verText.Size = UDim2.new(1, 0, 1, 0)
+	verText.BackgroundTransparency = 1
+	registerTheme(verText, "TextColor3", Enum.StudioStyleGuideColor.DimmedText)
+	verText.Parent = verPill
 
 	-- ── Connection card ──
 	local connCard = card(root, 1)
@@ -492,23 +607,33 @@ function UI.create(
 	spacer(syncRow, 2)
 	setSyncToggleVisual = toggleSwitch(syncRow, 3, false, function(on: boolean)
 		if UI.onSyncToggled then
-			UI.onSyncToggled(on, syncMode)
+			UI.onSyncToggled(on, initialDir, twoWayEnabled)
 		end
 	end)
 
-	label(syncCard, "Direction", 11, Enum.Font.Gotham, Enum.StudioStyleGuideColor.DimmedText, 3)
+	label(syncCard, "Initial Direction", 11, Enum.Font.Gotham, Enum.StudioStyleGuideColor.DimmedText, 3)
 	setSegmentedVisual = segmented(syncCard, 4, {
-		{ label = "Two-way", value = "two-way" },
-		{ label = "Studio→Disk", value = "studio-to-disk" },
-		{ label = "Disk→Studio", value = "disk-to-studio" },
-	}, syncMode, function(value: string)
-		syncMode = value
-		if UI.onSyncModeChanged then
-			UI.onSyncModeChanged(value)
+		{ label = "Studio ➔ Disk", value = "studio-to-disk" },
+		{ label = "Disk ➔ Studio", value = "disk-to-studio" },
+	}, initialDir, function(value: string)
+		initialDir = value
+		if UI.onSyncOptionsChanged then
+			UI.onSyncOptionsChanged(initialDir, twoWayEnabled)
 		end
 	end)
 
-	syncStatusLabel = label(syncCard, "Off", 11, Enum.Font.Gotham, Enum.StudioStyleGuideColor.DimmedText, 5)
+	local twoWayRow = row(syncCard, 5, 24)
+	listLayout(twoWayRow, Enum.FillDirection.Horizontal, 8, Enum.VerticalAlignment.Center)
+	label(twoWayRow, "Two-way sync", 12, Enum.Font.Gotham, Enum.StudioStyleGuideColor.MainText, 1)
+	spacer(twoWayRow, 2)
+	setTwoWayToggleVisual = toggleSwitch(twoWayRow, 3, twoWayEnabled, function(on: boolean)
+		twoWayEnabled = on
+		if UI.onSyncOptionsChanged then
+			UI.onSyncOptionsChanged(initialDir, twoWayEnabled)
+		end
+	end)
+
+	syncStatusLabel = label(syncCard, "Off", 11, Enum.Font.Gotham, Enum.StudioStyleGuideColor.DimmedText, 6)
 
 	-- ── Activity card ──
 	local activityCard = card(root, 4)
@@ -537,6 +662,12 @@ function UI.create(
 	log.LayoutOrder = 2
 	log.Parent = activityCard
 	corner(log, 5)
+
+	local logStroke = Instance.new("UIStroke")
+	logStroke.Thickness = 1
+	logStroke.Parent = log
+	registerTheme(logStroke, "Color", Enum.StudioStyleGuideColor.Border)
+
 	registerTheme(log, "BackgroundColor3", Enum.StudioStyleGuideColor.InputFieldBackground)
 	registerTheme(log, "ScrollBarImageColor3", Enum.StudioStyleGuideColor.ScrollBar)
 	local logLayout = listLayout(log, Enum.FillDirection.Vertical, 3)
@@ -591,37 +722,52 @@ function UI.setStatus(status: string)
 
 	lbl.Text = status
 
+	local targetColor
 	if status == "Connected" then
 		isConnected = true
-		ind.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- green
-		lbl.TextColor3 = Color3.fromRGB(46, 204, 113)
+		targetColor = Color3.fromRGB(46, 204, 113) -- green
 		btn.Text = "Disconnect"
 	elseif status == "Connecting" or status == "Reconnecting" then
 		isConnected = true
-		ind.BackgroundColor3 = Color3.fromRGB(241, 196, 15) -- amber
-		lbl.TextColor3 = Color3.fromRGB(241, 196, 15)
+		targetColor = Color3.fromRGB(241, 196, 15) -- amber
 		btn.Text = "Disconnect"
 	elseif status == "Offline" then
 		-- Server unreachable but the poll loop is still retrying, so keep "Disconnect".
 		isConnected = true
-		ind.BackgroundColor3 = Color3.fromRGB(231, 76, 60) -- red
-		lbl.TextColor3 = Color3.fromRGB(231, 76, 60)
+		targetColor = Color3.fromRGB(231, 76, 60) -- red
 		btn.Text = "Disconnect"
 	else
 		isConnected = false
-		ind.BackgroundColor3 = Color3.fromRGB(149, 165, 166) -- muted
-		lbl.TextColor3 = themeColor(Enum.StudioStyleGuideColor.DimmedText)
+		targetColor = themeColor(Enum.StudioStyleGuideColor.DimmedText)
 		btn.Text = "Connect"
 	end
+
+	-- Smooth transition for status colors
+	local info = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(ind, info, { BackgroundColor3 = targetColor }):Play()
+	TweenService:Create(lbl, info, { TextColor3 = targetColor }):Play()
 end
 
 -- Reflect the broker's sync state in the Sync card.
-function UI.setSyncStatus(running: boolean, mode: string?, scriptCount: number?)
+-- Reflect the broker's sync state in the Sync card.
+function UI.setSyncStatus(running: boolean, mode: string?, scriptCount: number?, initialDirection: string?)
 	syncRunning = running
 	if mode then
-		syncMode = mode
+		if mode == "two-way" then
+			twoWayEnabled = true
+			if initialDirection then
+				initialDir = initialDirection
+			end
+		else
+			twoWayEnabled = false
+			initialDir = mode
+		end
+
 		if setSegmentedVisual then
-			(setSegmentedVisual :: (string) -> ())(mode)
+			(setSegmentedVisual :: (string) -> ())(initialDir)
+		end
+		if setTwoWayToggleVisual then
+			(setTwoWayToggleVisual :: (boolean) -> ())(twoWayEnabled)
 		end
 	end
 	if setSyncToggleVisual then
@@ -631,7 +777,11 @@ function UI.setSyncStatus(running: boolean, mode: string?, scriptCount: number?)
 		local lbl = syncStatusLabel :: TextLabel
 		if running then
 			local count = scriptCount or 0
-			lbl.Text = ("Syncing %d scripts · %s"):format(count, MODE_LABELS[syncMode] or syncMode)
+			local modeLabel = if twoWayEnabled
+				then "Two-way (Initial: " .. (if initialDir == "studio-to-disk" then "Studio ➔ Disk" else "Disk ➔ Studio") .. ")"
+				elseif initialDir == "studio-to-disk" then "Studio ➔ Disk"
+				else "Disk ➔ Studio"
+			lbl.Text = ("Syncing %d scripts · %s"):format(count, modeLabel)
 			lbl.TextColor3 = Color3.fromRGB(46, 204, 113)
 		else
 			lbl.Text = "Off"
