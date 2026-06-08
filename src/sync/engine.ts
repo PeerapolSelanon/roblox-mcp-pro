@@ -24,6 +24,7 @@ function callStudio<T = unknown>(tool: string, args: unknown): Promise<T> {
 }
 import {
   writeTree,
+  escapeName,
   type ScriptFile,
   type SnapshotRoot,
 } from "./mirror.js";
@@ -35,9 +36,11 @@ const RESYNC_DEBOUNCE_MS = 1500;
 const DEFAULT_ROOTS = [
   "ServerScriptService",
   "ReplicatedStorage",
+  "ReplicatedFirst",
   "StarterGui",
   "StarterPlayer",
   "ServerStorage",
+  "Lighting",
 ];
 
 interface SnapshotResponse {
@@ -239,12 +242,18 @@ class SyncEngine {
       await this.watcher.close();
       this.watcher = null;
     }
-    await fs.rm(this.explorerDir, { recursive: true, force: true });
     await fs.mkdir(this.explorerDir, { recursive: true });
 
     this.fileToInstance.clear();
     this.instanceToFile.clear();
     for (const root of snap.roots) {
+      // Replace only this root's own folder, leaving folders this sync doesn't
+      // own (e.g. a scaffolded Workspace) intact. Wiping all of explorer/ here
+      // would delete any non-synced service the user set up.
+      await fs.rm(path.join(this.explorerDir, escapeName(root.tree.name)), {
+        recursive: true,
+        force: true,
+      });
       const scripts = await writeTree(this.explorerDir, root);
       this.index(scripts);
     }

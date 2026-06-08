@@ -35,9 +35,11 @@ const PROJECT_SKILLS = [
 const SEED_SERVICES: { name: string; className: string; children?: { name: string; className: string }[] }[] = [
   { name: "Workspace", className: "Workspace" },
   { name: "ReplicatedStorage", className: "ReplicatedStorage" },
+  { name: "ReplicatedFirst", className: "ReplicatedFirst" },
   { name: "ServerScriptService", className: "ServerScriptService" },
   { name: "ServerStorage", className: "ServerStorage" },
   { name: "StarterGui", className: "StarterGui" },
+  { name: "Lighting", className: "Lighting" },
   {
     name: "StarterPlayer",
     className: "StarterPlayer",
@@ -118,9 +120,11 @@ function defaultProjectJson(name: string): string {
         $className: "DataModel",
         Workspace: { $path: "explorer/Workspace" },
         ReplicatedStorage: { $path: "explorer/ReplicatedStorage" },
+        ReplicatedFirst: { $path: "explorer/ReplicatedFirst" },
         ServerScriptService: { $path: "explorer/ServerScriptService" },
         ServerStorage: { $path: "explorer/ServerStorage" },
         StarterGui: { $path: "explorer/StarterGui" },
+        Lighting: { $path: "explorer/Lighting" },
         StarterPlayer: {
           StarterPlayerScripts: { $path: "explorer/StarterPlayer/StarterPlayerScripts" },
           StarterCharacterScripts: { $path: "explorer/StarterPlayer/StarterCharacterScripts" },
