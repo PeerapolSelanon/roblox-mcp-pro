@@ -13,9 +13,11 @@ local TweenService = game:GetService("TweenService")
 
 local UI = {}
 
--- Accent (matches the web dashboard's blue). Theme-independent on purpose.
-local ACCENT = Color3.fromRGB(88, 166, 255)
-local ACCENT_HOVER = Color3.fromRGB(115, 184, 255)
+-- Ember accent — matches the web dashboard and landing page. Theme-independent
+-- on purpose so the brand color reads the same in dark or light Studio themes.
+local ACCENT = Color3.fromRGB(232, 99, 58)
+local ACCENT_HOVER = Color3.fromRGB(240, 124, 78)
+local ACCENT_PRESSED = Color3.fromRGB(201, 80, 31)
 local WHITE = Color3.fromRGB(255, 255, 255)
 
 -- Direction labels shown in the Sync card.
@@ -248,7 +250,7 @@ local function primaryButton(parent: Instance, text: string, layoutOrder: number
 		tweenColor(b, "BackgroundColor3", ACCENT, 0.15)
 	end)
 	b.MouseButton1Down:Connect(function()
-		tweenColor(b, "BackgroundColor3", Color3.fromRGB(66, 133, 244), 0.08)
+		tweenColor(b, "BackgroundColor3", ACCENT_PRESSED, 0.08)
 	end)
 	b.MouseButton1Up:Connect(function()
 		tweenColor(b, "BackgroundColor3", ACCENT_HOVER, 0.15)
@@ -532,7 +534,7 @@ function UI.create(
 	registerTheme(verStroke, "Color", Enum.StudioStyleGuideColor.Border)
 
 	local verText = Instance.new("TextLabel")
-	verText.Text = "v1.0.6"
+	verText.Text = "v1.0.9"
 	verText.TextSize = 9
 	verText.Font = Enum.Font.GothamMedium
 	verText.Size = UDim2.new(1, 0, 1, 0)
@@ -682,7 +684,7 @@ function UI.create(
 	copyJsonBtn.MouseButton1Click:Connect(function()
 		local configTable = {
 			mcpServers = {
-				["roblox-mcp-pro"] = { command = "npx", args = { "-y", "roblox-mcp-pro" } },
+				["roblox-mcp-pro"] = { command = "npx", args = { "-y", "roblox-mcp-pro@latest" } },
 			},
 		}
 		local okEncode, json = pcall(function()
@@ -698,7 +700,8 @@ function UI.create(
 
 	local copyCliBtn = button(footer, "Copy install cmd", 120, 2)
 	copyCliBtn.MouseButton1Click:Connect(function()
-		local cmd = 'gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | Out-String | iex'
+		-- The Claude Code one-liner; other clients use the JSON from "Copy config".
+		local cmd = "claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest"
 		pcall(function()
 			StudioService:CopyToClipboard(cmd)
 			print("[roblox-mcp-pro] Install command copied to clipboard.")
@@ -748,7 +751,6 @@ function UI.setStatus(status: string)
 	TweenService:Create(lbl, info, { TextColor3 = targetColor }):Play()
 end
 
--- Reflect the broker's sync state in the Sync card.
 -- Reflect the broker's sync state in the Sync card.
 function UI.setSyncStatus(running: boolean, mode: string?, scriptCount: number?, initialDirection: string?)
 	syncRunning = running
