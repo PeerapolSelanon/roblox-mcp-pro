@@ -305,7 +305,7 @@ local function card(parent: Instance, layoutOrder: number): Frame
 	c.Size = UDim2.new(1, 0, 0, 0)
 	c.AutomaticSize = Enum.AutomaticSize.Y
 	c.Parent = parent
-	registerTheme(c, "BackgroundColor3", Enum.StudioStyleGuideColor.DocViewBackground)
+	registerTheme(c, "BackgroundColor3", Enum.StudioStyleGuideColor.TableItem)
 
 	corner(c, 8)
 	local stroke = Instance.new("UIStroke")
@@ -532,7 +532,7 @@ function UI.create(
 	registerTheme(verStroke, "Color", Enum.StudioStyleGuideColor.Border)
 
 	local verText = Instance.new("TextLabel")
-	verText.Text = "v1.0.3"
+	verText.Text = "v1.0.4"
 	verText.TextSize = 9
 	verText.Font = Enum.Font.GothamMedium
 	verText.Size = UDim2.new(1, 0, 1, 0)
