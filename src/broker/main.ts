@@ -29,8 +29,14 @@ function log(message: string): void {
   }
 }
 
-/** Exit after this long with no agents AND no Studio plugin polling. */
-const IDLE_SHUTDOWN_MS = 120_000;
+/**
+ * Exit after this long with no connected AI agents. Liveness is driven by agents
+ * only (NOT the Studio plugin): when no MCP client is connected there is nothing
+ * to drive Studio, so the broker frees the port and shuts down. This avoids a
+ * stale broker squatting :3690 across upgrades — the next agent spawns a fresh
+ * one. The Studio plugin reconnects automatically once a new broker is up.
+ */
+const IDLE_SHUTDOWN_MS = 20_000;
 
 /**
  * Open the monitoring dashboard in the default browser once, when the broker
@@ -89,13 +95,13 @@ async function main(): Promise<void> {
   let idleSince: number | null = null;
   const heartbeat = setInterval(() => {
     routes.tick();
-    const busy = routes.state.agentCount() > 0 || bridge.status().pluginConnected;
+    const busy = routes.state.agentCount() > 0;
     if (busy) {
       idleSince = null;
     } else {
       idleSince ??= Date.now();
       if (Date.now() - idleSince >= IDLE_SHUTDOWN_MS) {
-        log("idle with no agents or plugin — shutting down.");
+        log("no connected agents — shutting down and freeing the port.");
         clearInterval(heartbeat);
         void bridge.stop().then(() => process.exit(0));
       }

@@ -50,8 +50,9 @@ they share the single broker instead of each fighting for port 3690.
   broker layer its `/rpc/*` and dashboard routes onto the same socket. **The plugin protocol is
   unchanged** — `plugin/src/Bridge.luau` / `init.server.luau`'s `pollLoop` still talk to the same
   three endpoints.
-- **`src/broker/`** — the broker process. `main.ts` (entry, idle-shutdown after 120s with no
-  agents + no plugin, logs to `%TEMP%/roblox-mcp-pro-broker.log`), `routes.ts` (the `/rpc/*`
+- **`src/broker/`** — the broker process. `main.ts` (entry, idle-shutdown ~20s after the last
+  **agent** disconnects — liveness is agent-driven, NOT plugin-driven, so the port frees for a
+  fresh broker across upgrades; logs to `%TEMP%/roblox-mcp-pro-broker.log`), `routes.ts` (the `/rpc/*`
   client API + `/`, `/api/state`, `/api/stream` dashboard; routes `manage_sync` to the local
   engine, everything else to `bridge.enqueue`), `registry.ts` (connected agents + rolling command
   log), `dashboard.ts` (self-contained HTML).
@@ -150,8 +151,8 @@ property edits in Studio mirror only on resync, not live.
 There is no unit-test harness. To verify a change end-to-end:
 1. Spawn `node dist/index.js` (or a Node MCP-stdio client harness). It auto-spawns
    the broker on 3690 if one isn't already running — no need to manage the port manually. The
-   broker logs to `%TEMP%/roblox-mcp-pro-broker.log` and idle-exits ~2 min after the last agent
-   and plugin disconnect.
+   broker logs to `%TEMP%/roblox-mcp-pro-broker.log` and idle-exits ~20s after the last agent
+   disconnects (the Studio plugin alone does not keep it alive).
 2. The real Studio plugin (toggled ON once, then auto-reconnects) answers commands.
 3. To test broker/transport plumbing without Studio, hit `/rpc/*` and `/api/state` directly (a
    `call` for a plugin tool returns `{ok:false, error:"…not connected"}`), and open the dashboard
