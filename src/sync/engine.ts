@@ -138,7 +138,13 @@ class SyncEngine {
 
     const info = await callStudio<{ placeId?: number }>("system_info", {});
     this.placeId = info.placeId ?? 0;
-    this.placeDir = path.join(syncRootDir(), `place_${this.placeId}`);
+    
+    const isFlat = process.env.ROBLOX_MCP_FLAT_SYNC === "true";
+    if (isFlat) {
+      this.placeDir = syncRootDir();
+    } else {
+      this.placeDir = path.join(syncRootDir(), `place_${this.placeId}`);
+    }
     this.explorerDir = path.join(this.placeDir, "explorer");
 
     if (initialDirection === "disk-to-studio") {
