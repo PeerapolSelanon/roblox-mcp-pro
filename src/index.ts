@@ -19,6 +19,7 @@ import { installLicenseGate } from "./licensing/gate.js";
 import { installPlugin, ensurePluginInstalled } from "./install-plugin.js";
 import { ensureSkillsInstalled } from "./install-skills.js";
 import { VERSION } from "./version.js";
+import { initProject } from "./init-project.js";
 
 function log(message: string): void {
   process.stderr.write(`[roblox-mcp-pro] ${message}\n`);
@@ -26,6 +27,10 @@ function log(message: string): void {
 
 async function main(): Promise<void> {
   // One-shot CLI subcommands (run, then exit — not the MCP stdio server).
+  if (process.argv[2] === "init") {
+    await initProject();
+    return;
+  }
   if (process.argv[2] === "install-plugin") {
     await installPlugin();
     return;
