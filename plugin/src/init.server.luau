@@ -13,16 +13,11 @@ local DEFAULT_URL = "http://127.0.0.1:3690"
 local SETTING_URL = "roblox_mcp_pro_url"
 local SETTING_TOKEN = "roblox_mcp_pro_token"
 local SETTING_AUTOCONNECT = "roblox_mcp_pro_autoconnect"
-local SETTING_INITIAL_DIR = "roblox_mcp_pro_initial_dir"
-local SETTING_TWOWAY_ENABLED = "roblox_mcp_pro_twoway_enabled"
 
 -- Resolve config from saved plugin settings (falls back to defaults).
 local url = plugin:GetSetting(SETTING_URL) or DEFAULT_URL
 local token = plugin:GetSetting(SETTING_TOKEN)
 local autoConnect = plugin:GetSetting(SETTING_AUTOCONNECT) == true
-local initialDir = plugin:GetSetting(SETTING_INITIAL_DIR) or "studio-to-disk"
-local twoWaySetting = plugin:GetSetting(SETTING_TWOWAY_ENABLED)
-local twoWayEnabled = if twoWaySetting ~= nil then twoWaySetting == true else true
 Bridge.configure(url, token)
 
 local toolbar = plugin:CreateToolbar("Roblox MCP Pro")
@@ -51,12 +46,9 @@ UI.create(widget, {
 	url = url,
 	token = token,
 	autoConnect = autoConnect,
-	initialDir = initialDir,
-	twoWayEnabled = twoWayEnabled,
 })
 
 local connected = false
-local isSyncing = false
 
 local function log(message: string)
 	print("[roblox-mcp-pro] " .. message)
@@ -96,11 +88,6 @@ local function pollLoop()
 			local ok, result, errMsg = Dispatcher.dispatch(command.tool, command.args)
 			Bridge.respond(command.id, ok, result, errMsg)
 
-			-- Feed execution result to UI console (but not broker-internal probes
-			-- like the dashboard's periodic system_info — only real agent commands).
-			if not command.internal then
-				UI.addLog(command.tool, ok, if ok then nil else errMsg)
-			end
 		elseif err then
 			-- Transport error (server down, HTTP disabled). Warn once per outage.
 			reachable = false
@@ -128,26 +115,6 @@ local function pollLoop()
 	end
 end
 
--- Reflect a sync-status result from the broker in the UI.
-local function applySyncResult(result: any)
-	isSyncing = result.running == true
-	UI.setSyncStatus(isSyncing, result.mode, result.scriptCount, result.initialDirection)
-end
-
--- While connected, poll the broker's sync status so the Sync card stays in step
--- (including sync started by an AI agent rather than this panel).
-local function startSyncRefresher()
-	task.spawn(function()
-		while connected do
-			local st = Bridge.syncStatus()
-			if st then
-				applySyncResult(st)
-			end
-			task.wait(5)
-		end
-	end)
-end
-
 local function setConnected(value: boolean)
 	connected = value
 	-- Tell the broker right away so the dashboard reflects it within ~1s.
@@ -158,12 +125,9 @@ local function setConnected(value: boolean)
 		log("connecting to " .. url)
 		UI.setStatus("Connecting")
 		task.spawn(pollLoop)
-		startSyncRefresher()
 	else
 		log("disconnected")
 		UI.setStatus("Disconnected")
-		isSyncing = false
-		UI.setSyncStatus(false, if twoWayEnabled then "two-way" else initialDir, 0, initialDir)
 	end
 end
 
@@ -175,45 +139,6 @@ end
 UI.onAutoConnectChanged = function(enabled: boolean)
 	plugin:SetSetting(SETTING_AUTOCONNECT, enabled)
 	log("auto-connect " .. (if enabled then "enabled" else "disabled"))
-end
-
-UI.onSyncOptionsChanged = function(dir: string, twoWay: boolean)
-	initialDir = dir
-	twoWayEnabled = twoWay
-	plugin:SetSetting(SETTING_INITIAL_DIR, dir)
-	plugin:SetSetting(SETTING_TWOWAY_ENABLED, twoWay)
-	-- If sync is already running, restart it with the new configuration.
-	if connected and isSyncing then
-		task.spawn(function()
-			local mode = if twoWay then "two-way" else dir
-			local result, err = Bridge.syncControl("start", mode, dir)
-			if result then
-				applySyncResult(result)
-			else
-				warn("[roblox-mcp-pro] sync restart failed: " .. tostring(err))
-			end
-		end)
-	end
-end
-
-UI.onSyncToggled = function(enabled: boolean, dir: string, twoWay: boolean)
-	local mode = if twoWay then "two-way" else dir
-	if not connected then
-		UI.setSyncStatus(false, mode, 0, dir)
-		warn("[roblox-mcp-pro] Connect to the server before enabling sync.")
-		return
-	end
-	task.spawn(function()
-		local action = if enabled then "start" else "stop"
-		local result, err = Bridge.syncControl(action, mode, dir)
-		if result then
-			applySyncResult(result)
-		else
-			isSyncing = false
-			UI.setSyncStatus(false, mode, 0, dir)
-			warn("[roblox-mcp-pro] sync " .. action .. " failed: " .. tostring(err))
-		end
-	end)
 end
 
 UI.onSettingsSaved = function(newUrl: string, newToken: string?)
