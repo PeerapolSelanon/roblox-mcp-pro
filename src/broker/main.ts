@@ -68,6 +68,17 @@ function maybeOpenDashboard(url: string): void {
   }
 }
 
+/**
+ * Stop the bridge and exit. A hard fallback timer force-exits even if a lingering
+ * connection — e.g. an open dashboard SSE stream — keeps `server.close()` from
+ * resolving; without it the broker could never free the port while a dashboard
+ * tab is open.
+ */
+function stopAndExit(): void {
+  void bridge.stop().catch(() => {});
+  setTimeout(() => process.exit(0), 400);
+}
+
 async function main(): Promise<void> {
   const routes = createBrokerRoutes(bridge);
   bridge.onUnhandled = routes.handle;
@@ -103,7 +114,7 @@ async function main(): Promise<void> {
       if (Date.now() - idleSince >= IDLE_SHUTDOWN_MS) {
         log("no connected agents — shutting down and freeing the port.");
         clearInterval(heartbeat);
-        void bridge.stop().then(() => process.exit(0));
+        stopAndExit();
       }
     }
   }, 1000);
@@ -112,7 +123,7 @@ async function main(): Promise<void> {
   const shutdown = (): void => {
     log("shutting down…");
     clearInterval(heartbeat);
-    void bridge.stop().then(() => process.exit(0));
+    stopAndExit();
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

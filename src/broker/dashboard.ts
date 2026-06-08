@@ -161,6 +161,28 @@ export const DASHBOARD_HTML = `<!doctype html>
   .btn.danger:hover {
     background: color-mix(in oklch, var(--red) 20%, var(--panel));
   }
+  /* Sync control: field labels, direction segmented, two-way switch, advanced */
+  .flabel { display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin: 12px 0 5px; }
+  .wshint { font-size: 11px; color: var(--faint); margin: -5px 0 8px; min-height: 14px; }
+  .wshint b { color: var(--muted); }
+  .seg-group { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+  .seg { padding: 8px; background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-family: var(--sans); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: .15s; }
+  .seg:hover { color: var(--text); border-color: var(--faint); }
+  .seg.active { background: color-mix(in oklch, var(--accent) 15%, var(--panel2)); border-color: color-mix(in oklch, var(--accent) 50%, var(--border)); color: var(--accent); }
+  .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; }
+  .switch-label { font-size: 13px; font-weight: 600; }
+  .switch-sub { font-size: 11px; color: var(--faint); }
+  .switch { width: 40px; height: 22px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel2); position: relative; cursor: pointer; flex: none; transition: .18s; padding: 0; }
+  .switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--faint); transition: left .18s var(--ease), background .18s; }
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch[aria-checked="true"] .knob { left: 20px; background: var(--bg); }
+  .sync-adv summary { cursor: pointer; font-size: 12px; color: var(--muted); font-family: var(--mono); list-style: none; padding: 6px 0; }
+  .sync-adv summary::-webkit-details-marker { display: none; }
+  .sync-adv summary::before { content: "\\25b8  "; }
+  .sync-adv[open] summary::before { content: "\\25be  "; }
+  .sync-msg { font-size: 12px; margin-top: 8px; font-family: var(--mono); min-height: 18px; }
+  .sync-live { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--green); margin-bottom: 4px; }
+  .sync-live-dir { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0 0 12px; word-break: break-all; }
 </style>
 </head>
 <body>
@@ -234,34 +256,56 @@ export const DASHBOARD_HTML = `<!doctype html>
     </div>
     <div class="panel">
       <h3>Sync Control</h3>
-      <div style="margin-top: 8px;">
-        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Sync folder (Absolute Path)</label>
-        <input type="text" id="inputSyncDir" placeholder="e.g. D:/RobloxProject/MyGame" class="control-input" />
-        
-        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Sync Mode</label>
-        <select id="selectMode">
-          <option value="two-way">Two-way (disk ↔ Studio)</option>
-          <option value="studio-to-disk">Studio → disk</option>
-          <option value="disk-to-studio">disk → Studio</option>
-        </select>
-        
-        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Initial Direction</label>
-        <select id="selectInitialDir">
-          <option value="studio-to-disk">Pull (Studio → disk)</option>
-          <option value="disk-to-studio">Push (disk → Studio)</option>
-        </select>
-        
-        <label class="clabel" style="display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin-bottom: 4px;">Roots (comma separated, optional)</label>
-        <input type="text" id="inputRoots" placeholder="e.g. ServerScriptService, StarterGui" class="control-input" />
-        
-        <div class="btn-group">
-          <button id="btnStart" class="btn primary" onclick="doSyncAction('start')">Start Sync</button>
-          <button id="btnStop" class="btn danger" onclick="doSyncAction('stop')">Stop Sync</button>
-          <button id="btnPull" class="btn" onclick="doSyncAction('pull')">Pull</button>
-          <button id="btnPush" class="btn" onclick="doSyncAction('push')">Push</button>
+
+      <!-- Running view (compact) -->
+      <div id="syncRunning" style="display:none;">
+        <div class="sync-live"><span class="dot on"></span><span id="syncLiveText">Syncing</span></div>
+        <div class="sync-live-dir" id="syncLiveDir">—</div>
+        <div class="btn-group" style="grid-template-columns:1fr;">
+          <button class="btn danger" onclick="doSyncAction('stop')">Stop sync</button>
         </div>
-        <div id="syncControlMsg" style="font-size: 12px; margin-top: 8px; font-family: var(--mono); min-height: 18px;"></div>
+        <div class="btn-group">
+          <button class="btn" onclick="doSyncAction('pull')">&#8595; Pull once</button>
+          <button class="btn" onclick="doSyncAction('push')">&#8593; Push once</button>
+        </div>
       </div>
+
+      <!-- Setup view -->
+      <div id="syncSetup">
+        <label class="flabel">Project folder</label>
+        <input type="text" id="inputSyncDir" placeholder="auto-detected from your AI client" class="control-input" />
+        <div class="wshint" id="wsHint"></div>
+
+        <label class="flabel">Direction</label>
+        <div class="seg-group" id="segDir" role="group" aria-label="Sync direction">
+          <button type="button" class="seg active" data-dir="studio-to-disk">Studio &#8594; Disk</button>
+          <button type="button" class="seg" data-dir="disk-to-studio">Disk &#8594; Studio</button>
+        </div>
+
+        <div class="switch-row">
+          <div>
+            <div class="switch-label">Two-way sync</div>
+            <div class="switch-sub">Keep Studio and files in step, live</div>
+          </div>
+          <button type="button" id="twoWayToggle" class="switch" role="switch" aria-checked="false" aria-label="Two-way sync"><span class="knob"></span></button>
+        </div>
+
+        <div class="btn-group" style="grid-template-columns:1fr;">
+          <button class="btn primary" onclick="doSyncAction('start')">Start sync</button>
+        </div>
+        <div class="btn-group">
+          <button class="btn" onclick="doSyncAction('pull')">&#8595; Pull once</button>
+          <button class="btn" onclick="doSyncAction('push')">&#8593; Push once</button>
+        </div>
+
+        <details class="sync-adv">
+          <summary>Advanced</summary>
+          <label class="flabel">Roots (comma separated, optional)</label>
+          <input type="text" id="inputRoots" placeholder="e.g. ServerScriptService, StarterGui" class="control-input" />
+        </details>
+      </div>
+
+      <div id="syncControlMsg" class="sync-msg"></div>
     </div>
   </div>
 
@@ -450,16 +494,27 @@ function render(state) {
   }
   $('portSwitcher').innerHTML = switcherHtml;
 
-  // Autofill syncDir from running sync or active agents
+  // Autofill the project folder from running sync or the active agent's workspace.
   if (!$('inputSyncDir').value) {
     if (sync.syncDir) {
       $('inputSyncDir').value = sync.syncDir;
     } else if (agents.length > 0) {
       const activeAgent = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
-      if (activeAgent?.cwd) {
+      if (activeAgent && activeAgent.cwd) {
         $('inputSyncDir').value = activeAgent.cwd;
+        $('wsHint').innerHTML = 'Detected from <b>' + esc(activeAgent.name) + '</b>';
       }
     }
+  }
+
+  // State-aware: compact "running" view vs the setup form.
+  const DIR_LABEL = { "two-way": "Two-way", "studio-to-disk": "Studio \\u2192 Disk", "disk-to-studio": "Disk \\u2192 Studio" };
+  $('syncSetup').style.display = sync.running ? 'none' : 'block';
+  $('syncRunning').style.display = sync.running ? 'block' : 'none';
+  if (sync.running) {
+    set('syncLiveText', 'Syncing ' + (sync.scriptCount || 0) + ' scripts');
+    const label = DIR_LABEL[sync.mode] || sync.mode || '';
+    $('syncLiveDir').textContent = label + (sync.syncDir ? '  \\u00b7  ' + sync.syncDir : '');
   }
 }
 
@@ -469,18 +524,22 @@ async function doSyncAction(action) {
     elMsg.textContent = msg;
     elMsg.style.color = isErr ? 'var(--red)' : 'var(--green)';
   };
-  showMsg('Processing...');
-  
+  showMsg('Working...');
+
   const payload = { action };
   if (action === 'start') {
     const syncDir = $('inputSyncDir').value.trim();
     if (!syncDir) {
-      showMsg('Error: Sync folder path is required.', true);
+      showMsg('Pick a project folder first.', true);
       return;
     }
+    const activeSeg = document.querySelector('#segDir .seg.active');
+    const dir = activeSeg ? activeSeg.dataset.dir : 'studio-to-disk';
+    const twoWay = $('twoWayToggle').getAttribute('aria-checked') === 'true';
     payload.syncDir = syncDir;
-    payload.mode = $('selectMode').value;
-    payload.initialDirection = $('selectInitialDir').value;
+    // Two-way ON -> bidirectional live sync; OFF -> one-way in the chosen direction.
+    payload.mode = twoWay ? 'two-way' : dir;
+    payload.initialDirection = dir;
     const rootsText = $('inputRoots').value.trim();
     if (rootsText) {
       payload.roots = rootsText.split(',').map(s => s.trim()).filter(Boolean);
@@ -495,7 +554,7 @@ async function doSyncAction(action) {
     });
     const data = await res.json();
     if (data.ok) {
-      showMsg(action === 'start' ? 'Sync started successfully.' : 'Sync action ' + action + ' completed.');
+      showMsg(action === 'start' ? 'Sync started.' : 'Done: ' + action + '.');
     } else {
       showMsg('Error: ' + data.error, true);
     }
@@ -519,6 +578,20 @@ function connect() {
   es.onmessage = (e) => { try { apply(JSON.parse(e.data)); } catch {} };
   es.onerror = () => { setStream(false); es.close(); setTimeout(connect, 2000); };
 }
+// Sync Control: direction segmented + two-way toggle (vanilla, no framework).
+document.querySelectorAll('#segDir .seg').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#segDir .seg').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+  });
+});
+const twToggle = $('twoWayToggle');
+if (twToggle) {
+  twToggle.addEventListener('click', () => {
+    twToggle.setAttribute('aria-checked', twToggle.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+  });
+}
+
 connect();
 // keep relative timestamps fresh between server pushes
 setInterval(() => { if (last) render(last); }, 2000);
