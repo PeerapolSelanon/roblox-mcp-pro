@@ -47,8 +47,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   header small { font-size: 12px; font-family: var(--mono); }
   .badge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px;
     border-radius: 999px; border: 1px solid var(--border-soft); font-size: 12px; font-family: var(--mono); color: var(--muted); }
-  .portlink { color: var(--muted); text-decoration: none; margin: 0 4px; transition: color .15s; }
-  .portlink:hover { color: var(--accent); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
   .dot.on { background: var(--green); box-shadow: 0 0 7px var(--green); }
   .dot.off { background: var(--red); box-shadow: 0 0 7px var(--red); }
@@ -98,6 +96,11 @@ export const DASHBOARD_HTML = `<!doctype html>
   .kv dd.good { color: var(--green); } .kv dd.bad2 { color: var(--red); }
 
   section h2 { font-size: 12px; font-family: var(--mono); letter-spacing: .02em; color: var(--muted); margin: 0 0 11px; font-weight: 500; }
+  .pager { display: none; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }
+  .pgbtn { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 7px; color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 5px 11px; cursor: pointer; transition: .15s; }
+  .pgbtn:hover:not(:disabled) { color: var(--ink); border-color: var(--faint); }
+  .pgbtn:disabled { opacity: .4; cursor: default; }
+  .pginfo { font-family: var(--mono); font-size: 12px; color: var(--faint); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; }
   th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
   td { font-family: var(--mono); font-size: 12.5px; }
@@ -191,7 +194,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   <h1>Roblox MCP Pro</h1>
   <small id="hdrsub" class="muted">broker monitor</small>
   <div class="spacer"></div>
-  <span class="badge" id="portSwitcher"></span>
   <span class="badge muted" id="clock"></span>
   <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
 </header>
@@ -315,6 +317,7 @@ export const DASHBOARD_HTML = `<!doctype html>
       <thead><tr><th>Agent</th><th>Version</th><th>PID</th><th>Client ID</th><th>Commands</th><th>Connected</th><th>Last seen</th></tr></thead>
       <tbody id="agents"><tr><td class="empty" colspan="7">No agents connected.</td></tr></tbody>
     </table>
+    <div class="pager" id="agentsPager"></div>
   </section>
 
   <section>
@@ -323,6 +326,7 @@ export const DASHBOARD_HTML = `<!doctype html>
       <thead><tr><th>Time</th><th>Agent</th><th>Tool</th><th>Result</th><th>ms</th></tr></thead>
       <tbody id="activity"><tr><td class="empty" colspan="5">No activity yet.</td></tr></tbody>
     </table>
+    <div class="pager" id="activityPager"></div>
   </section>
 </main>
 <script>
@@ -343,6 +347,33 @@ const dur = (ms) => {
 };
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const set = (id, v) => { $(id).textContent = v; };
+
+// Client-side pagination for the agents/activity tables (5 rows per page).
+const PAGE_SIZE = 5;
+let agentsPage = 0, activityPage = 0;
+function renderPaged(id, items, rowFn, page, colspan, emptyText) {
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (page > pages - 1) page = pages - 1;
+  if (page < 0) page = 0;
+  const start = page * PAGE_SIZE;
+  const slice = items.slice(start, start + PAGE_SIZE);
+  $(id).innerHTML = slice.length
+    ? slice.map(rowFn).join("")
+    : "<tr><td class=empty colspan=" + colspan + ">" + emptyText + "</td></tr>";
+  const pager = $(id + "Pager");
+  if (total > PAGE_SIZE) {
+    pager.style.display = "flex";
+    pager.innerHTML =
+      "<button class='pgbtn' data-pg='" + id + "' data-d='-1'" + (page === 0 ? " disabled" : "") + ">&#8249; Prev</button>" +
+      "<span class='pginfo'>" + (page + 1) + " / " + pages + "  &#183;  " + total + " total</span>" +
+      "<button class='pgbtn' data-pg='" + id + "' data-d='1'" + (page >= pages - 1 ? " disabled" : "") + ">Next &#8250;</button>";
+  } else {
+    pager.style.display = "none";
+    pager.innerHTML = "";
+  }
+  return page;
+}
 
 // The Studio plugin long-polls every ~25s, so an age up to ~25s is healthy.
 // Past ~28s with no poll, it's likely dropping; past the broker's liveness
@@ -464,35 +495,23 @@ function render(state) {
   set("dSyncPlace", sync.placeId != null ? String(sync.placeId) : "—");
   set("dDir", sync.syncDir || "—");
 
-  // agents table
-  $("agents").innerHTML = agents.length ? agents.map((a) =>
+  // agents table (paginated, 5 per page)
+  const agentRow = (a) =>
     "<tr><td class=agentcell><span class='dot on'></span>" + esc(a.name) + "</td><td class=muted>" + esc(a.version || "—") +
     "</td><td class=muted>" + (a.pid ?? "—") + "</td><td class=muted>" + esc((a.clientId || "").slice(0, 8)) +
-    "</td><td>" + a.commandCount + "</td><td class=muted>" + ago(a.connectedAt) + "</td><td class=muted>" + ago(a.lastSeenAt) + "</td></tr>"
-  ).join("") : "<tr><td class=empty colspan=7>No agents connected.</td></tr>";
+    "</td><td>" + a.commandCount + "</td><td class=muted>" + ago(a.connectedAt) + "</td><td class=muted>" + ago(a.lastSeenAt) + "</td></tr>";
+  agentsPage = renderPaged("agents", agents, agentRow, agentsPage, 7, "No agents connected.");
 
-  // activity table
+  // activity table (paginated, 5 per page)
   const recent = state.recent || [];
-  $("activity").innerHTML = recent.length ? recent.map((c) =>
+  const activityRow = (c) =>
     "<tr><td class=muted>" + fmtTime(c.ts) + "</td><td>" + esc(c.agent) +
     "</td><td class=tool>" + esc(c.tool) + "</td><td class=" + (c.ok ? "ok>ok" : "err>" + esc(c.error || "error")) +
-    "</td><td class=muted>" + c.durationMs + "</td></tr>"
-  ).join("") : "<tr><td class=empty colspan=5>No activity yet.</td></tr>";
+    "</td><td class=muted>" + c.durationMs + "</td></tr>";
+  activityPage = renderPaged("activity", recent, activityRow, activityPage, 5, "No activity yet.");
 
   $("hdrsub").textContent = "broker monitor · :" + (state.port ?? "3690");
   $("clock").textContent = "updated " + new Date().toLocaleTimeString();
-
-  // Port Switcher
-  const currentPort = state.port || 3690;
-  let switcherHtml = 'Port: ';
-  for (let p = 3690; p <= 3695; p++) {
-    if (p === currentPort) {
-      switcherHtml += '<span style="color: var(--accent); font-weight: bold; margin: 0 4px;">' + p + '</span>';
-    } else {
-      switcherHtml += '<a class="portlink" href="http://127.0.0.1:' + p + '">' + p + '</a>';
-    }
-  }
-  $('portSwitcher').innerHTML = switcherHtml;
 
   // Autofill the project folder from running sync or the active agent's workspace.
   if (!$('inputSyncDir').value) {
@@ -591,6 +610,16 @@ if (twToggle) {
     twToggle.setAttribute('aria-checked', twToggle.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
   });
 }
+
+// Table pagination: prev/next buttons (delegated, no inline handlers).
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.pgbtn');
+  if (!b || b.disabled) return;
+  const d = parseInt(b.getAttribute('data-d'), 10) || 0;
+  if (b.getAttribute('data-pg') === 'agents') agentsPage += d;
+  else activityPage += d;
+  if (last) render(last);
+});
 
 connect();
 // keep relative timestamps fresh between server pushes
