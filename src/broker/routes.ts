@@ -18,6 +18,7 @@ import { BRIDGE_PORT } from "../constants.js";
 import { syncEngine, type SyncMode } from "../sync/engine.js";
 import { BrokerState } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
+import { scaffoldProject } from "./scaffold.js";
 
 /** Studio session details, polled from the plugin for the dashboard. */
 interface StudioInfo {
@@ -183,6 +184,30 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       res.write(`data: ${JSON.stringify(buildSnapshot())}\n\n`);
       sseClients.add(res);
       req.on("close", () => sseClients.delete(res));
+      return true;
+    }
+
+    // --- new project scaffold ---------------------------------------------
+    // Create an empty, sync-ready project skeleton on disk. The folder may be
+    // given explicitly or resolved from the most recently active agent's cwd.
+    if (method === "POST" && path === "/api/scaffold") {
+      const body = await readJson(req);
+      let dir = body.dir ? String(body.dir).trim() : "";
+      if (!dir) {
+        const agents = state.snapshot().agents;
+        const active = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
+        if (active?.cwd) dir = active.cwd;
+      }
+      if (!dir) {
+        sendJson(res, 200, { ok: false, error: "no project folder given and no active agent to detect one from." });
+        return true;
+      }
+      try {
+        const result = await scaffoldProject(dir);
+        sendJson(res, 200, { ok: true, result });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
       return true;
     }
 

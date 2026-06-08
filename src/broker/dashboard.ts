@@ -309,6 +309,18 @@ export const DASHBOARD_HTML = `<!doctype html>
 
       <div id="syncControlMsg" class="sync-msg"></div>
     </div>
+
+    <div class="panel">
+      <h3>New project</h3>
+      <div class="switch-sub" style="margin-bottom:10px;">Scaffold an empty, sync-ready project: <b>explorer/</b>, default.project.json, sourcemap.json, selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</div>
+      <label class="flabel">Project folder</label>
+      <input type="text" id="inputScaffoldDir" placeholder="auto-detected from your AI client" class="control-input" />
+      <div class="wshint" id="scaffoldHint"></div>
+      <div class="btn-group" style="grid-template-columns:1fr;">
+        <button class="btn primary" onclick="doScaffold()">Create empty project</button>
+      </div>
+      <div id="scaffoldMsg" class="sync-msg"></div>
+    </div>
   </div>
 
   <section>
@@ -526,6 +538,15 @@ function render(state) {
     }
   }
 
+  // Autofill the new-project folder from the active agent's workspace.
+  if (!$('inputScaffoldDir').value) {
+    const activeAgent = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
+    if (activeAgent && activeAgent.cwd) {
+      $('inputScaffoldDir').value = activeAgent.cwd;
+      $('scaffoldHint').innerHTML = 'Detected from <b>' + esc(activeAgent.name) + '</b>';
+    }
+  }
+
   // State-aware: compact "running" view vs the setup form.
   const DIR_LABEL = { "two-way": "Two-way", "studio-to-disk": "Studio \\u2192 Disk", "disk-to-studio": "Disk \\u2192 Studio" };
   $('syncSetup').style.display = sync.running ? 'none' : 'block';
@@ -574,6 +595,38 @@ async function doSyncAction(action) {
     const data = await res.json();
     if (data.ok) {
       showMsg(action === 'start' ? 'Sync started.' : 'Done: ' + action + '.');
+    } else {
+      showMsg('Error: ' + data.error, true);
+    }
+  } catch (err) {
+    showMsg('Failed to connect to broker: ' + err, true);
+  }
+}
+
+async function doScaffold() {
+  const elMsg = $('scaffoldMsg');
+  const showMsg = (msg, isErr = false) => {
+    elMsg.textContent = msg;
+    elMsg.style.color = isErr ? 'var(--red)' : 'var(--green)';
+  };
+  const dir = $('inputScaffoldDir').value.trim();
+  if (!dir) {
+    showMsg('Pick a project folder first.', true);
+    return;
+  }
+  showMsg('Creating project...');
+  try {
+    const res = await fetch('/api/scaffold', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dir })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const r = data.result || {};
+      const made = (r.created || []).length;
+      const kept = (r.skipped || []).length;
+      showMsg('Project ready at ' + (r.dir || dir) + ' \\u2014 ' + made + ' created, ' + kept + ' already present.');
     } else {
       showMsg('Error: ' + data.error, true);
     }
