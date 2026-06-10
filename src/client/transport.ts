@@ -20,6 +20,11 @@ const BASE = `http://${BRIDGE_HOST}:${BRIDGE_PORT}`;
 
 let clientId: string | null = null;
 let heartbeatTimer: NodeJS.Timeout | null = null;
+// Remembered registration so we can transparently re-attach if the broker is
+// replaced mid-session (killed, upgraded, crashed) — see recoverBroker().
+let lastName: string | null = null;
+let lastVersion: string | undefined;
+let recovering: Promise<void> | null = null;
 
 function headers(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -83,8 +88,32 @@ export async function ensureBroker(): Promise<void> {
   throw new Error("Timed out waiting for the roblox-mcp-pro broker to start.");
 }
 
+/**
+ * The broker died mid-session (upgrade, crash, manual kill). Spawn/find a new
+ * one and re-register under our previous identity so the dashboard keeps the
+ * same name. Single-flight: concurrent failing calls share one recovery.
+ */
+function recoverBroker(): Promise<void> {
+  recovering ??= (async () => {
+    try {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+      clientId = null;
+      await ensureBroker();
+      await register(lastName ?? "agent", lastVersion);
+    } finally {
+      recovering = null;
+    }
+  })();
+  return recovering;
+}
+
 /** Register this agent with the broker and begin heartbeating. */
 export async function register(name: string, version?: string): Promise<void> {
+  lastName = name;
+  lastVersion = version;
   const res = await fetch(`${BASE}/rpc/register`, {
     method: "POST",
     headers: headers(),
@@ -108,6 +137,8 @@ export async function register(name: string, version?: string): Promise<void> {
 
 /** Update this agent's display name once the MCP handshake reveals the client. */
 export function identify(name: string, version?: string): void {
+  lastName = name;
+  lastVersion = version;
   if (!clientId) return;
   void fetch(`${BASE}/rpc/identify`, {
     method: "POST",
@@ -144,9 +175,21 @@ export async function call<T = unknown>(tool: string, args: unknown): Promise<T>
       signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS + 5000),
     });
   } catch (e) {
-    throw new StudioError(
-      `Lost connection to the roblox-mcp-pro broker (${e instanceof Error ? e.message : String(e)}).`,
-    );
+    // Broker gone mid-session (upgrade/kill/crash): spawn a fresh one,
+    // re-register, and retry the call once before giving up.
+    try {
+      await recoverBroker();
+      res = await fetch(`${BASE}/rpc/call`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ clientId, tool, args }),
+        signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS + 5000),
+      });
+    } catch {
+      throw new StudioError(
+        `Lost connection to the roblox-mcp-pro broker (${e instanceof Error ? e.message : String(e)}).`,
+      );
+    }
   }
   if (!res.ok) throw new StudioError(`Broker returned HTTP ${res.status}.`);
   const body = (await res.json()) as { ok: boolean; result?: T; error?: string };
@@ -156,9 +199,18 @@ export async function call<T = unknown>(tool: string, args: unknown): Promise<T>
 
 /** Fetch bridge/plugin status from the broker. */
 export async function status(): Promise<BridgeStatus> {
-  const res = await fetch(`${BASE}/rpc/status`, {
-    headers: headers(),
-    signal: AbortSignal.timeout(2000),
-  });
-  return (await res.json()) as BridgeStatus;
+  try {
+    const res = await fetch(`${BASE}/rpc/status`, {
+      headers: headers(),
+      signal: AbortSignal.timeout(2000),
+    });
+    return (await res.json()) as BridgeStatus;
+  } catch {
+    await recoverBroker();
+    const res = await fetch(`${BASE}/rpc/status`, {
+      headers: headers(),
+      signal: AbortSignal.timeout(2000),
+    });
+    return (await res.json()) as BridgeStatus;
+  }
 }
