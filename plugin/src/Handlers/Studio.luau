@@ -118,11 +118,16 @@ local function startPlaytest(kind: string, args: any): any
 	playtest.error = nil
 
 	task.spawn(function()
+		-- ExecutePlayModeAsync(args) / ExecuteMultiplayerTestAsync(numPlayers, args)
+		-- both REQUIRE a non-nil args (Variant); passing nil throws
+		-- "Argument 1 missing or nil". args are readable in the test session via
+		-- StudioTestService:GetTestArgs().
+		local testArgs = { duration = duration }
 		local ok, result = pcall(function()
 			if kind == "multiplayer" then
-				return sts:ExecuteMultiplayerTestAsync(numPlayers, nil)
+				return sts:ExecuteMultiplayerTestAsync(numPlayers, testArgs)
 			end
-			return sts:ExecutePlayModeAsync(nil)
+			return sts:ExecutePlayModeAsync(testArgs)
 		end)
 		playtest.running = false
 		playtest.finishedAt = os.time()

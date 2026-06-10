@@ -35,3 +35,5 @@ obsidian_vault/
 
 .impeccable/
 .playwright-mcp/
+# Added by code-review-graph
+.code-review-graph/
