@@ -17,9 +17,34 @@ const Selection = z
 const Studio = z
   .object({
     action: z
-      .enum(["info", "run", "pause", "stop"])
+      .enum(["info", "run", "pause", "stop", "play", "multiplayer", "playtest_status"])
       .default("info")
-      .describe("'info' reports environment; 'run'/'pause'/'stop' control Run-mode playtest."),
+      .describe(
+        "'info' environment; 'run'/'pause'/'stop' Run mode (server sim, same DataModel); " +
+          "'play' real Play Solo, 'multiplayer' server+N clients (StudioTestService), " +
+          "'playtest_status' poll the play/multiplayer result.",
+      ),
+    duration: z
+      .number()
+      .int()
+      .min(1)
+      .max(600)
+      .optional()
+      .describe("For 'play'/'multiplayer': max seconds before the test auto-ends (default 30)."),
+    test_script: z
+      .string()
+      .max(100_000)
+      .optional()
+      .describe(
+        "For 'play'/'multiplayer': Luau run in the test session's server; its prints/errors land in the report, and the test ends when it returns.",
+      ),
+    num_players: z
+      .number()
+      .int()
+      .min(1)
+      .max(8)
+      .optional()
+      .describe("For 'multiplayer': simulated clients (default 1, max 8)."),
   })
   .strict();
 
@@ -57,10 +82,10 @@ export function registerStudioInfoTools(server: McpServer): void {
   forwardTool(server, "manage_studio", {
     title: "Studio Info & Playtest",
     description:
-      "Report Studio environment details, or control a Run-mode playtest (server simulation, no player).\n" +
-      "Args: action ('info'|'run'|'pause'|'stop').\n" +
-      "Returns: info -> { ok, studioVersion, theme, runState, placeId, gameId }; run -> { ok, runState, started_at }.\n" +
-      "Playtest loop: run -> manage_logs {since: started_at} -> stop. Note: 'stop' does NOT revert changes made during the run.",
+      "Report Studio environment details, or run a playtest.\n" +
+      "Args: action ('info'|'run'|'pause'|'stop'|'play'|'multiplayer'|'playtest_status'), duration?, test_script?, num_players?.\n" +
+      "Run mode loop: run -> manage_logs {since: started_at} -> stop ('stop' does NOT revert changes).\n" +
+      "Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value. 'multiplayer' is the same with num_players clients.",
     inputSchema: Studio.shape,
     annotations: mut,
   });

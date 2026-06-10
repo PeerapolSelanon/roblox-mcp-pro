@@ -276,7 +276,7 @@ activity, and sync status in real time. (Don't want it to open on its own? Set
 | ------------------ | ----------------------------------------------------- |
 | `manage_sync`      | Bidirectional Studio ↔ local mirror (+ sourcemap).    |
 | `manage_selection` | Read/change the Explorer selection.                   |
-| `manage_studio`    | Studio environment info + Run-mode playtest (run/pause/stop). |
+| `manage_studio`    | Studio info + playtests: Run mode (run/pause/stop) and real Play Solo / multiplayer with test scripts + auto reports. |
 | `manage_logs`      | Recent Output log history (filter by type or `since`). |
 | `workspace_state`  | High-level read-only session snapshot.                |
 | `capture_studio`   | Screenshot the Studio window so the agent sees the real render. |
