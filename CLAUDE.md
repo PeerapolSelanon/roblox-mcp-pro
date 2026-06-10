@@ -124,7 +124,12 @@ The broker is **not** gated — licensing belongs to each agent's client process
 `src/sync/{engine,mirror,sourcemap}.ts` keeps a Studio subtree and an on-disk mirror in step. It
 lives in the **broker** (single engine shared by all agents, so multiple agents never spin up
 competing file watchers); the `manage_sync` tool forwards control to it via `/rpc/call`.
-Mirror lives at `roblox-mcp-sync/place_<id>/explorer/` (override dir with `ROBLOX_MCP_SYNC_DIR`).
+**Layout: one project folder = one universe**; each place mirrors into
+`places/<Name>_<placeId>/{place.json, explorer/, default.project.json, sourcemap.json}`. Identity
+is the `placeId` in `place.json` (folder names are cosmetic; unsaved places with id 0 match by
+name), and `pull` re-resolves the open place first so a snapshot never lands in another place's
+folder. Base dir = the syncDir arg, else the active agent's cwd, else `ROBLOX_MCP_SYNC_DIR`;
+`ROBLOX_MCP_FLAT_SYNC=true` keeps the legacy single-place `explorer/`-at-root layout.
 Directions:
 - **pull** (Studio→disk): full snapshot via `sync_snapshot`, rebuilds files + sourcemap.
 - **FS→Studio**: chokidar watches `*.luau`; change/add/unlink push source / create / delete in

@@ -62,11 +62,11 @@ export function registerSyncTools(server: McpServer): void {
       title: "Manage Studio <-> Local Sync",
       description:
         "Mirror the Studio DataModel to local files and keep them in sync (scripts as " +
-        ".server/.client/.module.luau under roblox-mcp-sync/place_{id}/explorer/, plus sourcemap.json " +
-        "for luau-lsp). Runs in the shared broker.\n" +
+        ".server/.client/.module.luau under places/<Name>_<placeId>/explorer/, plus sourcemap.json " +
+        "for luau-lsp; one project = one universe, one place folder per place). Runs in the shared broker.\n" +
         "Args: action (start|stop|status|pull|push), roots? (subtrees for 'start'; default the " +
         "script services), mode? (two-way [default] | studio-to-disk | disk-to-studio).\n" +
-        "Returns: { running, mode, roots, placeId, scriptCount, syncDir, pushed? }. " +
+        "Returns: { running, mode, roots, placeId, placeName, scriptCount, syncDir, pushed? }. " +
         "pull/push/stop require sync to be started first.",
       inputSchema: InputSchema.shape,
       annotations: {

@@ -185,7 +185,19 @@ export const DASHBOARD_HTML = `<!doctype html>
   .sync-adv[open] summary::before { content: "\\25be  "; }
   .sync-msg { font-size: 12px; margin-top: 8px; font-family: var(--mono); min-height: 18px; }
   .sync-live { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--green); margin-bottom: 4px; }
+  .sync-live.paused { color: var(--amber); }
   .sync-live-dir { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0 0 12px; word-break: break-all; }
+
+  /* Places: per-place status badges (label + color, never color alone) */
+  .pbadge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; margin-right: 6px;
+    border-radius: 999px; border: 1px solid var(--border); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+  .pbadge .dot { width: 6px; height: 6px; }
+  .pbadge.open { color: var(--green); border-color: color-mix(in oklch, var(--green) 45%, var(--border)); background: var(--green-bg); }
+  .pbadge.syncing { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); background: color-mix(in oklch, var(--accent) 12%, transparent); }
+  .pbadge.paused { color: var(--amber); border-color: color-mix(in oklch, var(--amber) 45%, var(--border)); background: var(--amber-bg); }
+  td.placename { font-family: var(--sans); font-weight: 600; font-size: 13px; }
+  td.placename .nomirror { color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 11px; margin-left: 8px; }
+  .places-dir { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 8px; word-break: break-all; }
 </style>
 </head>
 <body>
@@ -222,6 +234,15 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="card"><div class="clabel">Uptime</div><div class="cvalue" id="uptime">—</div></div>
   </div>
 
+  <section id="placesSection" style="display:none;">
+    <h2>Universe · places</h2>
+    <table>
+      <thead><tr><th>Place</th><th>Place ID</th><th>Status</th><th>Last synced</th><th>Folder</th></tr></thead>
+      <tbody id="placesBody"></tbody>
+    </table>
+    <div class="places-dir" id="placesDir"></div>
+  </section>
+
   <div class="details">
     <div class="panel">
       <h3>Studio session</h3>
@@ -252,7 +273,7 @@ export const DASHBOARD_HTML = `<!doctype html>
         <dt>Direction</dt><dd id="dSyncMode">—</dd>
         <dt>Roots</dt><dd id="dRoots">—</dd>
         <dt>Scripts</dt><dd id="dScripts">0</dd>
-        <dt>Place ID</dt><dd id="dSyncPlace">—</dd>
+        <dt>Place</dt><dd id="dSyncPlace">—</dd>
         <dt>Folder</dt><dd id="dDir">—</dd>
       </dl>
     </div>
@@ -261,7 +282,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 
       <!-- Running view (compact) -->
       <div id="syncRunning" style="display:none;">
-        <div class="sync-live"><span class="dot on"></span><span id="syncLiveText">Syncing</span></div>
+        <div class="sync-live" id="syncLiveRow"><span class="dot on" id="syncLiveDot"></span><span id="syncLiveText">Syncing</span></div>
         <div class="sync-live-dir" id="syncLiveDir">—</div>
         <div class="btn-group" style="grid-template-columns:1fr;">
           <button class="btn danger" onclick="doSyncAction('stop')">Stop sync</button>
@@ -312,7 +333,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 
     <div class="panel">
       <h3>New project</h3>
-      <div class="switch-sub" style="margin-bottom:10px;">Scaffold an empty, sync-ready project: <b>explorer/</b>, default.project.json, sourcemap.json, selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</div>
+      <div class="switch-sub" style="margin-bottom:10px;">Scaffold an empty, sync-ready project (one project = one universe): <b>places/</b> (each place gets its own <b>explorer/</b> mirror on first sync), selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</div>
       <label class="flabel">Project folder</label>
       <input type="text" id="inputScaffoldDir" placeholder="auto-detected from your AI client" class="control-input" />
       <div class="wshint" id="scaffoldHint"></div>
@@ -504,8 +525,44 @@ function render(state) {
   set("dSyncMode", sync.running ? (MODE_LABEL[sync.mode] || sync.mode || "—") : "—");
   set("dRoots", sync.roots && sync.roots.length ? sync.roots.join(", ") : "—");
   set("dScripts", sync.scriptCount ?? 0);
-  set("dSyncPlace", sync.placeId != null ? String(sync.placeId) : "—");
+  set("dSyncPlace", sync.placeName ? sync.placeName + " · " + (sync.placeId ?? "?") : sync.placeId != null ? String(sync.placeId) : "—");
   set("dDir", sync.syncDir || "—");
+
+  // Universe places: every mirrored place, with the open / syncing one flagged.
+  const placesState = state.places;
+  if (placesState) {
+    $("placesSection").style.display = "block";
+    const list = (placesState.list || []).slice();
+    const openId = ps.level !== "bad" && studio && studio.placeId != null ? studio.placeId : null;
+    // The open place may have no mirror yet — surface it anyway so the row
+    // count always matches what the user can see in Studio.
+    if (openId !== null && !list.some((p) => p.placeId === openId)) {
+      list.unshift({ folder: null, placeId: openId, name: (studio && studio.placeName) || "?", lastSyncedAt: null });
+    }
+    const rowFor = (p) => {
+      const badges = [];
+      if (openId !== null && p.placeId === openId) {
+        badges.push("<span class='pbadge open'><span class='dot on'></span>open in Studio</span>");
+      }
+      if (sync.running && sync.placeId === p.placeId) {
+        badges.push(sync.playtestActive
+          ? "<span class='pbadge paused'><span class='dot warn'></span>playtest · sync paused</span>"
+          : "<span class='pbadge syncing'><span class='dot on' style='background:var(--accent);box-shadow:none;'></span>syncing</span>");
+      }
+      return "<tr><td class=placename>" + esc(p.name) +
+        (p.folder === null ? "<span class='nomirror'>no mirror yet</span>" : "") +
+        "</td><td class=muted>" + (p.placeId > 0 ? p.placeId : "unsaved") +
+        "</td><td>" + (badges.join("") || "<span class=muted>—</span>") +
+        "</td><td class=muted>" + (p.lastSyncedAt ? ago(p.lastSyncedAt) : "never") +
+        "</td><td class=muted>" + (p.folder !== null ? "places/" + esc(p.folder) : "—") + "</td></tr>";
+    };
+    $("placesBody").innerHTML = list.length
+      ? list.map(rowFor).join("")
+      : "<tr><td class=empty colspan=5>No place mirrors yet — open a place in Studio and start sync; its folder appears here.</td></tr>";
+    $("placesDir").textContent = placesState.dir || "";
+  } else {
+    $("placesSection").style.display = "none";
+  }
 
   // agents table (paginated, 5 per page)
   const agentRow = (a) =>
@@ -552,7 +609,12 @@ function render(state) {
   $('syncSetup').style.display = sync.running ? 'none' : 'block';
   $('syncRunning').style.display = sync.running ? 'block' : 'none';
   if (sync.running) {
-    set('syncLiveText', 'Syncing ' + (sync.scriptCount || 0) + ' scripts');
+    const paused = !!sync.playtestActive;
+    $('syncLiveRow').className = 'sync-live' + (paused ? ' paused' : '');
+    $('syncLiveDot').className = 'dot ' + (paused ? 'warn' : 'on');
+    set('syncLiveText', paused
+      ? 'Playtest running \\u00b7 sync paused, edits queued'
+      : 'Syncing ' + (sync.placeName ? sync.placeName + ' \\u00b7 ' : '') + (sync.scriptCount || 0) + ' scripts');
     const label = DIR_LABEL[sync.mode] || sync.mode || '';
     $('syncLiveDir').textContent = label + (sync.syncDir ? '  \\u00b7  ' + sync.syncDir : '');
   }

@@ -4,6 +4,7 @@
 -- for commands, dispatching each to its handler.
 
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
 local Bridge = require(script.Bridge)
 local Dispatcher = require(script.Dispatcher)
@@ -156,6 +157,33 @@ UI.onSettingsSaved = function(newUrl: string, newToken: string?)
 		setConnected(true)
 	end
 end
+
+-- Watch the Run-mode state and tell the broker on transitions so the sync
+-- engine can pause/queue during a playtest. Covers both agent-driven
+-- (manage_studio run/stop) and human-driven (Run button) transitions.
+local function currentRunState(): string
+	if RunService:IsEdit() then
+		return "edit"
+	elseif RunService:IsRunning() then
+		return "running"
+	else
+		return "paused"
+	end
+end
+
+task.spawn(function()
+	local last = currentRunState()
+	while true do
+		task.wait(1)
+		if connected then
+			local state = currentRunState()
+			if state ~= last then
+				last = state
+				Bridge.postEvent({ kind = "run_state_changed", path = "game", data = { state = state } })
+			end
+		end
+	end
+end)
 
 -- Toggle widget visibility via toolbar button
 button.Click:Connect(function()

@@ -29,6 +29,7 @@ import {
   type SnapshotRoot,
 } from "./mirror.js";
 import { writeSourcemap } from "./sourcemap.js";
+import { defaultProjectJson } from "../broker/scaffold.js";
 
 const SUPPRESS_MS = 2000;
 const RESYNC_DEBOUNCE_MS = 1500;
@@ -70,9 +71,14 @@ interface SyncStatus {
   mode: SyncMode;
   roots: string[];
   placeId: number | null;
+  placeName: string | null;
   scriptCount: number;
   syncDir: string;
+  /** Universe root (the folder containing places/); "" until sync has started. */
+  baseDir: string;
   initialDirection?: "studio-to-disk" | "disk-to-studio";
+  /** True while Studio is in a Run-mode playtest (sync paused, FS edits queued). */
+  playtestActive: boolean;
 }
 
 function log(message: string): void {
@@ -81,6 +87,61 @@ function log(message: string): void {
 
 function syncRootDir(): string {
   return process.env.ROBLOX_MCP_SYNC_DIR ?? process.cwd();
+}
+
+/**
+ * One project folder = one universe; each place mirrors into its own
+ * `places/<Name>_<placeId>/` folder. Identity is the `placeId` recorded in
+ * `place.json` (folder names are cosmetic and may be renamed); unsaved places
+ * (placeId 0) fall back to matching by name. This is what prevents a snapshot
+ * of one place from ever landing in another place's mirror.
+ */
+async function resolvePlaceFolder(baseDir: string, placeId: number, placeName: string): Promise<string> {
+  const placesDir = path.join(baseDir, "places");
+  await fs.mkdir(placesDir, { recursive: true });
+
+  let entries: string[] = [];
+  try {
+    entries = await fs.readdir(placesDir);
+  } catch {
+    // Unreadable places dir: fall through and create a fresh folder.
+  }
+  for (const entry of entries) {
+    const dir = path.join(placesDir, entry);
+    try {
+      const raw = await fs.readFile(path.join(dir, "place.json"), "utf8");
+      const meta = JSON.parse(raw) as { placeId?: number; name?: string };
+      const match = placeId > 0 ? meta.placeId === placeId : meta.placeId === 0 && meta.name === placeName;
+      if (match) {
+        if (meta.name !== placeName || meta.placeId !== placeId) {
+          // Keep the recorded name fresh (place renamed / first publish).
+          await fs.writeFile(
+            path.join(dir, "place.json"),
+            JSON.stringify({ placeId, name: placeName }, null, 2),
+            "utf8",
+          );
+        }
+        return dir;
+      }
+    } catch {
+      // Not a place folder (no/invalid place.json) — skip it.
+    }
+  }
+
+  const dir = path.join(placesDir, `${escapeName(placeName)}_${placeId}`);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(
+    path.join(dir, "place.json"),
+    JSON.stringify({ placeId, name: placeName }, null, 2),
+    "utf8",
+  );
+  // Seed a per-place Rojo-style project file for luau-lsp etc. (never overwrite).
+  try {
+    await fs.writeFile(path.join(dir, "default.project.json"), defaultProjectJson(placeName), { flag: "wx" });
+  } catch {
+    // Already there — fine.
+  }
+  return dir;
 }
 
 /** Reverse the name escaping done by the mirror (`~~` -> `~`). */
@@ -102,6 +163,8 @@ class SyncEngine {
   private initialDirection?: "studio-to-disk" | "disk-to-studio";
   private roots: string[] = [];
   private placeId: number | null = null;
+  private placeName: string | null = null;
+  private baseDir = "";
   private placeDir = "";
   private explorerDir = "";
   private fileToInstance = new Map<string, string>();
@@ -111,6 +174,12 @@ class SyncEngine {
   private readonly suppressFile = new Map<string, number>();
   private readonly suppressStudio = new Map<string, number>();
   private resyncTimer: NodeJS.Timeout | null = null;
+  // Run-mode awareness: while Studio is in a playtest, FS edits are queued
+  // (replayed after stop) and Studio events are dropped (transient sim state).
+  private runActive = false;
+  private readonly pendingFsChanges = new Set<string>();
+  private readonly pendingFsUnlinks = new Set<string>();
+  private sawStructuralDuringRun = false;
 
   isRunning(): boolean {
     return this.running;
@@ -122,9 +191,12 @@ class SyncEngine {
       mode: this.mode,
       roots: this.roots,
       placeId: this.placeId,
+      placeName: this.placeName,
       scriptCount: this.instanceToFile.size,
       syncDir: this.explorerDir || syncRootDir(),
+      baseDir: this.baseDir,
       initialDirection: this.initialDirection,
+      playtestActive: this.runActive,
     };
   }
 
@@ -140,17 +212,8 @@ class SyncEngine {
     this.initialDirection = initialDirection;
     this.roots = roots && roots.length > 0 ? roots : DEFAULT_ROOTS;
 
-    const info = await callStudio<{ placeId?: number }>("system_info", {});
-    this.placeId = info.placeId ?? 0;
-    
-    const baseDir = customSyncDir ?? syncRootDir();
-    const isFlat = process.env.ROBLOX_MCP_FLAT_SYNC !== "false";
-    if (isFlat) {
-      this.placeDir = baseDir;
-    } else {
-      this.placeDir = path.join(baseDir, `place_${this.placeId}`);
-    }
-    this.explorerDir = path.join(this.placeDir, "explorer");
+    this.baseDir = customSyncDir ?? syncRootDir();
+    await this.resolvePlaceDirs();
 
     if (initialDirection === "disk-to-studio") {
       // disk-to-studio initial sync: do not clear local disk files.
@@ -168,9 +231,11 @@ class SyncEngine {
       await this.pull();
     }
 
-    // Studio -> disk live mirroring, unless we're pushing disk -> Studio only.
+    // Always listen for bridge events (run_state_changed matters in every mode);
+    // sync change events from Studio are only requested when we mirror them.
+    this.unsubscribe = bridge.onEvent((event) => void this.onStudioEvent(event));
     if (this.mode !== "disk-to-studio") {
-      await this.startStudioWatch();
+      await callStudio("sync_watch", { action: "watch", roots: this.roots });
     }
 
     this.running = true;
@@ -232,11 +297,37 @@ class SyncEngine {
 
 
   /**
+   * Ask Studio which place is open and point placeDir/explorerDir at its
+   * mirror folder. With ROBLOX_MCP_FLAT_SYNC=true the legacy single-place
+   * layout (explorer/ at the project root) is kept instead.
+   */
+  private async resolvePlaceDirs(): Promise<void> {
+    const info = await callStudio<{ placeId?: number; placeName?: string }>("system_info", {});
+    this.placeId = info.placeId ?? 0;
+    this.placeName = info.placeName ?? "Untitled";
+
+    if (process.env.ROBLOX_MCP_FLAT_SYNC === "true") {
+      this.placeDir = this.baseDir;
+    } else {
+      this.placeDir = await resolvePlaceFolder(this.baseDir, this.placeId, this.placeName);
+    }
+    this.explorerDir = path.join(this.placeDir, "explorer");
+  }
+
+  /**
    * Full Studio -> disk snapshot; rebuilds the file index and sourcemap.
    * The file watcher is closed while we rewrite the tree and reopened with
    * `ignoreInitial` afterward, so our own writes never fire watcher events.
    */
   async pull(): Promise<void> {
+    // Re-check which place is open: Studio may have switched since we started
+    // (the plugin reconnects after a place change while the engine keeps
+    // running). Never write one place's snapshot into another place's folder.
+    const before = this.placeId;
+    await this.resolvePlaceDirs();
+    if (before !== null && before !== this.placeId) {
+      log(`place changed (${before} -> ${this.placeId}); mirroring to ${this.explorerDir}`);
+    }
     const snap = await callStudio<SnapshotResponse>("sync_snapshot", { roots: this.roots });
     if (this.watcher) {
       await this.watcher.close();
@@ -295,6 +386,10 @@ class SyncEngine {
       }
     }
     this.running = false;
+    this.runActive = false;
+    this.pendingFsChanges.clear();
+    this.pendingFsUnlinks.clear();
+    this.sawStructuralDuringRun = false;
     log("stopped");
   }
 
@@ -323,11 +418,6 @@ class SyncEngine {
     });
   }
 
-  private async startStudioWatch(): Promise<void> {
-    this.unsubscribe = bridge.onEvent((event) => this.onStudioEvent(event));
-    await callStudio("sync_watch", { action: "watch", roots: this.roots });
-  }
-
   private consume(map: Map<string, number>, key: string): boolean {
     const expiry = map.get(key);
     if (expiry !== undefined) {
@@ -339,6 +429,10 @@ class SyncEngine {
 
   private async onFileChange(absPath: string): Promise<void> {
     if (!this.running) return;
+    if (this.runActive) {
+      this.pendingFsChanges.add(absPath); // replayed after the playtest stops
+      return;
+    }
     if (this.consume(this.suppressFile, absPath)) return; // echo of a Studio write
 
     const instancePath = this.fileToInstance.get(absPath);
@@ -361,6 +455,10 @@ class SyncEngine {
   /** A new .luau file appeared on disk -> create the corresponding script in Studio. */
   private async onFileAdd(absPath: string): Promise<void> {
     if (!this.running) return;
+    if (this.runActive) {
+      this.pendingFsChanges.add(absPath); // replayed after the playtest stops
+      return;
+    }
     if (this.fileToInstance.has(absPath)) return; // already tracked (handled by change)
     if (this.consume(this.suppressFile, absPath)) return; // our own write
 
@@ -395,6 +493,11 @@ class SyncEngine {
   /** A tracked .luau file was deleted on disk -> delete the script in Studio. */
   private async onFileUnlink(absPath: string): Promise<void> {
     if (!this.running) return;
+    if (this.runActive) {
+      this.pendingFsChanges.delete(absPath);
+      this.pendingFsUnlinks.add(absPath); // replayed after the playtest stops
+      return;
+    }
     const instancePath = this.fileToInstance.get(absPath);
     if (!instancePath) return;
     if (this.consume(this.suppressFile, absPath)) return; // our own removal
@@ -423,6 +526,21 @@ class SyncEngine {
   private async onStudioEvent(event: StudioEvent): Promise<void> {
     if (!this.running) return;
 
+    if (event.kind === "run_state_changed") {
+      const data = event.data as { state?: string } | undefined;
+      await this.onRunStateChanged(data?.state ?? "edit");
+      return;
+    }
+
+    if (this.runActive) {
+      // Playtest in progress: simulation/script churn is transient — don't
+      // mirror it. Remember structural changes so we re-pull once it stops.
+      if (event.kind === "added" || event.kind === "removing") {
+        this.sawStructuralDuringRun = true;
+      }
+      return;
+    }
+
     if (event.kind === "source_changed") {
       const instancePath = event.path;
       if (this.consume(this.suppressStudio, instancePath)) return; // echo of an FS write
@@ -438,6 +556,40 @@ class SyncEngine {
       log(`Studio->FS ${instancePath}`);
     } else if (event.kind === "added" || event.kind === "removing") {
       this.scheduleResync(); // structural change: re-snapshot after things settle
+    }
+  }
+
+  /**
+   * Playtest transitions. "running"/"paused" both count as run mode (the
+   * DataModel is still in its transient simulation state while paused); only
+   * "edit" ends it. On return to edit: replay queued FS edits (the agent's
+   * intent wins over whatever the run left behind), then re-pull if the run
+   * made structural changes we skipped.
+   */
+  private async onRunStateChanged(state: string): Promise<void> {
+    const active = state !== "edit";
+    if (active === this.runActive) return;
+    this.runActive = active;
+
+    if (active) {
+      log(`playtest ${state}: sync paused, queuing FS edits`);
+      return;
+    }
+
+    const unlinks = [...this.pendingFsUnlinks];
+    const changes = [...this.pendingFsChanges];
+    this.pendingFsUnlinks.clear();
+    this.pendingFsChanges.clear();
+    log(`playtest ended: replaying ${changes.length} FS edit(s), ${unlinks.length} delete(s)`);
+    for (const p of unlinks) {
+      await this.onFileUnlink(p);
+    }
+    for (const p of changes) {
+      await this.onFileChange(p);
+    }
+    if (this.sawStructuralDuringRun) {
+      this.sawStructuralDuringRun = false;
+      this.scheduleResync();
     }
   }
 

@@ -3,7 +3,29 @@
 -- Handlers are loaded defensively: one broken handler disables only its own
 -- tool rather than breaking the whole plugin.
 
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
+
 local Handlers = script.Parent.Handlers
+
+-- Tools that never mutate the DataModel (or whose changes shouldn't create
+-- undo steps, e.g. selection / transient previews). Everything else gets a
+-- ChangeHistoryService waypoint after a successful dispatch, so one command
+-- equals one Ctrl+Z step instead of agent work folding into the user's undo.
+local NO_WAYPOINT = {
+	query_instances = true,
+	find_instances = true,
+	scene_overview = true,
+	describe_instance = true,
+	system_info = true,
+	sync_snapshot = true,
+	sync_watch = true,
+	spatial_query = true,
+	manage_logs = true,
+	manage_studio = true,
+	manage_selection = true,
+	workspace_state = true,
+	ui_preview = true,
+}
 
 local HANDLER_NAMES = {
 	execute_luau = "Execute",
@@ -65,6 +87,12 @@ function Dispatcher.dispatch(tool: string, args: any): (boolean, any, string?)
 	end
 	local ok, result = pcall(handler, args)
 	if ok then
+		if not NO_WAYPOINT[tool] then
+			-- Best-effort: waypoints are unavailable while a playtest is running.
+			pcall(function()
+				ChangeHistoryService:SetWaypoint("MCP " .. tool)
+			end)
+		end
 		return true, result, nil
 	else
 		return false, nil, tostring(result)

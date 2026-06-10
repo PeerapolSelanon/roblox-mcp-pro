@@ -16,7 +16,10 @@ const Selection = z
 
 const Studio = z
   .object({
-    action: z.enum(["info"]).default("info").describe("Report Studio environment info."),
+    action: z
+      .enum(["info", "run", "pause", "stop"])
+      .default("info")
+      .describe("'info' reports environment; 'run'/'pause'/'stop' control Run-mode playtest."),
   })
   .strict();
 
@@ -27,6 +30,10 @@ const Logs = z
       .enum(["output", "info", "warning", "error"])
       .optional()
       .describe("Filter to one message type."),
+    since: z
+      .number()
+      .optional()
+      .describe("Only entries at/after this epoch-seconds timestamp (use started_at from manage_studio 'run')."),
   })
   .strict();
 
@@ -48,22 +55,23 @@ export function registerStudioInfoTools(server: McpServer): void {
   });
 
   forwardTool(server, "manage_studio", {
-    title: "Studio Info",
+    title: "Studio Info & Playtest",
     description:
-      "Report Studio environment details (version, theme, run/edit state, place/game ids).\n" +
-      "Args: action ('info').\n" +
-      "Returns: { ok, studioVersion, theme, isRunning, isEdit, placeId, gameId }.",
+      "Report Studio environment details, or control a Run-mode playtest (server simulation, no player).\n" +
+      "Args: action ('info'|'run'|'pause'|'stop').\n" +
+      "Returns: info -> { ok, studioVersion, theme, runState, placeId, gameId }; run -> { ok, runState, started_at }.\n" +
+      "Playtest loop: run -> manage_logs {since: started_at} -> stop. Note: 'stop' does NOT revert changes made during the run.",
     inputSchema: Studio.shape,
-    annotations: read,
+    annotations: mut,
   });
 
   forwardTool(server, "manage_logs", {
     title: "Get Output Logs",
     description:
-      "Return recent Studio Output log history (newest first), optionally filtered by type.\n" +
-      "Args: limit (default 100), message_type? ('output'|'info'|'warning'|'error').\n" +
+      "Return recent Studio Output log history (newest first), optionally filtered by type or time.\n" +
+      "Args: limit (default 100), message_type? ('output'|'info'|'warning'|'error'), since? (epoch seconds).\n" +
       "Returns: { ok, count, logs: [{ message, type, timestamp }] }.\n" +
-      "Use after execute_luau or a playtest to see what was printed or errored.",
+      "Use after execute_luau or a playtest (pass since: started_at from manage_studio 'run') to see what printed or errored.",
     inputSchema: Logs.shape,
     annotations: read,
   });

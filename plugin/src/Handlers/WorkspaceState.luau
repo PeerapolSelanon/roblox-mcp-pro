@@ -5,6 +5,7 @@ local Workspace = game:GetService("Workspace")
 local Selection = game:GetService("Selection")
 local RunService = game:GetService("RunService")
 local Serialize = require(script.Parent.Parent.Serialize)
+local resolvePlaceName = require(script.Parent.Parent.PlaceName)
 
 local SUMMARY_SERVICES = {
 	"Workspace", "ServerScriptService", "ServerStorage", "ReplicatedStorage",
@@ -28,7 +29,7 @@ return function(_args: any): any
 	return {
 		ok = true,
 		placeId = game.PlaceId,
-		placeName = game.Name,
+		placeName = resolvePlaceName(),
 		isRunning = RunService:IsRunning(),
 		gravity = Workspace.Gravity,
 		childCounts = services,

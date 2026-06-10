@@ -2,15 +2,12 @@
 -- Handler for system_info: report basic Studio session details.
 
 local RunService = game:GetService("RunService")
+local resolvePlaceName = require(script.Parent.Parent.PlaceName)
 
 return function(_args: any): any
-	local placeName: string? = nil
-	pcall(function()
-		placeName = game.Name
-	end)
 	return {
 		placeId = game.PlaceId,
-		placeName = placeName,
+		placeName = resolvePlaceName(),
 		studioVersion = version(),
 		isRunning = RunService:IsRunning(),
 	}

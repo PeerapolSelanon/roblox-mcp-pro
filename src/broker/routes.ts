@@ -12,6 +12,8 @@
  */
 
 import type http from "node:http";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { Bridge } from "../services/bridge.js";
 import { StudioError } from "../services/errors.js";
 import { BRIDGE_PORT } from "../constants.js";
@@ -26,6 +28,15 @@ interface StudioInfo {
   placeName?: string;
   studioVersion?: string;
   isRunning?: boolean;
+}
+
+/** One mirrored place under <universe>/places/ (read from its place.json). */
+interface PlaceEntry {
+  folder: string;
+  placeId: number;
+  name: string;
+  /** mtime of the place's sourcemap.json — a good proxy for "last synced". */
+  lastSyncedAt: number | null;
 }
 
 export interface BrokerRoutes {
@@ -97,7 +108,9 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       }
       return;
     }
-    if (studioInflight || Date.now() - studioAt < STUDIO_TTL_MS) return;
+    // No throttle while we have nothing to show (e.g. right after a reconnect,
+    // possibly with a different place open) — only throttle refreshes.
+    if (studioInflight || (studio !== null && Date.now() - studioAt < STUDIO_TTL_MS)) return;
     studioInflight = true;
     try {
       // internal: keep this probe out of the plugin's activity log.
@@ -111,6 +124,71 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     }
   }
 
+  // Known place mirrors in the active universe, scanned from places/*/place.json
+  // on a throttle so the dashboard can show every place, not just the open one.
+  let places: PlaceEntry[] | null = null;
+  let placesDir: string | null = null;
+  let placesAt = 0;
+  let placesInflight = false;
+  const PLACES_TTL_MS = 5000;
+
+  /** The universe root: sync's baseDir when started, else the active agent's cwd. */
+  function universeDir(): string | null {
+    const syncStatus = syncEngine.status() as unknown as { baseDir?: string };
+    if (syncStatus.baseDir) return syncStatus.baseDir;
+    const agents = state.snapshot().agents;
+    const active = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
+    return active?.cwd ?? null;
+  }
+
+  async function refreshPlaces(): Promise<void> {
+    if (placesInflight || Date.now() - placesAt < PLACES_TTL_MS) return;
+    placesInflight = true;
+    try {
+      const base = universeDir();
+      if (!base) {
+        places = null;
+        placesDir = null;
+        return;
+      }
+      const dir = path.join(base, "places");
+      let entries: string[];
+      try {
+        entries = await fs.readdir(dir);
+      } catch {
+        // No places/ folder — not a universe project (or nothing synced yet).
+        places = null;
+        placesDir = null;
+        return;
+      }
+      const out: PlaceEntry[] = [];
+      for (const entry of entries) {
+        try {
+          let raw = await fs.readFile(path.join(dir, entry, "place.json"), "utf8");
+          // Tolerate a UTF-8 BOM (hand-edited place.json files).
+          if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+          const meta = JSON.parse(raw) as { placeId?: number; name?: string };
+          if (typeof meta.placeId !== "number") continue;
+          let lastSyncedAt: number | null = null;
+          try {
+            lastSyncedAt = (await fs.stat(path.join(dir, entry, "sourcemap.json"))).mtimeMs;
+          } catch {
+            // Never pulled yet.
+          }
+          out.push({ folder: entry, placeId: meta.placeId, name: meta.name ?? entry, lastSyncedAt });
+        } catch {
+          // Not a place folder — skip.
+        }
+      }
+      out.sort((a, b) => (b.lastSyncedAt ?? 0) - (a.lastSyncedAt ?? 0));
+      places = out;
+      placesDir = dir;
+    } finally {
+      placesAt = Date.now();
+      placesInflight = false;
+    }
+  }
+
   function buildSnapshot(): Record<string, unknown> {
     const snap = state.snapshot();
     return {
@@ -119,6 +197,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       plugin: bridge.status(),
       studio,
       sync: syncEngine.status(),
+      places: places !== null ? { dir: placesDir, list: places } : null,
       totalCommands,
       agents: snap.agents,
       recent: snap.recent,
@@ -329,6 +408,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
   function tick(): void {
     state.prune();
     void refreshStudio();
+    void refreshPlaces();
     broadcast();
   }
 
