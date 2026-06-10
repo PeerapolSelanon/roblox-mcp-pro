@@ -36,7 +36,13 @@ const Studio = z
       .max(100_000)
       .optional()
       .describe(
-        "For 'play'/'multiplayer': Luau run in the test session's server; its prints/errors land in the report, and the test ends when it returns.",
+        "For 'play': Luau run on the test session's CLIENT with a preloaded `Test` helper. Movement (drives real gameplay): " +
+          "Test.walkTo(Vector3|path), pathTo(...), moveDir('w'|'a'|'s'|'d', seconds), jump(). " +
+          "Text entry: typeText(path, text, pressEnter?). Trigger control logic (Studio sandboxes synthetic mouse/key input in playtests, " +
+          "so fire the event a button/key is wired to): fireRemote(path, ...), fireBindable(path, ...), invokeModule(path, fnName, ...). " +
+          "Assertions: assertExists/assertVisible/assertText/assertNear/expect (a failed assert ends the test with that error). " +
+          "(Test.click/pressKey/etc. exist but throw a pointer to the above — hardware input can't be synthesized.) " +
+          "For 'multiplayer': Luau run on the server (no Test helper). Prints/errors land in the report; the test ends when the script returns or 'duration' elapses.",
       ),
     num_players: z
       .number()
@@ -85,7 +91,7 @@ export function registerStudioInfoTools(server: McpServer): void {
       "Report Studio environment details, or run a playtest.\n" +
       "Args: action ('info'|'run'|'pause'|'stop'|'play'|'multiplayer'|'playtest_status'), duration?, test_script?, num_players?.\n" +
       "Run mode loop: run -> manage_logs {since: started_at} -> stop ('stop' does NOT revert changes).\n" +
-      "Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value. 'multiplayer' is the same with num_players clients.",
+      "Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value (client report under report.client). For 'play', test_script runs on the client with a `Test` helper to walk the character, enter text, fire the events controls are wired to, and assert state (see test_script). 'multiplayer' is the same with num_players clients (server-side script, no Test helper).",
     inputSchema: Studio.shape,
     annotations: mut,
   });
