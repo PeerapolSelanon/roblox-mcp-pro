@@ -91,7 +91,7 @@ export function registerStudioInfoTools(server: McpServer): void {
       "Report Studio environment details, or run a playtest.\n" +
       "Args: action ('info'|'run'|'pause'|'stop'|'play'|'multiplayer'|'playtest_status'), duration?, test_script?, num_players?.\n" +
       "Run mode loop: run -> manage_logs {since: started_at} -> stop ('stop' does NOT revert changes).\n" +
-      "Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value (client report under report.client). For 'play', test_script runs on the client with a `Test` helper to walk the character, enter text, fire the events controls are wired to, and assert state (see test_script). 'multiplayer' is the same with num_players clients (server-side script, no Test helper).",
+      "Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value (client report under report.client). The plugin suspends during the playtest; playtest_status still answers ({running:true, suspended:true}) — keep polling until running:false. For 'play', test_script runs on the client with a `Test` helper to walk the character, enter text, fire the events controls are wired to, and assert state (see test_script). 'multiplayer' is the same with num_players clients (server-side script, no Test helper).",
     inputSchema: Studio.shape,
     annotations: mut,
   });

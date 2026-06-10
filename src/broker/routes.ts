@@ -92,6 +92,20 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
   let totalCommands = 0;
   const startedAt = Date.now();
 
+  // During a StudioTestService playtest ('play'/'multiplayer') the edit-mode
+  // plugin stops long-polling, so bridge.enqueue fail-fasts with "not
+  // connected" even though everything is fine. The broker saw the launch
+  // response (it carries `duration`), so remember the window and, while the
+  // plugin is silent inside it, answer playtest_status ourselves and give
+  // other tools an accurate "wait for the playtest" error instead.
+  let playtest: { kind: string; startedAtSec: number; untilMs: number } | null = null;
+  const PLAYTEST_RECONNECT_GRACE_MS = 30_000;
+
+  function playtestWindow(): { kind: string; startedAtSec: number; untilMs: number } | null {
+    if (playtest && Date.now() > playtest.untilMs) playtest = null;
+    return playtest;
+  }
+
   // Studio session details for the dashboard, refreshed from the plugin on a
   // throttle. Polled via bridge.enqueue directly (not /rpc/call) so these
   // internal probes never show up in the agent command log.
@@ -379,11 +393,51 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       let ok = true;
       let result: unknown = null;
       let error: string | undefined;
+      const studioAction =
+        tool === "manage_studio" ? String((args as { action?: unknown } | undefined)?.action ?? "") : "";
       try {
-        result =
-          tool === "manage_sync"
-            ? await runSync(args)
-            : await bridge.enqueue(tool, args);
+        const suspended = playtestWindow() !== null && !bridge.status().pluginConnected;
+        if (suspended && tool !== "manage_sync") {
+          const pt = playtestWindow()!;
+          if (studioAction === "playtest_status") {
+            result = {
+              ok: true,
+              running: true,
+              kind: pt.kind,
+              started_at: pt.startedAtSec,
+              suspended: true,
+              note:
+                "the Studio plugin is suspended while the playtest runs; " +
+                "status is broker-inferred — poll again for the final report.",
+            };
+          } else {
+            const leftSec = Math.max(0, Math.ceil((pt.untilMs - PLAYTEST_RECONNECT_GRACE_MS - Date.now()) / 1000));
+            throw new StudioError(
+              `A '${pt.kind}' playtest is running and the Studio plugin is suspended until it ends ` +
+                `(~${leftSec}s left at most). Poll manage_studio {action:'playtest_status'} for the report, then retry.`,
+            );
+          }
+        } else {
+          result =
+            tool === "manage_sync"
+              ? await runSync(args)
+              : await bridge.enqueue(tool, args);
+          if (studioAction === "play" || studioAction === "multiplayer") {
+            const r = result as { ok?: boolean; duration?: number; started_at?: number } | null;
+            if (r?.ok === true) {
+              playtest = {
+                kind: studioAction,
+                startedAtSec: typeof r.started_at === "number" ? r.started_at : Math.floor(Date.now() / 1000),
+                untilMs: Date.now() + (typeof r.duration === "number" ? r.duration : 30) * 1000 + PLAYTEST_RECONNECT_GRACE_MS,
+              };
+            }
+          } else if (studioAction === "playtest_status") {
+            // A real (plugin-answered) status that says the test ended closes
+            // the window immediately — no need to wait it out.
+            const r = result as { running?: boolean } | null;
+            if (r && r.running === false) playtest = null;
+          }
+        }
       } catch (e) {
         ok = false;
         error = e instanceof Error ? e.message : String(e);
