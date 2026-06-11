@@ -2,9 +2,10 @@
  * Local, non-secret licensing state persisted at ~/.roblox-mcp-pro/state.json.
  *
  * Nothing here is a secret — the license key itself is supplied by the user via
- * env var or LICENSE_FILE. This file only remembers the trial start, the Lemon
- * Squeezy activation instance id for this machine, and the last successful
- * online validation (so we can grant an offline grace window).
+ * env var or LICENSE_FILE. This file only remembers the trial start, the
+ * provider's activation instance id for this machine (Lemon Squeezy instance or
+ * Polar activation), and the last successful online validation (so we can grant
+ * an offline grace window).
  */
 
 import { promises as fs } from "node:fs";
@@ -13,7 +14,7 @@ import { STATE_DIR, STATE_FILE } from "./config.js";
 export interface LicenseStore {
   /** ISO timestamp the free trial began on this machine. */
   trialStartedAt?: string;
-  /** Lemon Squeezy activation instance id for this machine. */
+  /** Provider activation instance id for this machine (LS instance / Polar activation). */
   instanceId?: string;
   /** The license key this instance was activated with (to detect key changes). */
   licenseKey?: string;

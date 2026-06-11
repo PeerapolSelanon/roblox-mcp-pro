@@ -11,26 +11,20 @@
  * Docs: https://docs.lemonsqueezy.com/help/licensing/license-api
  */
 
+import {
+  LEMONSQUEEZY_STORE_ID,
+  LEMONSQUEEZY_PRODUCT_ID,
+  OWNERSHIP_CHECK_ENABLED,
+} from "./config.js";
+import type { ProviderResult } from "./provider.js";
+
 const API_BASE = "https://api.lemonsqueezy.com/v1/licenses";
 const REQUEST_TIMEOUT_MS = 8_000;
 
-export interface LsResult {
-  /** The HTTP request completed and returned parseable JSON. */
-  reachable: boolean;
-  /** Lemon Squeezy considers the key valid/active. */
-  valid: boolean;
-  /** License key status: "active" | "expired" | "disabled" | "inactive". */
-  status?: string;
-  /** Subscription/expiry timestamp, if any. */
-  expiresAt?: string | null;
-  /** Store the key belongs to — verify it matches yours. */
-  storeId?: number;
-  /** Product the key belongs to — verify it matches yours. */
-  productId?: number;
-  /** Activation instance id (from activate). */
-  instanceId?: string;
-  /** Error text from Lemon Squeezy or transport. */
-  error?: string;
+/** Whether a key's store/product match this product (or check disabled in dev). */
+function ownsMatch(storeId?: number, productId?: number): boolean {
+  if (!OWNERSHIP_CHECK_ENABLED) return true;
+  return storeId === LEMONSQUEEZY_STORE_ID && productId === LEMONSQUEEZY_PRODUCT_ID;
 }
 
 interface LsRaw {
@@ -45,7 +39,7 @@ interface LsRaw {
   meta?: { store_id?: number; product_id?: number } | null;
 }
 
-async function post(endpoint: string, body: Record<string, string>): Promise<LsResult> {
+async function post(endpoint: string, body: Record<string, string>): Promise<ProviderResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -63,10 +57,9 @@ async function post(endpoint: string, body: Record<string, string>): Promise<LsR
     return {
       reachable: true,
       valid: Boolean(data.valid ?? data.activated),
+      owns: ownsMatch(data.meta?.store_id, data.meta?.product_id),
       status: data.license_key?.status,
       expiresAt: data.license_key?.expires_at ?? null,
-      storeId: data.meta?.store_id,
-      productId: data.meta?.product_id,
       instanceId: data.instance?.id,
       error: data.error ?? undefined,
     };
@@ -74,6 +67,7 @@ async function post(endpoint: string, body: Record<string, string>): Promise<LsR
     return {
       reachable: false,
       valid: false,
+      owns: false,
       error: error instanceof Error ? error.message : String(error),
     };
   } finally {
@@ -82,12 +76,12 @@ async function post(endpoint: string, body: Record<string, string>): Promise<LsR
 }
 
 /** Register this machine. Returns an instanceId on success. */
-export function activate(licenseKey: string, instanceName: string): Promise<LsResult> {
+export function activate(licenseKey: string, instanceName: string): Promise<ProviderResult> {
   return post("activate", { license_key: licenseKey, instance_name: instanceName });
 }
 
 /** Validate a key, optionally bound to a previously-activated instance. */
-export function validate(licenseKey: string, instanceId?: string): Promise<LsResult> {
+export function validate(licenseKey: string, instanceId?: string): Promise<ProviderResult> {
   const body: Record<string, string> = { license_key: licenseKey };
   if (instanceId) body.instance_id = instanceId;
   return post("validate", body);

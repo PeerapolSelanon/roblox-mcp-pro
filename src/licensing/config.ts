@@ -15,6 +15,19 @@
 import os from "node:os";
 import path from "node:path";
 
+/**
+ * Which payment/license provider is active: "lemonsqueezy" (default) or "polar".
+ * Polar requires a deployed license proxy (see licensing-proxy/) because its API
+ * needs an org token that must not ship in the package.
+ */
+export const LICENSE_PROVIDER = (process.env.RMP_LICENSE_PROVIDER ?? "lemonsqueezy").toLowerCase();
+
+/**
+ * URL of the self-hosted Polar license proxy (keyless validate/activate). Only
+ * used when RMP_LICENSE_PROVIDER=polar. e.g. https://roblox-mcp-pro-license.you.workers.dev
+ */
+export const LICENSE_PROXY_URL = process.env.RMP_LICENSE_PROXY_URL ?? "";
+
 /** Your Lemon Squeezy numeric Store ID. Find it in Settings → Stores. */
 export const LEMONSQUEEZY_STORE_ID = Number.parseInt(
   process.env.RMP_LS_STORE_ID ?? "398915",

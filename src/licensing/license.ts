@@ -21,12 +21,11 @@ import {
   OFFLINE_GRACE_DAYS,
   PURCHASE_URL,
   PRODUCT_NAME,
-  LEMONSQUEEZY_STORE_ID,
-  LEMONSQUEEZY_PRODUCT_ID,
-  OWNERSHIP_CHECK_ENABLED,
 } from "./config.js";
 import { readStore, writeStore, type LicenseStore } from "./store.js";
-import { activate, validate, type LsResult } from "./lemonsqueezy.js";
+import { provider } from "./provider.js";
+
+const { activate, validate } = provider;
 
 export type LicenseStatus = "licensed" | "trial" | "locked";
 
@@ -56,11 +55,6 @@ function daysBetween(fromIso: string, to: number): number {
   return Math.floor((to - Date.parse(fromIso)) / DAY_MS);
 }
 
-function ownsKey(r: LsResult): boolean {
-  if (!OWNERSHIP_CHECK_ENABLED) return true; // dev mode: skip the match
-  return r.storeId === LEMONSQUEEZY_STORE_ID && r.productId === LEMONSQUEEZY_PRODUCT_ID;
-}
-
 async function readLicenseFile(): Promise<string | undefined> {
   try {
     const raw = (await fs.readFile(LICENSE_FILE, "utf8")).trim();
@@ -70,9 +64,10 @@ async function readLicenseFile(): Promise<string | undefined> {
   }
 }
 
-/** A subscription/key status that still grants access. */
+/** A subscription/key status that still grants access (covers both providers:
+ *  LS uses active/expired/disabled/inactive; Polar uses granted/revoked/disabled). */
 function isLive(status?: string): boolean {
-  return status !== "expired" && status !== "disabled";
+  return status !== "expired" && status !== "disabled" && status !== "revoked" && status !== "inactive";
 }
 
 /** Result when Lemon Squeezy is unreachable: offline grace window, else locked. */
@@ -116,7 +111,7 @@ async function resolveWithKey(key: string): Promise<LicenseState | "no-key"> {
   if (boundInstance) {
     const val = await validate(key, boundInstance);
     if (!val.reachable) return offlineResult(store);
-    if (!ownsKey(val)) return "no-key";
+    if (!val.owns) return "no-key";
     if (val.valid && isLive(val.status)) {
       await writeStore({
         licenseKey: key,
@@ -141,7 +136,7 @@ async function resolveWithKey(key: string): Promise<LicenseState | "no-key"> {
   const act = await activate(key, os.hostname() || "device");
   if (!act.reachable) return offlineResult(store);
 
-  if (act.valid && act.instanceId && ownsKey(act)) {
+  if (act.valid && act.instanceId && act.owns) {
     await writeStore({
       instanceId: act.instanceId,
       licenseKey: key,
@@ -152,7 +147,7 @@ async function resolveWithKey(key: string): Promise<LicenseState | "no-key"> {
   }
 
   // Activation failed — classify why.
-  if (!ownsKey(act)) return "no-key"; // wrong store/product or key not found → trial
+  if (!act.owns) return "no-key"; // wrong store/product or key not found → trial
   if (!isLive(act.status)) {
     return {
       status: "locked",
