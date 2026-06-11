@@ -1,6 +1,6 @@
 {
   "name": "roblox-mcp-pro",
-  "version": "1.0.25",
+  "version": "1.0.26",
   "description": "MCP server that lets AI agents control Roblox Studio: live Luau execution, instance query/mutate, UI/terrain/lighting, and bidirectional Studio<->local sync. Paid subscription with a free trial.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "Peerapol",

@@ -148,9 +148,16 @@ After editing, **restart the client** so it picks up the new server.
 <a id="add-your-license-key"></a>
 #### Add your license key
 
-During the 14-day trial you can skip this. After buying, you get a license key — add it to your
-client config in an **`env`** block next to the command. Example (works for any client; just put it
-in that client's config file):
+During the 14-day trial you can skip this. After buying you get a license key — and the **easiest
+way to apply it needs no config editing at all**:
+
+- **Dashboard (recommended):** open the monitor at **http://127.0.0.1:3690/**, paste your key in the
+  **License** box, click **Save**, then restart your AI client. Done.
+- **One command:** `npx roblox-mcp-pro@latest set-license YOUR-LICENSE-KEY` (writes it for you), then
+  restart your AI client.
+
+Prefer to put it in your client config yourself? Add it in an **`env`** block next to the command
+(works for any client; just put it in that client's config file):
 
 ```json
 {

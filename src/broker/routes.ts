@@ -18,6 +18,7 @@ import type { Bridge } from "../services/bridge.js";
 import { StudioError } from "../services/errors.js";
 import { BRIDGE_PORT } from "../constants.js";
 import { syncEngine, type SyncMode } from "../sync/engine.js";
+import { resolveLicense, saveLicenseKey } from "../licensing/license.js";
 import { BrokerState } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
 import { scaffoldProject } from "./scaffold.js";
@@ -295,6 +296,28 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       res.write(`data: ${JSON.stringify(buildSnapshot())}\n\n`);
       sseClients.add(res);
       req.on("close", () => sseClients.delete(res));
+      return true;
+    }
+
+    // --- license: let users paste a key on the dashboard, no config edit ---
+    if (method === "GET" && path === "/api/license") {
+      const state = await resolveLicense();
+      sendJson(res, 200, { status: state.status, message: state.message, daysLeft: state.daysLeft });
+      return true;
+    }
+    if (method === "POST" && path === "/api/license") {
+      const body = await readJson(req);
+      const key = String(body.key ?? "").trim();
+      if (!key) {
+        sendJson(res, 400, { ok: false, error: "missing license key" });
+        return true;
+      }
+      try {
+        const state = await saveLicenseKey(key);
+        sendJson(res, 200, { ok: state.status !== "locked", status: state.status, message: state.message });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
       return true;
     }
 

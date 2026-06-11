@@ -345,6 +345,23 @@ export const DASHBOARD_HTML = `<!doctype html>
   </div>
 
   <section>
+    <h2>License</h2>
+    <div class="card" style="border-radius:12px;">
+      <div id="licStatus" style="font-size:14px;margin-bottom:9px;">Checking…</div>
+      <div class="btn-group" style="grid-template-columns:1fr auto;gap:8px;align-items:center;">
+        <input id="inputLicense" type="text" placeholder="Paste your license key (ROBLOXAI-…)"
+          style="padding:9px 11px;border:1px solid var(--border-soft);border-radius:8px;background:var(--panel);color:inherit;font-family:var(--mono);font-size:12px;width:100%;" />
+        <button class="btn primary" onclick="saveLicense()">Save key</button>
+      </div>
+      <div id="licMsg" class="sync-msg"></div>
+      <div style="color:var(--muted);font-size:11px;margin-top:7px;">
+        No license? <a id="buyLink" href="#" target="_blank" rel="noopener" style="color:var(--green);">Get one</a>.
+        After saving, restart your AI client so it picks up the key.
+      </div>
+    </div>
+  </section>
+
+  <section>
     <h2>Connected agents</h2>
     <table>
       <thead><tr><th>Agent</th><th>Version</th><th>PID</th><th>Client ID</th><th>Commands</th><th>Connected</th><th>Last seen</th></tr></thead>
@@ -665,6 +682,58 @@ async function doSyncAction(action) {
   }
 }
 
+const BUY_URL = 'https://buy.polar.sh/polar_cl_ZOs8s5PTV2KAyj0y71A7xtBzIpPbdclQfrQBP3IHCyH';
+
+function renderLicense(data) {
+  const el = $('licStatus');
+  if (!el) return;
+  const s = (data && data.status) || 'unknown';
+  const tint = s === 'licensed' ? 'var(--green)' : (s === 'trial' ? '#e0a82e' : 'var(--red)');
+  const label = s === 'licensed' ? 'Licensed ✅' : (s === 'trial' ? 'Free trial (full Pro)' : (s === 'locked' ? 'Free tier (Pro locked)' : s));
+  el.innerHTML = '<b style="color:' + tint + '">' + label + '</b> — ' + esc((data && data.message) || '');
+}
+
+async function loadLicense() {
+  const buy = $('buyLink');
+  if (buy) buy.href = BUY_URL;
+  try {
+    const res = await fetch('/api/license');
+    renderLicense(await res.json());
+  } catch (err) {
+    const el = $('licStatus');
+    if (el) el.textContent = 'Could not read license status.';
+  }
+}
+
+async function saveLicense() {
+  const elMsg = $('licMsg');
+  const showMsg = (msg, isErr = false) => {
+    elMsg.textContent = msg;
+    elMsg.style.color = isErr ? 'var(--red)' : 'var(--green)';
+  };
+  const key = $('inputLicense').value.trim();
+  if (!key) { showMsg('Paste your license key first.', true); return; }
+  showMsg('Validating…');
+  try {
+    const res = await fetch('/api/license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showMsg('Saved & validated — restart your AI client to apply.');
+      $('inputLicense').value = '';
+      renderLicense(data);
+    } else {
+      showMsg('Error: ' + (data.error || data.message || 'invalid key'), true);
+      renderLicense(data);
+    }
+  } catch (err) {
+    showMsg('Failed to connect to broker: ' + err, true);
+  }
+}
+
 async function doScaffold() {
   const elMsg = $('scaffoldMsg');
   const showMsg = (msg, isErr = false) => {
@@ -737,6 +806,7 @@ document.addEventListener('click', (e) => {
 });
 
 connect();
+loadLicense();
 // keep relative timestamps fresh between server pushes
 setInterval(() => { if (last) render(last); }, 2000);
 </script>

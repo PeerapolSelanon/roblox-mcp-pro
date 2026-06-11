@@ -35,6 +35,20 @@ async function main(): Promise<void> {
     await installPlugin();
     return;
   }
+  if (process.argv[2] === "set-license") {
+    const key = process.argv[3];
+    if (!key) {
+      process.stderr.write("usage: roblox-mcp-pro set-license <LICENSE-KEY>\n");
+      process.exit(1);
+    }
+    const { saveLicenseKey } = await import("./licensing/license.js");
+    const state = await saveLicenseKey(key);
+    process.stdout.write(`License: ${state.status} — ${state.message}\n`);
+    if (state.status !== "locked") {
+      process.stdout.write("Saved. Restart your AI client for it to take effect.\n");
+    }
+    return;
+  }
   if (process.argv[2] === "--version" || process.argv[2] === "-v") {
     process.stdout.write(`${VERSION}\n`);
     return;

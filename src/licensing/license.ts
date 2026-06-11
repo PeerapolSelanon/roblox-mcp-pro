@@ -17,6 +17,7 @@ import os from "node:os";
 import { promises as fs } from "node:fs";
 import {
   LICENSE_FILE,
+  STATE_DIR,
   TRIAL_DAYS,
   OFFLINE_GRACE_DAYS,
   PURCHASE_URL,
@@ -202,4 +203,28 @@ export async function resolveLicense(): Promise<LicenseState> {
   }
   cached = await resolveTrial();
   return cached;
+}
+
+/**
+ * Save a license key to ~/.roblox-mcp-pro/license.key and re-resolve, so a user
+ * can paste a key (dashboard or CLI) instead of editing their client config.
+ * Note: a running MCP server caches its license at startup — the user must
+ * restart their AI client for a newly-saved key to take effect there.
+ */
+export async function saveLicenseKey(key: string): Promise<LicenseState> {
+  const trimmed = key.trim();
+  if (!trimmed) {
+    return { status: "locked", message: "No license key provided." };
+  }
+  await fs.mkdir(STATE_DIR, { recursive: true });
+  await fs.writeFile(LICENSE_FILE, trimmed + "\n", "utf8");
+  // Validate/activate immediately so the caller can confirm the key works. The
+  // env var, if set, would override the file on the next resolve — flag that.
+  if (process.env.ROBLOX_MCP_LICENSE?.trim()) {
+    const result = await resolveWithKey(trimmed);
+    return result === "no-key"
+      ? { status: "locked", message: "That key isn't for this product." }
+      : result;
+  }
+  return resolveLicense();
 }
