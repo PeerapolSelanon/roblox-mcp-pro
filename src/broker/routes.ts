@@ -13,7 +13,9 @@
 
 import type http from "node:http";
 import { promises as fs } from "node:fs";
+// `path` is shadowed by the url pathname inside handle(); keep an alias too.
 import path from "node:path";
+import nodePath from "node:path";
 import type { Bridge } from "../services/bridge.js";
 import { StudioError } from "../services/errors.js";
 import { BRIDGE_PORT } from "../constants.js";
@@ -23,6 +25,7 @@ import { VERSION } from "../version.js";
 import { BrokerState } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
 import { scaffoldProject } from "./scaffold.js";
+import { browseDir, listRoots, loadRecentProjects, rememberProject } from "./fsbrowse.js";
 
 /** Studio session details, polled from the plugin for the dashboard. */
 interface StudioInfo {
@@ -285,7 +288,8 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
 
     // --- dashboard ---------------------------------------------------------
     if (method === "GET" && path === "/") {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      // no-store: after a broker upgrade the browser must not show a stale dashboard.
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(DASHBOARD_HTML);
       return true;
     }
@@ -327,6 +331,55 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       return true;
     }
 
+    // --- folder picker (dashboard) ------------------------------------------
+    // Read-only directory listing + suggestions so the dashboard can offer a
+    // real "Browse…" picker and accurate auto-detection. Localhost-only broker.
+    if (method === "GET" && path === "/api/fs/browse") {
+      const target = url.searchParams.get("path");
+      try {
+        if (!target) {
+          // Top level: drive roots + everything we can auto-detect.
+          const [roots, recent] = await Promise.all([listRoots(), loadRecentProjects()]);
+          const suggestions: { path: string; source: string }[] = [];
+          const seen = new Set<string>();
+          const add = (dir: string | null | undefined, source: string): void => {
+            if (!dir || seen.has(dir)) return;
+            seen.add(dir);
+            suggestions.push({ path: dir, source });
+          };
+          const syncStatus = syncEngine.status() as unknown as { baseDir?: string };
+          add(syncStatus.baseDir, "active sync");
+          const agents = [...state.snapshot().agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+          for (const agent of agents) add(agent.cwd, agent.name);
+          for (const dir of recent) add(dir, "recent");
+          sendJson(res, 200, { ok: true, roots, suggestions });
+        } else {
+          sendJson(res, 200, { ok: true, ...(await browseDir(target)) });
+        }
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+      return true;
+    }
+    // Create a single new folder inside an existing one (for "New project").
+    if (method === "POST" && path === "/api/fs/mkdir") {
+      const body = await readJson(req);
+      const parent = String(body.parent ?? "").trim();
+      const name = String(body.name ?? "").trim();
+      if (!parent || !name || /[\\/:*?"<>|]/.test(name)) {
+        sendJson(res, 200, { ok: false, error: "invalid folder name" });
+        return true;
+      }
+      try {
+        const dir = nodePath.join(nodePath.resolve(parent), name);
+        await fs.mkdir(dir);
+        sendJson(res, 200, { ok: true, path: dir });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+      return true;
+    }
+
     // --- new project scaffold ---------------------------------------------
     // Create an empty, sync-ready project skeleton on disk. The folder may be
     // given explicitly or resolved from the most recently active agent's cwd.
@@ -344,6 +397,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       }
       try {
         const result = await scaffoldProject(dir);
+        void rememberProject(dir);
         sendJson(res, 200, { ok: true, result });
       } catch (e) {
         sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
@@ -373,6 +427,9 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
           }
         }
         const result = await runSync(body);
+        if (body.action === "start" && body.syncDir) {
+          void rememberProject(String(body.syncDir));
+        }
         sendJson(res, 200, { ok: true, result });
       } catch (e) {
         sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });

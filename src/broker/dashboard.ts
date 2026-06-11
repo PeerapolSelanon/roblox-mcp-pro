@@ -8,6 +8,10 @@
  * Studio plugin and the AI agents — must be impossible to misread, and when
  * either is down the page says exactly what to do about it. Everything the
  * broker knows (Studio session, broker, sync, agents, activity) is shown.
+ *
+ * Project-folder fields auto-detect from (in order) the running sync, the most
+ * recently active agent's cwd, and the recent-projects list — and offer a real
+ * "Browse…" picker backed by /api/fs/browse on the localhost-only broker.
  */
 
 export const DASHBOARD_HTML = `<!doctype html>
@@ -27,6 +31,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     --green-bg: color-mix(in oklch, var(--green) 12%, transparent);
     --red-bg: color-mix(in oklch, var(--red) 12%, transparent);
     --amber-bg: color-mix(in oklch, var(--amber) 12%, transparent);
+    --accent-bg: color-mix(in oklch, var(--accent) 12%, transparent);
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
@@ -37,7 +42,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   }
   header {
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-    padding: 14px 24px; border-bottom: 1px solid var(--border-soft);
+    padding: 14px 24px 0; border-bottom: 1px solid var(--border-soft);
     background: color-mix(in oklch, var(--bg) 80%, transparent); backdrop-filter: blur(10px);
     position: sticky; top: 0; z-index: 10;
   }
@@ -52,7 +57,21 @@ export const DASHBOARD_HTML = `<!doctype html>
   .dot.off { background: var(--red); box-shadow: 0 0 7px var(--red); }
   .dot.warn { background: var(--amber); box-shadow: 0 0 7px var(--amber); }
   .spacer { flex: 1; }
+  button.badge { background: none; cursor: pointer; }
+  button.badge:hover { border-color: var(--faint); color: var(--text); }
   main { padding: 24px; display: grid; gap: 22px; max-width: 1100px; margin: 0 auto; }
+
+  /* Tab navigation (second header row, stays visible with the sticky header) */
+  .tabs { display: flex; gap: 2px; width: 100%; overflow-x: auto; margin-top: 6px; }
+  .tab { position: relative; background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--muted); font: 600 13px var(--sans); padding: 9px 14px 11px; cursor: pointer; white-space: nowrap; transition: color .15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabdot { position: absolute; top: 5px; right: 3px; width: 7px; height: 7px; border-radius: 50%; display: none; }
+  .tabdot.bad { display: block; background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .tabdot.warn { display: block; background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .tabpane { display: none; }
+  .tabpane.active { display: grid; gap: 22px; }
 
   /* Diagnostics banner */
   .banner { border: 1px solid var(--border); border-radius: 12px; padding: 15px 18px; }
@@ -65,7 +84,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   .banner .problem { margin-top: 12px; }
   .banner .ptitle { font-weight: 600; }
 
-  /* Hero status cards — full border + status tint (no side-stripe) */
+  /* Hero status cards */
   .heroes { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
   .hero { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 14px; padding: 18px 20px; transition: border-color .2s; }
   .hero.ok { border-color: color-mix(in oklch, var(--green) 35%, var(--border)); background: color-mix(in oklch, var(--green) 5%, var(--panel)); }
@@ -86,19 +105,26 @@ export const DASHBOARD_HTML = `<!doctype html>
   .card .clabel { color: var(--muted); font-size: 11px; font-family: var(--mono); letter-spacing: .02em; }
   .card .cvalue { font-size: 23px; font-weight: 700; margin-top: 3px; letter-spacing: -.01em; }
 
-  /* Details panels */
+  /* Panels */
   .details { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  .panel { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; padding: 15px 17px; }
-  .panel h3 { margin: 0 0 12px; font-size: 12px; font-family: var(--mono); letter-spacing: .02em; color: var(--accent); font-weight: 500; }
-  .kv { display: grid; grid-template-columns: minmax(96px, auto) 1fr; gap: 6px 14px; font-size: 13px; }
+  .panel { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px 18px; }
+  .phead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 14px; }
+  .phead h3 { margin: 0; font-size: 12px; font-family: var(--mono); letter-spacing: .02em; color: var(--accent); font-weight: 500; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px;
+    border: 1px solid var(--border); font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .pill .dot { width: 6px; height: 6px; }
+  .pill.on { color: var(--green); border-color: color-mix(in oklch, var(--green) 45%, var(--border)); background: var(--green-bg); }
+  .pill.warn2 { color: var(--amber); border-color: color-mix(in oklch, var(--amber) 45%, var(--border)); background: var(--amber-bg); }
+  .pill.off2 { color: var(--red); border-color: color-mix(in oklch, var(--red) 45%, var(--border)); background: var(--red-bg); }
+  .kv { display: grid; grid-template-columns: minmax(96px, auto) 1fr; gap: 7px 14px; font-size: 13px; margin: 0; }
   .kv dt { color: var(--muted); }
   .kv dd { margin: 0; color: var(--text); word-break: break-all; font-family: var(--mono); font-size: 12.5px; }
   .kv dd.good { color: var(--green); } .kv dd.bad2 { color: var(--red); }
 
   section h2 { font-size: 12px; font-family: var(--mono); letter-spacing: .02em; color: var(--muted); margin: 0 0 11px; font-weight: 500; }
   .pager { display: none; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }
-  .pgbtn { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 7px; color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 5px 11px; cursor: pointer; transition: .15s; }
-  .pgbtn:hover:not(:disabled) { color: var(--ink); border-color: var(--faint); }
+  .pgbtn { background: var(--panel); border: 1px solid var(--border-soft); border-radius: 7px; color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 5px 11px; cursor: pointer; transition: .15s; }
+  .pgbtn:hover:not(:disabled) { color: var(--text); border-color: var(--faint); }
   .pgbtn:disabled { opacity: .4; cursor: default; }
   .pginfo { font-family: var(--mono); font-size: 12px; color: var(--faint); }
   table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; }
@@ -111,93 +137,105 @@ export const DASHBOARD_HTML = `<!doctype html>
   td.agentcell { display: flex; align-items: center; gap: 8px; }
   .ok { color: var(--green); } .err { color: var(--red); } .muted { color: var(--muted); }
   .empty { color: var(--faint); padding: 18px; text-align: center; font-family: var(--sans); }
+
+  /* Form controls */
   .control-input, select {
     width: 100%;
-    padding: 8px 12px;
+    padding: 9px 12px;
     background: var(--panel2);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--text);
-    font-family: var(--sans);
-    margin-bottom: 10px;
-    font-size: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
   }
-  .control-input:focus, select:focus {
-    border-color: var(--accent);
-    outline: none;
-  }
-  .btn-group {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    margin-top: 10px;
-  }
+  .control-input:focus, select:focus { border-color: var(--accent); outline: none; }
   .btn {
-    padding: 8px 12px;
+    padding: 9px 12px;
     background: var(--border-soft);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 8px;
     color: var(--text);
     font-family: var(--sans);
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     text-align: center;
-    transition: background 0.2s, border-color 0.2s;
+    transition: background .2s, border-color .2s;
+    white-space: nowrap;
   }
-  .btn:hover {
-    background: var(--panel2);
-    border-color: var(--accent);
-  }
-  .btn.primary {
-    background: var(--accent);
-    border-color: transparent;
-    color: var(--bg);
-  }
-  .btn.primary:hover {
-    background: color-mix(in oklch, var(--accent) 80%, white);
-  }
-  .btn.danger {
-    background: var(--red-bg);
-    border-color: color-mix(in oklch, var(--red) 45%, var(--border));
-    color: var(--red);
-  }
-  .btn.danger:hover {
-    background: color-mix(in oklch, var(--red) 20%, var(--panel));
-  }
-  /* Sync control: field labels, direction segmented, two-way switch, advanced */
+  .btn:hover { background: var(--panel2); border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: transparent; color: var(--bg); }
+  .btn.primary:hover { background: color-mix(in oklch, var(--accent) 80%, white); }
+  .btn.danger { background: var(--red-bg); border-color: color-mix(in oklch, var(--red) 45%, var(--border)); color: var(--red); }
+  .btn.danger:hover { background: color-mix(in oklch, var(--red) 20%, var(--panel)); }
+  .btn-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
   .flabel { display: block; font-size: 11px; font-family: var(--mono); color: var(--muted); margin: 12px 0 5px; }
-  .wshint { font-size: 11px; color: var(--faint); margin: -5px 0 8px; min-height: 14px; }
+  .flabel:first-child { margin-top: 0; }
+  .folder-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .wshint { font-size: 11px; color: var(--faint); margin: 5px 0 0; min-height: 14px; }
   .wshint b { color: var(--muted); }
-  .seg-group { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
-  .seg { padding: 8px; background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-family: var(--sans); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: .15s; }
+  .seg-group { display: grid; gap: 6px; }
+  .seg-group.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .seg-group.cols2 { grid-template-columns: repeat(2, 1fr); }
+  .seg { padding: 8px 6px; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-family: var(--sans); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: .15s; }
   .seg:hover { color: var(--text); border-color: var(--faint); }
-  .seg.active { background: color-mix(in oklch, var(--accent) 15%, var(--panel2)); border-color: color-mix(in oklch, var(--accent) 50%, var(--border)); color: var(--accent); }
-  .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; }
-  .switch-label { font-size: 13px; font-weight: 600; }
-  .switch-sub { font-size: 11px; color: var(--faint); }
-  .switch { width: 40px; height: 22px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel2); position: relative; cursor: pointer; flex: none; transition: .18s; padding: 0; }
-  .switch .knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--faint); transition: left .18s var(--ease), background .18s; }
-  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
-  .switch[aria-checked="true"] .knob { left: 20px; background: var(--bg); }
+  .seg.active { background: var(--accent-bg); border-color: color-mix(in oklch, var(--accent) 50%, var(--border)); color: var(--accent); }
+  .seg .segsub { display: block; font-weight: 400; font-size: 10.5px; color: var(--faint); margin-top: 1px; }
   .sync-adv summary { cursor: pointer; font-size: 12px; color: var(--muted); font-family: var(--mono); list-style: none; padding: 6px 0; }
   .sync-adv summary::-webkit-details-marker { display: none; }
   .sync-adv summary::before { content: "\\25b8  "; }
   .sync-adv[open] summary::before { content: "\\25be  "; }
   .sync-msg { font-size: 12px; margin-top: 8px; font-family: var(--mono); min-height: 18px; }
-  .sync-live { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--green); margin-bottom: 4px; }
-  .sync-live.paused { color: var(--amber); }
-  .sync-live-dir { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0 0 12px; word-break: break-all; }
+  .panel-note { font-size: 12px; color: var(--muted); margin: 0 0 12px; line-height: 1.5; }
+  .panel-note b { color: var(--text); }
+
+  /* Sync: running facts strip */
+  .syncfacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .syncfact { background: var(--panel2); border: 1px solid var(--border-soft); border-radius: 9px; padding: 9px 12px; }
+  .syncfact .fl { font-size: 10.5px; font-family: var(--mono); color: var(--faint); letter-spacing: .02em; }
+  .syncfact .fv { font-size: 13px; font-weight: 600; margin-top: 2px; word-break: break-all; }
+  .syncfact .fv.mono { font-family: var(--mono); font-weight: 400; font-size: 12px; color: var(--muted); }
 
   /* Places: per-place status badges (label + color, never color alone) */
   .pbadge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; margin-right: 6px;
     border-radius: 999px; border: 1px solid var(--border); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
   .pbadge .dot { width: 6px; height: 6px; }
   .pbadge.open { color: var(--green); border-color: color-mix(in oklch, var(--green) 45%, var(--border)); background: var(--green-bg); }
-  .pbadge.syncing { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); background: color-mix(in oklch, var(--accent) 12%, transparent); }
+  .pbadge.syncing { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); background: var(--accent-bg); }
   .pbadge.paused { color: var(--amber); border-color: color-mix(in oklch, var(--amber) 45%, var(--border)); background: var(--amber-bg); }
   td.placename { font-family: var(--sans); font-weight: 600; font-size: 13px; }
   td.placename .nomirror { color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 11px; margin-left: 8px; }
   .places-dir { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 8px; word-break: break-all; }
+
+  /* Folder picker modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    width: min(640px, 100%); max-height: min(640px, 90vh); display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,.5); }
+  .modal .mhead { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); }
+  .modal .mhead h4 { margin: 0; font-size: 14px; font-weight: 700; flex: 1; }
+  .modal .mclose { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 8px; border-radius: 6px; }
+  .modal .mclose:hover { color: var(--text); background: var(--panel2); }
+  .modal .mpath { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-bottom: 1px solid var(--border-soft); background: var(--panel2); }
+  .modal .mpath .cur { flex: 1; font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  .modal .mlist { flex: 1; overflow-y: auto; padding: 8px; min-height: 180px; }
+  .mitem { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px;
+    background: none; border: none; border-radius: 8px; color: var(--text); font: 13px var(--sans); cursor: pointer; }
+  .mitem:hover { background: var(--panel2); }
+  .mitem .ico { flex: none; width: 18px; text-align: center; color: var(--accent); }
+  .mitem .nm { flex: 1; word-break: break-all; }
+  .mitem .tag { font-family: var(--mono); font-size: 10.5px; color: var(--faint); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .mitem .tag.proj { color: var(--green); border-color: color-mix(in oklch, var(--green) 45%, var(--border)); background: var(--green-bg); }
+  .msection { font-size: 10.5px; font-family: var(--mono); color: var(--faint); letter-spacing: .04em; padding: 10px 12px 4px; text-transform: uppercase; }
+  .modal .mfoot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border-soft); }
+  .modal .mfoot .newf { display: none; flex: 1; gap: 8px; }
+  .modal .mfoot .newf.open { display: flex; }
+  .modal .mfoot .newf input { flex: 1; }
+  .modal .merr { color: var(--red); font-family: var(--mono); font-size: 11.5px; padding: 0 18px 10px; min-height: 0; }
+  .mempty { color: var(--faint); padding: 24px; text-align: center; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -206,12 +244,22 @@ export const DASHBOARD_HTML = `<!doctype html>
   <h1>Roblox MCP Pro</h1>
   <small id="hdrsub" class="muted">broker monitor</small>
   <div class="spacer"></div>
+  <button class="badge" id="hdrStudio" onclick="switchTab('overview')" title="Studio plugin — details on Overview"><span id="hdrStudioDot" class="dot"></span>Studio</button>
+  <button class="badge" id="hdrAgents" onclick="switchTab('overview')" title="AI agents — details on Overview"><span id="hdrAgentsDot" class="dot"></span><span id="hdrAgentsText">agents</span></button>
   <span class="badge muted" id="clock"></span>
   <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="overview" role="tab">Overview<span class="tabdot" id="dotOverview"></span></button>
+    <button class="tab" data-tab="sync" role="tab">Sync<span class="tabdot" id="dotSync"></span></button>
+    <button class="tab" data-tab="project" role="tab">New Project</button>
+    <button class="tab" data-tab="agents" role="tab">Agents</button>
+    <button class="tab" data-tab="license" role="tab">License<span class="tabdot" id="dotLicense"></span></button>
+  </nav>
 </header>
 <main>
   <div id="banner" class="banner warn"><div class="head">Loading…</div></div>
 
+  <div class="tabpane active" id="tab-overview">
   <div class="heroes">
     <div id="pluginHero" class="hero">
       <div class="label">① Roblox Studio plugin</div>
@@ -234,20 +282,10 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="card"><div class="clabel">Uptime</div><div class="cvalue" id="uptime">—</div></div>
   </div>
 
-  <section id="placesSection" style="display:none;">
-    <h2>Universe · places</h2>
-    <table>
-      <thead><tr><th>Place</th><th>Place ID</th><th>Status</th><th>Last synced</th><th>Folder</th></tr></thead>
-      <tbody id="placesBody"></tbody>
-    </table>
-    <div class="places-dir" id="placesDir"></div>
-  </section>
-
   <div class="details">
     <div class="panel">
-      <h3>Studio session</h3>
+      <div class="phead"><h3>Studio session</h3><span class="pill" id="studioPill"><span class="dot"></span><span id="studioPillText">—</span></span></div>
       <dl class="kv">
-        <dt>Plugin</dt><dd id="dPlugin">—</dd>
         <dt>Place</dt><dd id="dPlace">—</dd>
         <dt>Place ID</dt><dd id="dPlaceId">—</dd>
         <dt>Version</dt><dd id="dVer">—</dd>
@@ -256,9 +294,8 @@ export const DASHBOARD_HTML = `<!doctype html>
       </dl>
     </div>
     <div class="panel">
-      <h3>Broker</h3>
+      <div class="phead"><h3>Broker</h3><span class="pill on"><span class="dot on"></span>running</span></div>
       <dl class="kv">
-        <dt>Status</dt><dd class="good">running</dd>
         <dt>Port</dt><dd id="dPort">—</dd>
         <dt>Uptime</dt><dd id="dUptime">—</dd>
         <dt>Started</dt><dd id="dStarted">—</dd>
@@ -266,91 +303,100 @@ export const DASHBOARD_HTML = `<!doctype html>
         <dt>Queue</dt><dd id="dQueue">0 queued · 0 in flight</dd>
       </dl>
     </div>
-    <div class="panel">
-      <h3>Sync (Studio ↔ disk)</h3>
-      <dl class="kv">
-        <dt>State</dt><dd id="dSyncState">off</dd>
-        <dt>Direction</dt><dd id="dSyncMode">—</dd>
-        <dt>Roots</dt><dd id="dRoots">—</dd>
-        <dt>Scripts</dt><dd id="dScripts">0</dd>
-        <dt>Place</dt><dd id="dSyncPlace">—</dd>
-        <dt>Folder</dt><dd id="dDir">—</dd>
-      </dl>
-    </div>
-    <div class="panel">
-      <h3>Sync Control</h3>
+  </div>
+  </div><!-- /tab-overview -->
 
-      <!-- Running view (compact) -->
-      <div id="syncRunning" style="display:none;">
-        <div class="sync-live" id="syncLiveRow"><span class="dot on" id="syncLiveDot"></span><span id="syncLiveText">Syncing</span></div>
-        <div class="sync-live-dir" id="syncLiveDir">—</div>
-        <div class="btn-group" style="grid-template-columns:1fr;">
-          <button class="btn danger" onclick="doSyncAction('stop')">Stop sync</button>
-        </div>
-        <div class="btn-group">
-          <button class="btn" onclick="doSyncAction('pull')">&#8595; Pull once</button>
-          <button class="btn" onclick="doSyncAction('push')">&#8593; Push once</button>
-        </div>
+  <div class="tabpane" id="tab-sync">
+  <div class="panel" id="syncPanel">
+    <div class="phead"><h3>Sync · Studio ↔ disk</h3><span class="pill" id="syncPill"><span class="dot" id="syncPillDot"></span><span id="syncPillText">off</span></span></div>
+
+    <!-- Running view -->
+    <div id="syncRunning" style="display:none;">
+      <div class="syncfacts">
+        <div class="syncfact"><div class="fl">DIRECTION</div><div class="fv" id="rDir">—</div></div>
+        <div class="syncfact"><div class="fl">PLACE</div><div class="fv" id="rPlace">—</div></div>
+        <div class="syncfact"><div class="fl">SCRIPTS</div><div class="fv" id="rScripts">0</div></div>
+        <div class="syncfact"><div class="fl">FOLDER</div><div class="fv mono" id="rDirPath">—</div></div>
+      </div>
+      <div class="btn-group" style="grid-template-columns:1fr 1fr 1fr;">
+        <button class="btn" onclick="doSyncAction('pull')">&#8595; Pull once</button>
+        <button class="btn" onclick="doSyncAction('push')">&#8593; Push once</button>
+        <button class="btn danger" onclick="doSyncAction('stop')">&#9632; Stop sync</button>
+      </div>
+    </div>
+
+    <!-- Setup view -->
+    <div id="syncSetup">
+      <label class="flabel">Project folder</label>
+      <div class="folder-row">
+        <input type="text" id="inputSyncDir" placeholder="detecting…" class="control-input" />
+        <button class="btn" onclick="openPicker('inputSyncDir','wsHint')">&#128193; Browse</button>
+      </div>
+      <div class="wshint" id="wsHint"></div>
+
+      <label class="flabel">Direction</label>
+      <div class="seg-group cols3" id="segDir" role="group" aria-label="Sync direction">
+        <button type="button" class="seg active" data-dir="studio-to-disk">Studio &#8594; Disk<span class="segsub">snapshot to files</span></button>
+        <button type="button" class="seg" data-dir="disk-to-studio">Disk &#8594; Studio<span class="segsub">files into Studio</span></button>
+        <button type="button" class="seg" data-dir="two-way">Two-way<span class="segsub">live, both ways</span></button>
       </div>
 
-      <!-- Setup view -->
-      <div id="syncSetup">
-        <label class="flabel">Project folder</label>
-        <input type="text" id="inputSyncDir" placeholder="auto-detected from your AI client" class="control-input" />
-        <div class="wshint" id="wsHint"></div>
-
-        <label class="flabel">Direction</label>
-        <div class="seg-group" id="segDir" role="group" aria-label="Sync direction">
+      <div id="firstCopyRow" style="display:none;">
+        <label class="flabel">First copy (which side wins initially)</label>
+        <div class="seg-group cols2" id="segFirst" role="group" aria-label="Initial copy direction">
           <button type="button" class="seg active" data-dir="studio-to-disk">Studio &#8594; Disk</button>
           <button type="button" class="seg" data-dir="disk-to-studio">Disk &#8594; Studio</button>
         </div>
-
-        <div class="switch-row">
-          <div>
-            <div class="switch-label">Two-way sync</div>
-            <div class="switch-sub">Keep Studio and files in step, live</div>
-          </div>
-          <button type="button" id="twoWayToggle" class="switch" role="switch" aria-checked="false" aria-label="Two-way sync"><span class="knob"></span></button>
-        </div>
-
-        <div class="btn-group" style="grid-template-columns:1fr;">
-          <button class="btn primary" onclick="doSyncAction('start')">Start sync</button>
-        </div>
-        <div class="btn-group">
-          <button class="btn" onclick="doSyncAction('pull')">&#8595; Pull once</button>
-          <button class="btn" onclick="doSyncAction('push')">&#8593; Push once</button>
-        </div>
-
-        <details class="sync-adv">
-          <summary>Advanced</summary>
-          <label class="flabel">Roots (comma separated, optional)</label>
-          <input type="text" id="inputRoots" placeholder="e.g. ServerScriptService, StarterGui" class="control-input" />
-        </details>
       </div>
 
-      <div id="syncControlMsg" class="sync-msg"></div>
+      <details class="sync-adv">
+        <summary>Advanced</summary>
+        <label class="flabel">Roots (comma separated, optional)</label>
+        <input type="text" id="inputRoots" placeholder="e.g. ServerScriptService, StarterGui" class="control-input" />
+      </details>
+
+      <div class="btn-group" style="grid-template-columns:1fr;">
+        <button class="btn primary" onclick="doSyncAction('start')">&#9654; Start sync</button>
+      </div>
     </div>
 
+    <div id="syncControlMsg" class="sync-msg"></div>
+  </div>
+
+  <section id="placesSection" style="display:none;">
+    <h2>Universe · places</h2>
+    <table>
+      <thead><tr><th>Place</th><th>Place ID</th><th>Status</th><th>Last synced</th><th>Folder</th></tr></thead>
+      <tbody id="placesBody"></tbody>
+    </table>
+    <div class="places-dir" id="placesDir"></div>
+  </section>
+  </div><!-- /tab-sync -->
+
+  <div class="tabpane" id="tab-project">
     <div class="panel">
-      <h3>New project</h3>
-      <div class="switch-sub" style="margin-bottom:10px;">Scaffold an empty, sync-ready project (one project = one universe): <b>places/</b> (each place gets its own <b>explorer/</b> mirror on first sync), selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</div>
+      <div class="phead"><h3>New project</h3></div>
+      <p class="panel-note">Scaffold an empty, sync-ready project (one project = one universe): <b>places/</b>, selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</p>
       <label class="flabel">Project folder</label>
-      <input type="text" id="inputScaffoldDir" placeholder="auto-detected from your AI client" class="control-input" />
+      <div class="folder-row">
+        <input type="text" id="inputScaffoldDir" placeholder="detecting…" class="control-input" />
+        <button class="btn" onclick="openPicker('inputScaffoldDir','scaffoldHint')">&#128193; Browse</button>
+      </div>
       <div class="wshint" id="scaffoldHint"></div>
       <div class="btn-group" style="grid-template-columns:1fr;">
         <button class="btn primary" onclick="doScaffold()">Create empty project</button>
       </div>
       <div id="scaffoldMsg" class="sync-msg"></div>
     </div>
-  </div>
+  </div><!-- /tab-project -->
 
-  <section>
-    <h2>License</h2>
-    <div class="card" style="border-radius:12px;">
-      <div id="licStatus" style="font-size:14px;margin-bottom:9px;">Checking…</div>
-      <div class="btn-group" style="grid-template-columns:1fr auto;gap:8px;align-items:center;">
-        <input id="inputLicense" type="text" placeholder="Paste your license key (ROBLOXAI-…)"
-          style="padding:9px 11px;border:1px solid var(--border-soft);border-radius:8px;background:var(--panel);color:inherit;font-family:var(--mono);font-size:12px;width:100%;" />
+  <div class="tabpane" id="tab-license">
+    <div class="panel">
+      <div class="phead"><h3>License</h3></div>
+      <div id="licStatus" style="font-size:14px;margin-bottom:10px;">Checking…</div>
+      <label class="flabel">License key</label>
+      <div class="folder-row">
+        <input id="inputLicense" type="text" placeholder="ROBLOXAI-…" class="control-input" />
         <button class="btn primary" onclick="saveLicense()">Save key</button>
       </div>
       <div id="licMsg" class="sync-msg"></div>
@@ -359,8 +405,9 @@ export const DASHBOARD_HTML = `<!doctype html>
         After saving, restart your AI client so it picks up the key.
       </div>
     </div>
-  </section>
+  </div><!-- /tab-license -->
 
+  <div class="tabpane" id="tab-agents">
   <section>
     <h2>Connected agents</h2>
     <table>
@@ -378,7 +425,34 @@ export const DASHBOARD_HTML = `<!doctype html>
     </table>
     <div class="pager" id="activityPager"></div>
   </section>
+  </div><!-- /tab-agents -->
 </main>
+
+<!-- Folder picker modal -->
+<div class="modal-overlay" id="pickerOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Choose project folder">
+    <div class="mhead">
+      <h4>Choose project folder</h4>
+      <button class="mclose" onclick="closePicker()" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="mpath">
+      <button class="btn" id="pkUp" style="padding:5px 11px;font-size:12px;">&#8593; Up</button>
+      <span class="cur" id="pkPath">Suggestions</span>
+    </div>
+    <div class="mlist" id="pkList"></div>
+    <div class="merr" id="pkErr"></div>
+    <div class="mfoot">
+      <button class="btn" id="pkNewBtn">+ New folder</button>
+      <span class="newf" id="pkNewRow">
+        <input type="text" class="control-input" id="pkNewName" placeholder="folder name" />
+        <button class="btn" id="pkNewOk">Create</button>
+      </span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="pkUse" disabled>Use this folder</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const fmtTime = (ts) => new Date(ts).toLocaleTimeString();
@@ -447,6 +521,13 @@ function setHero(prefix, level, big, sub) {
   $(prefix + "Sub").innerHTML = sub;
 }
 
+function setPill(id, textId, level, text) {
+  $(id).className = "pill " + (level === "ok" ? "on" : level === "warn" ? "warn2" : level === "bad" ? "off2" : "");
+  const dot = $(id).querySelector(".dot");
+  if (dot) dot.className = "dot " + (level === "ok" ? "on" : level === "warn" ? "warn" : level === "bad" ? "off" : "");
+  $(textId).textContent = text;
+}
+
 const PLUGIN_FIX = [
   "Open <b>Roblox Studio</b>.",
   "Click the <b>MCP</b> button on the toolbar so it's highlighted (or open the panel and Connect).",
@@ -501,8 +582,7 @@ function render(state) {
     problems.push({ sev: "bad", title: ps.never ? "Studio plugin has never connected" : "Studio plugin disconnected", detail: ps.never ? "The broker is up but no plugin has attached." : "Studio may have closed or lost the connection.", steps: PLUGIN_FIX });
   }
 
-  $("dPlugin").textContent = ps.label;
-  $("dPlugin").className = ps.level === "ok" ? "good" : "bad2";
+  setPill("studioPill", "studioPillText", ps.level, ps.label.toLowerCase());
   set("dPlace", studio && studio.placeName ? studio.placeName : "—");
   set("dPlaceId", studio && studio.placeId != null ? String(studio.placeId) : "—");
   set("dVer", studio && studio.studioVersion ? studio.studioVersion : "—");
@@ -520,6 +600,12 @@ function render(state) {
 
   renderBanner(problems);
 
+  // header pills (visible on every tab) + tab indicator dots
+  $('hdrStudioDot').className = 'dot ' + (ps.level === 'ok' ? 'on' : ps.level === 'warn' ? 'warn' : 'off');
+  $('hdrAgentsDot').className = 'dot ' + (agents.length ? 'on' : 'off');
+  $('hdrAgentsText').textContent = agents.length === 1 ? '1 agent' : agents.length + ' agents';
+  $('dotOverview').className = 'tabdot' + (problems.length ? (problems.some((p) => p.sev === 'bad') ? ' bad' : ' warn') : '');
+
   // metric cards
   set("mAgents", agents.length);
   set("queued", plugin.queued ?? 0);
@@ -534,16 +620,6 @@ function render(state) {
   set("dStarted", state.brokerStartedAt ? new Date(state.brokerStartedAt).toLocaleString() : "—");
   set("dCmds", state.totalCommands ?? 0);
   set("dQueue", (plugin.queued ?? 0) + " queued · " + (plugin.inflight ?? 0) + " in flight");
-
-  // sync details
-  const MODE_LABEL = { "two-way": "Two-way (disk ↔ Studio)", "studio-to-disk": "Studio → disk", "disk-to-studio": "disk → Studio" };
-  $("dSyncState").textContent = sync.running ? "running" : "off";
-  $("dSyncState").className = sync.running ? "good" : "";
-  set("dSyncMode", sync.running ? (MODE_LABEL[sync.mode] || sync.mode || "—") : "—");
-  set("dRoots", sync.roots && sync.roots.length ? sync.roots.join(", ") : "—");
-  set("dScripts", sync.scriptCount ?? 0);
-  set("dSyncPlace", sync.placeName ? sync.placeName + " · " + (sync.placeId ?? "?") : sync.placeId != null ? String(sync.placeId) : "—");
-  set("dDir", sync.syncDir || "—");
 
   // Universe places: every mirrored place, with the open / syncing one flagged.
   const placesState = state.places;
@@ -599,7 +675,8 @@ function render(state) {
   $("hdrsub").textContent = "broker monitor · :" + (state.port ?? "3690");
   $("clock").textContent = "updated " + new Date().toLocaleTimeString();
 
-  // Autofill the project folder from running sync or the active agent's workspace.
+  // Autofill the project folder from running sync or the active agent's workspace
+  // (the /api/fs/browse suggestions handle the no-agent case at page load).
   if (!$('inputSyncDir').value) {
     if (sync.syncDir) {
       $('inputSyncDir').value = sync.syncDir;
@@ -607,34 +684,33 @@ function render(state) {
       const activeAgent = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
       if (activeAgent && activeAgent.cwd) {
         $('inputSyncDir').value = activeAgent.cwd;
-        $('wsHint').innerHTML = 'Detected from <b>' + esc(activeAgent.name) + '</b>';
+        $('wsHint').innerHTML = 'Auto-detected from <b>' + esc(activeAgent.name) + '</b>';
       }
     }
   }
-
-  // Autofill the new-project folder from the active agent's workspace.
   if (!$('inputScaffoldDir').value) {
     const activeAgent = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
     if (activeAgent && activeAgent.cwd) {
       $('inputScaffoldDir').value = activeAgent.cwd;
-      $('scaffoldHint').innerHTML = 'Detected from <b>' + esc(activeAgent.name) + '</b>';
+      $('scaffoldHint').innerHTML = 'Auto-detected from <b>' + esc(activeAgent.name) + '</b>';
     }
   }
 
-  // State-aware: compact "running" view vs the setup form.
-  const DIR_LABEL = { "two-way": "Two-way", "studio-to-disk": "Studio \\u2192 Disk", "disk-to-studio": "Disk \\u2192 Studio" };
+  // Sync panel: pill + compact "running" view vs the setup form.
+  const DIR_LABEL = { "two-way": "Two-way (live)", "studio-to-disk": "Studio \\u2192 Disk", "disk-to-studio": "Disk \\u2192 Studio" };
   $('syncSetup').style.display = sync.running ? 'none' : 'block';
   $('syncRunning').style.display = sync.running ? 'block' : 'none';
   if (sync.running) {
     const paused = !!sync.playtestActive;
-    $('syncLiveRow').className = 'sync-live' + (paused ? ' paused' : '');
-    $('syncLiveDot').className = 'dot ' + (paused ? 'warn' : 'on');
-    set('syncLiveText', paused
-      ? 'Playtest running \\u00b7 sync paused, edits queued'
-      : 'Syncing ' + (sync.placeName ? sync.placeName + ' \\u00b7 ' : '') + (sync.scriptCount || 0) + ' scripts');
-    const label = DIR_LABEL[sync.mode] || sync.mode || '';
-    $('syncLiveDir').textContent = label + (sync.syncDir ? '  \\u00b7  ' + sync.syncDir : '');
+    setPill("syncPill", "syncPillText", paused ? "warn" : "ok", paused ? "playtest \\u00b7 paused" : "syncing");
+    set('rDir', DIR_LABEL[sync.mode] || sync.mode || '\\u2014');
+    set('rPlace', sync.placeName || (sync.placeId != null ? String(sync.placeId) : '\\u2014'));
+    set('rScripts', sync.scriptCount ?? 0);
+    set('rDirPath', sync.syncDir || '\\u2014');
+  } else {
+    setPill("syncPill", "syncPillText", "", "off");
   }
+  $('dotSync').className = 'tabdot' + (sync.running && sync.playtestActive ? ' warn' : '');
 }
 
 async function doSyncAction(action) {
@@ -653,18 +729,21 @@ async function doSyncAction(action) {
       return;
     }
     const activeSeg = document.querySelector('#segDir .seg.active');
-    const dir = activeSeg ? activeSeg.dataset.dir : 'studio-to-disk';
-    const twoWay = $('twoWayToggle').getAttribute('aria-checked') === 'true';
+    const sel = activeSeg ? activeSeg.dataset.dir : 'studio-to-disk';
     payload.syncDir = syncDir;
-    // Two-way ON -> bidirectional live sync; OFF -> one-way in the chosen direction.
-    payload.mode = twoWay ? 'two-way' : dir;
-    payload.initialDirection = dir;
+    payload.mode = sel;
+    if (sel === 'two-way') {
+      const firstSeg = document.querySelector('#segFirst .seg.active');
+      payload.initialDirection = firstSeg ? firstSeg.dataset.dir : 'studio-to-disk';
+    } else {
+      payload.initialDirection = sel;
+    }
     const rootsText = $('inputRoots').value.trim();
     if (rootsText) {
       payload.roots = rootsText.split(',').map(s => s.trim()).filter(Boolean);
     }
   }
-  
+
   try {
     const res = await fetch('/plugin/sync', {
       method: 'POST',
@@ -690,7 +769,12 @@ function renderLicense(data) {
   const s = (data && data.status) || 'unknown';
   const tint = s === 'licensed' ? 'var(--green)' : (s === 'trial' ? '#e0a82e' : 'var(--red)');
   const label = s === 'licensed' ? 'Licensed ✅' : (s === 'trial' ? 'Free trial (full Pro)' : (s === 'locked' ? 'Free tier (Pro locked)' : s));
-  el.innerHTML = '<b style="color:' + tint + '">' + label + '</b> — ' + esc((data && data.message) || '');
+  // The server message may start with the same word as the label — drop the echo.
+  let msg = (data && data.message) || '';
+  if (s === 'licensed') msg = msg.replace(/^Licensed\\s*\\u2705?\\s*/i, '');
+  el.innerHTML = '<b style="color:' + tint + '">' + label + '</b>' + (msg ? ' — ' + esc(msg) : '');
+  const dot = $('dotLicense');
+  if (dot) dot.className = 'tabdot' + (s === 'locked' ? ' bad' : s === 'trial' ? ' warn' : '');
 }
 
 async function loadLicense() {
@@ -766,6 +850,170 @@ async function doScaffold() {
   }
 }
 
+// ---- Folder picker (Browse… modal backed by /api/fs/browse) ---------------
+let pickerTargetInput = null;
+let pickerTargetHint = null;
+let pickerPath = null; // null = top level (suggestions + drives)
+
+function openPicker(inputId, hintId) {
+  pickerTargetInput = inputId;
+  pickerTargetHint = hintId;
+  $('pickerOverlay').classList.add('open');
+  $('pkErr').textContent = '';
+  $('pkNewRow').classList.remove('open');
+  const current = $(inputId).value.trim();
+  pkNavigate(current || null);
+}
+
+function closePicker() {
+  $('pickerOverlay').classList.remove('open');
+  pickerTargetInput = null;
+}
+
+async function pkNavigate(path) {
+  $('pkErr').textContent = '';
+  $('pkList').innerHTML = '<div class="mempty">Loading\\u2026</div>';
+  try {
+    const url = path ? '/api/fs/browse?path=' + encodeURIComponent(path) : '/api/fs/browse';
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) {
+      // e.g. a stale path that no longer exists — fall back to top level.
+      if (path) { pkNavigate(null); return; }
+      $('pkErr').textContent = data.error || 'Could not browse.';
+      $('pkList').innerHTML = '';
+      return;
+    }
+    if (path) {
+      pickerPath = data.path;
+      $('pkPath').textContent = data.path;
+      // From a drive root (no parent) Up returns to the drives/suggestions view.
+      $('pkUp').disabled = false;
+      $('pkUp').onclick = () => { if (data.parent) pkNavigate(data.parent); else pkNavigate(null); };
+      $('pkUse').disabled = false;
+      $('pkNewBtn').style.display = '';
+      const rows = data.dirs.map((d) =>
+        "<button class='mitem' data-path='" + esc(d.path).replace(/'/g, '&#39;') + "'><span class='ico'>&#128193;</span><span class='nm'>" + esc(d.name) + "</span>" +
+        (d.isProject ? "<span class='tag proj'>roblox project</span>" : "") + "</button>"
+      ).join("");
+      $('pkList').innerHTML = rows || '<div class="mempty">No sub-folders here. Click "Use this folder" to pick it.</div>';
+    } else {
+      pickerPath = null;
+      $('pkPath').textContent = 'Suggestions & drives';
+      $('pkUp').disabled = true;
+      $('pkUse').disabled = true;
+      $('pkNewBtn').style.display = 'none';
+      let html = '';
+      if ((data.suggestions || []).length) {
+        html += "<div class='msection'>Detected</div>" + data.suggestions.map((s) =>
+          "<button class='mitem' data-path='" + esc(s.path).replace(/'/g, '&#39;') + "' data-pick='1'><span class='ico'>&#10022;</span><span class='nm'>" + esc(s.path) + "</span><span class='tag'>" + esc(s.source) + "</span></button>"
+        ).join("");
+      }
+      html += "<div class='msection'>Drives</div>" + (data.roots || []).map((r) =>
+        "<button class='mitem' data-path='" + esc(r.path).replace(/'/g, '&#39;') + "'><span class='ico'>&#128190;</span><span class='nm'>" + esc(r.name) + "</span></button>"
+      ).join("");
+      $('pkList').innerHTML = html || '<div class="mempty">Nothing to show.</div>';
+    }
+  } catch (err) {
+    $('pkErr').textContent = 'Failed to reach broker: ' + err;
+    $('pkList').innerHTML = '';
+  }
+}
+
+function pkChoose(path) {
+  if (pickerTargetInput) {
+    $(pickerTargetInput).value = path;
+    if (pickerTargetHint) $(pickerTargetHint).innerHTML = 'Chosen via <b>Browse</b>';
+  }
+  closePicker();
+}
+
+// List clicks: suggestions pick directly (double duty: single click navigates
+// into a folder; a suggestion is already a full project path so picking it
+// immediately is the fast path users want).
+$('pkList').addEventListener('click', (e) => {
+  const item = e.target.closest('.mitem');
+  if (!item) return;
+  const p = item.getAttribute('data-path');
+  if (!p) return;
+  if (item.getAttribute('data-pick')) pkChoose(p);
+  else pkNavigate(p);
+});
+$('pkUse').addEventListener('click', () => { if (pickerPath) pkChoose(pickerPath); });
+$('pickerOverlay').addEventListener('click', (e) => { if (e.target === $('pickerOverlay')) closePicker(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePicker(); });
+
+// New folder: reveal name input, create via /api/fs/mkdir, then enter it.
+$('pkNewBtn').addEventListener('click', () => {
+  $('pkNewRow').classList.toggle('open');
+  $('pkNewName').focus();
+});
+$('pkNewOk').addEventListener('click', async () => {
+  const name = $('pkNewName').value.trim();
+  if (!name || !pickerPath) return;
+  $('pkErr').textContent = '';
+  try {
+    const res = await fetch('/api/fs/mkdir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent: pickerPath, name })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      $('pkNewName').value = '';
+      $('pkNewRow').classList.remove('open');
+      pkNavigate(data.path);
+    } else {
+      $('pkErr').textContent = data.error || 'Could not create folder.';
+    }
+  } catch (err) {
+    $('pkErr').textContent = 'Failed to reach broker: ' + err;
+  }
+});
+$('pkNewName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pkNewOk').click(); });
+
+// Auto-detect project folders at page load — works even before any agent
+// connects, using the broker's suggestions (sync dir, agent cwds, recents).
+async function autoDetectFolders() {
+  try {
+    const res = await fetch('/api/fs/browse');
+    const data = await res.json();
+    if (!data.ok || !(data.suggestions || []).length) return;
+    const s = data.suggestions[0];
+    if (!$('inputSyncDir').value) {
+      $('inputSyncDir').value = s.path;
+      $('wsHint').innerHTML = 'Auto-detected from <b>' + esc(s.source) + '</b>';
+    }
+    if (!$('inputScaffoldDir').value) {
+      $('inputScaffoldDir').value = s.path;
+      $('scaffoldHint').innerHTML = 'Auto-detected from <b>' + esc(s.source) + '</b>';
+    }
+  } catch {
+    // broker unreachable — SSE reconnect will sort the page out
+  }
+}
+
+// ---- Tabs: hash-based, last tab remembered, Overview by default ------------
+const TAB_NAMES = ['overview', 'sync', 'project', 'agents', 'license'];
+function switchTab(name) {
+  if (!TAB_NAMES.includes(name)) name = 'overview';
+  document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  try { localStorage.setItem('rmp-tab', name); } catch {}
+  if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+}
+document.querySelectorAll('.tab').forEach((t) => {
+  t.addEventListener('click', () => switchTab(t.dataset.tab));
+});
+window.addEventListener('hashchange', () => switchTab(location.hash.slice(1)));
+(function initTab() {
+  let name = location.hash.slice(1);
+  if (!TAB_NAMES.includes(name)) {
+    try { name = localStorage.getItem('rmp-tab') || 'overview'; } catch { name = 'overview'; }
+  }
+  switchTab(name);
+})();
+
 function setStream(ok) {
   $("streamDot").className = "dot " + (ok ? "on" : "off");
   $("streamText").textContent = ok ? "live" : "disconnected — retrying";
@@ -781,19 +1029,22 @@ function connect() {
   es.onmessage = (e) => { try { apply(JSON.parse(e.data)); } catch {} };
   es.onerror = () => { setStream(false); es.close(); setTimeout(connect, 2000); };
 }
-// Sync Control: direction segmented + two-way toggle (vanilla, no framework).
+
+// Sync Control: direction segments (vanilla, no framework). Picking "Two-way"
+// reveals the first-copy choice.
 document.querySelectorAll('#segDir .seg').forEach((b) => {
   b.addEventListener('click', () => {
     document.querySelectorAll('#segDir .seg').forEach((x) => x.classList.remove('active'));
     b.classList.add('active');
+    $('firstCopyRow').style.display = b.dataset.dir === 'two-way' ? 'block' : 'none';
   });
 });
-const twToggle = $('twoWayToggle');
-if (twToggle) {
-  twToggle.addEventListener('click', () => {
-    twToggle.setAttribute('aria-checked', twToggle.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+document.querySelectorAll('#segFirst .seg').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#segFirst .seg').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
   });
-}
+});
 
 // Table pagination: prev/next buttons (delegated, no inline handlers).
 document.addEventListener('click', (e) => {
@@ -807,6 +1058,7 @@ document.addEventListener('click', (e) => {
 
 connect();
 loadLicense();
+autoDetectFolders();
 // keep relative timestamps fresh between server pushes
 setInterval(() => { if (last) render(last); }, 2000);
 </script>
