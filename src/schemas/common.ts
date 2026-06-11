@@ -11,7 +11,8 @@ export const InstancePath = z
   .max(500, "Path must not exceed 500 characters")
   .describe(
     "Full instance path rooted at a service, e.g. 'game.Workspace.Model.Part' " +
-      "or 'Workspace.Baseplate'.",
+      "or 'Workspace.Baseplate'. Duplicate-named siblings can be picked with a " +
+      "1-based index: 'Workspace.Part[2]' = the second child named Part.",
   );
 
 /** A 3-number [x, y, z] vector. */

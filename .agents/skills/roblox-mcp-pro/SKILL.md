@@ -28,6 +28,11 @@ and that the roblox-mcp-pro server must be running. Don't keep retrying blindly 
 `workspace_state` is a good second call to orient yourself (place name, child counts per service,
 camera, selection) before editing.
 
+> Exact per-parameter contracts for every tool live in
+> [references/tools.md](references/tools.md) — auto-generated from the server's
+> own schemas each release, so it is always current. Check it when unsure about
+> an argument name, type, or default.
+
 ## Choosing the right tool
 
 Prefer the **specific** tool over `execute_luau`. The structured tools return clean, validated
@@ -39,10 +44,17 @@ captured print/warn plus `return` values.
 | --- | --- |
 | Read instances / the tree | `query_instances` |
 | Create / edit / move / clone / delete instances | `mutate_instances` |
+| N spaced copies (fence rows, grids) | `mutate_instances` action `duplicate` (count + offset) |
 | Read or write specific properties | `manage_properties` |
+| Attributes / CollectionService tags | `manage_properties` (get/set_attributes, add/remove_tags, get_tagged) |
+| Same properties on many instances at once | `manage_properties` (mass_set, mass_get, modify_children) |
+| Adjust a value relatively ("raise 5 studs", "double it") | `manage_properties` set_relative (delta/scale) |
+| What properties/events does class X have | `describe_instance` with `class_name` (API-dump reflection) |
 | Do many edits atomically (one undo) | `batch_execute` |
 | Run arbitrary Luau | `execute_luau` |
 | Find parts by space (box, radius, raycast, nearest) | `spatial_query` |
+| Ground height / is a spot free to build | `spatial_query` (find_ground, check_placement) |
+| Bounding box / flat spots / walkability / density map | `spatial_query` (bounds, find_flat, analyze_walkable, spatial_map) |
 | Generate/edit terrain | `manage_terrain` |
 | Time of day, fog, ambient, shadows | `manage_lighting` |
 | Bloom/Blur/ColorCorrection/DoF/Atmosphere/Sky | `manage_effects` |
@@ -54,6 +66,11 @@ captured print/warn plus `return` values.
 | Animation instances / preview | `manage_animation` |
 | Insert marketplace assets by id | `manage_assets` |
 | Read/write script source, create scripts | `manage_scripts` |
+| Surgical script edits / search code | `manage_scripts` (edit_replace/edit_insert/edit_delete by line, search across scripts, replace with dry_run) |
+| What does this script require()? | `manage_scripts` get_dependencies |
+| Procedural hills / ramps / material swap / smooth terrain | `manage_terrain` (generate, fill_wedge, fill_cylinder, replace_material, smooth) |
+| Let the user point at an instance by clicking it | `manage_selection` watch |
+| What changed since I last looked | `workspace_state` action 'changes' |
 | Mirror Studio↔disk both ways | `manage_sync` |
 | Explorer selection | `manage_selection` |
 | Studio version/theme/run state | `manage_studio` |
@@ -72,6 +89,13 @@ captured print/warn plus `return` values.
   their string names. Values are coerced to the property's current type, so match the existing type.
 - **Check logs after running code.** If `execute_luau` or a playtest misbehaves, `manage_logs`
   returns the recent Output history (newest first) so you can see prints and errors.
+- **Edit scripts surgically.** Don't `set_source` a whole file to change three lines:
+  `manage_scripts` `search` finds the line numbers, `get_source` with `start_line`/`end_line`
+  reads just that slice, and `edit_replace`/`edit_insert`/`edit_delete` change only those lines.
+- **Duplicate-named siblings.** Paths accept a 1-based index — `Workspace.Part[2]` is the second
+  child named `Part` — so you can target instances that share a name.
+- **Place things on the ground.** `spatial_query` `find_ground` returns the exact Y under a
+  point, and `check_placement` tells you whether a box-shaped spot is free before you build there.
 
 ## Bidirectional sync (`manage_sync`)
 

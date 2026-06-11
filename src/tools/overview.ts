@@ -6,6 +6,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { forwardTool } from "./_forward.js";
+import { callStudio, describeError } from "../services/studio.js";
+import { ok, fail } from "../services/format.js";
+import { getClassInfo } from "../services/apidump.js";
 
 const READ_ONLY = {
   readOnlyHint: true,
@@ -80,33 +83,61 @@ export function registerOverviewTools(server: McpServer): void {
     annotations: READ_ONLY,
   });
 
-  forwardTool(server, "describe_instance", {
-    title: "Describe Instance",
-    description:
-      "Everything about one instance in a single call: properties + children + ancestry " +
-      "(replaces separate query/property/parent calls).\n" +
-      "Args: path (required), props (string[] projection — read only these, optional), " +
-      "children (bool, default true), max_children (default 100).\n" +
-      "Returns: { path,name,className,childCount,properties,ancestors:[{name,class}]," +
-      "children?:[{name,class,n}],moreChildren? }.",
-    inputSchema: z
-      .object({
-        path: z.string().min(1).describe("Instance path (required)."),
-        props: z
-          .array(z.string().min(1))
-          .max(40)
-          .optional()
-          .describe("Read only these properties (projection); omit for a common set."),
-        children: z.boolean().default(true).describe("Include the child list (default true)."),
-        max_children: z
-          .number()
-          .int()
-          .min(1)
-          .max(500)
-          .default(100)
-          .describe("Max children listed (default 100)."),
-      })
-      .strict().shape,
-    annotations: READ_ONLY,
-  });
+  const DescribeSchema = z
+    .object({
+      path: z.string().min(1).optional().describe("Instance path (omit when using class_name)."),
+      class_name: z
+        .string()
+        .max(100)
+        .optional()
+        .describe(
+          "Class reflection mode: describe the CLASS instead of an instance — " +
+            "properties/events/methods from the Roblox API dump (no Studio needed).",
+        ),
+      props: z
+        .array(z.string().min(1))
+        .max(40)
+        .optional()
+        .describe("Read only these properties (projection); omit for a common set."),
+      children: z.boolean().default(true).describe("Include the child list (default true)."),
+      max_children: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .default(100)
+        .describe("Max children listed (default 100)."),
+    })
+    .strict();
+
+  server.registerTool(
+    "describe_instance",
+    {
+      title: "Describe Instance",
+      description:
+        "Everything about one instance in a single call: properties + children + ancestry " +
+        "(replaces separate query/property/parent calls). Or pass class_name instead of path " +
+        "to get CLASS reflection (valid properties/events/methods) from the Roblox API dump — " +
+        "use it before setting unfamiliar properties.\n" +
+        "Args: path | class_name, props?, children (default true), max_children (default 100).\n" +
+        "Returns: instance -> { path,name,className,childCount,properties,ancestors,children?,moreChildren? }; " +
+        "class -> { className,superclasses,creatable,properties:[{name,type,readOnly}],events,methods }.",
+      inputSchema: DescribeSchema.shape,
+      annotations: READ_ONLY,
+    },
+    async (input: z.infer<typeof DescribeSchema>) => {
+      try {
+        if (input.class_name) {
+          const info = await getClassInfo(input.class_name);
+          if (!info) return fail(`Error: unknown class '${input.class_name}'.`);
+          return ok(info as unknown as Record<string, unknown>, JSON.stringify(info));
+        }
+        if (!input.path) return fail("Error: provide path (instance) or class_name (class reflection).");
+        const result = await callStudio<Record<string, unknown>>("describe_instance", input);
+        return ok(result, JSON.stringify(result));
+      } catch (error) {
+        return fail(describeError(error));
+      }
+    },
+  );
 }

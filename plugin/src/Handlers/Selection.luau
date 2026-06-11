@@ -43,6 +43,22 @@ return function(args: any): any
 	elseif action == "clear" then
 		Selection:Set({})
 		return { ok = true, selection = {} }
+	elseif action == "watch" then
+		-- Wait for the user to change the Explorer selection — lets a person
+		-- "point at" instances for the agent by clicking them in Studio.
+		-- Capped well under the server's 30s command timeout; note the poll
+		-- loop is blocked while waiting, so keep timeouts short.
+		local timeout = math.clamp(tonumber(args.timeout) or 10, 1, 20)
+		local before = table.concat(currentPaths(), "\n")
+		local deadline = os.clock() + timeout
+		while os.clock() < deadline do
+			task.wait(0.25)
+			local now = table.concat(currentPaths(), "\n")
+			if now ~= before then
+				return { ok = true, changed = true, selection = currentPaths() }
+			end
+		end
+		return { ok = true, changed = false, selection = currentPaths() }
 	else
 		return { ok = false, error = "unknown manage_selection action: " .. tostring(action) }
 	end

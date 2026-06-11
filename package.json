@@ -1,6 +1,6 @@
 {
   "name": "roblox-mcp-pro",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "MCP server that lets AI agents control Roblox Studio: live Luau execution, instance query/mutate, UI/terrain/lighting, and bidirectional Studio<->local sync. Paid subscription with a free trial.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "Peerapol",
@@ -42,7 +42,8 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
     "obfuscate": "node scripts/obfuscate.mjs",
-    "prepublishOnly": "npm run clean && npm run build && npm run obfuscate"
+    "docs": "node scripts/gen-docs.mjs",
+    "prepublishOnly": "npm run clean && npm run build && npm run docs && npm run obfuscate"
   },
   "engines": {
     "node": ">=18"

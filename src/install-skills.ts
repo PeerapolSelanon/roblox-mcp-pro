@@ -45,6 +45,21 @@ async function readIfPresent(p: string): Promise<Buffer | null> {
   }
 }
 
+/** All files under dir, as paths relative to it (skills are small trees). */
+async function listFiles(dir: string, prefix = ""): Promise<string[]> {
+  const out: string[] = [];
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      out.push(...(await listFiles(path.join(dir, entry.name), rel)));
+    } else {
+      out.push(rel);
+    }
+  }
+  return out;
+}
+
 export interface SkillSyncResult {
   /** Number of skill files newly written or updated. */
   changed: number;
@@ -71,18 +86,21 @@ export async function ensureSkillsInstalled(): Promise<SkillSyncResult> {
 
     for (const skill of SKILLS) {
       try {
-        const src = path.join(sourceDir, skill, "SKILL.md");
-        const source = await readIfPresent(src);
-        if (!source) continue; // skill not in package; skip quietly
+        // Copy the whole skill tree (SKILL.md + references/…), not just the
+        // top file — generated references ride along with each release.
+        const srcDir = path.join(sourceDir, skill);
+        for (const rel of await listFiles(srcDir)) {
+          const source = await readIfPresent(path.join(srcDir, rel));
+          if (!source) continue;
 
-        const destDir = path.join(target.skillsDir, skill);
-        const dest = path.join(destDir, "SKILL.md");
-        const existing = await readIfPresent(dest);
-        if (existing && existing.equals(source)) continue;
+          const dest = path.join(target.skillsDir, skill, rel);
+          const existing = await readIfPresent(dest);
+          if (existing && existing.equals(source)) continue;
 
-        await fs.mkdir(destDir, { recursive: true });
-        await fs.writeFile(dest, source);
-        result.changed++;
+          await fs.mkdir(path.dirname(dest), { recursive: true });
+          await fs.writeFile(dest, source);
+          result.changed++;
+        }
       } catch {
         // Skip this skill on error; keep going.
       }

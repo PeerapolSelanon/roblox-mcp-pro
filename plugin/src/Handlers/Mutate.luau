@@ -87,6 +87,37 @@ local function doOperation(op: any): any
 		local p = Serialize.path(target)
 		target:Destroy()
 		return { ok = true, action = action, path = p }
+	elseif action == "duplicate" then
+		-- N spaced copies in one call: each copy is offset by `offset` studs from
+		-- the previous one (rows of fences, lamp posts, platforms, …).
+		local count = math.clamp(tonumber(op.count) or 1, 1, 100)
+		local rawOffset = op.offset
+		local offset = Vector3.zero
+		if type(rawOffset) == "table" then
+			offset = Vector3.new(
+				tonumber(rawOffset.x or rawOffset[1]) or 0,
+				tonumber(rawOffset.y or rawOffset[2]) or 0,
+				tonumber(rawOffset.z or rawOffset[3]) or 0
+			)
+		end
+		local newParent = (op.parent and Serialize.resolve(op.parent)) or target.Parent
+		local basePivot: CFrame? = if target:IsA("PVInstance") then target:GetPivot() else nil
+		local paths = {}
+		for i = 1, count do
+			local copy = target:Clone()
+			if not copy then
+				return { ok = false, action = action, error = "instance is not Archivable" }
+			end
+			if op.name then
+				copy.Name = if count > 1 then op.name .. tostring(i) else op.name
+			end
+			copy.Parent = newParent
+			if basePivot and offset.Magnitude > 0 and copy:IsA("PVInstance") then
+				copy:PivotTo(basePivot + offset * i)
+			end
+			table.insert(paths, Serialize.path(copy))
+		end
+		return { ok = true, action = action, resultPaths = paths }
 	elseif action == "clone" then
 		local clone = target:Clone()
 		if not clone then

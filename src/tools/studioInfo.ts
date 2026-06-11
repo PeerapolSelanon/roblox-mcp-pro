@@ -9,8 +9,20 @@ import { forwardTool } from "./_forward.js";
 
 const Selection = z
   .object({
-    action: z.enum(["get", "set", "add", "clear"]).describe("Read or change the Explorer selection."),
+    action: z
+      .enum(["get", "set", "add", "clear", "watch"])
+      .describe(
+        "Read or change the Explorer selection. 'watch' waits for the USER to change it — " +
+          "ask them to click the instance(s) in Studio, then call watch.",
+      ),
     paths: z.array(InstancePath).max(500).optional().describe("Instance paths for set/add."),
+    timeout: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .optional()
+      .describe("For 'watch': seconds to wait for a selection change (default 10, max 20)."),
   })
   .strict();
 
@@ -68,7 +80,17 @@ const Logs = z
   })
   .strict();
 
-const WorkspaceState = z.object({}).strict();
+const WorkspaceState = z
+  .object({
+    action: z
+      .enum(["snapshot", "changes"])
+      .default("snapshot")
+      .describe(
+        "'snapshot': high-level session summary. 'changes': diff the instance tree against the " +
+          "previous 'changes' call — what was added/removed since (first call only sets the baseline).",
+      ),
+  })
+  .strict();
 
 const read = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 const mut = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
@@ -77,10 +99,11 @@ export function registerStudioInfoTools(server: McpServer): void {
   forwardTool(server, "manage_selection", {
     title: "Manage Explorer Selection",
     description:
-      "Read or change which instances are selected in the Studio Explorer.\n" +
-      "Args: action ('get'|'set'|'add'|'clear'), paths?.\n" +
-      "Returns: { ok, selection: string[] }.\n" +
-      "Example: action: 'set', paths: ['Workspace.Model.Part1', 'Workspace.Model.Part2'].",
+      "Read or change which instances are selected in the Studio Explorer, or wait for the user " +
+      "to select something ('watch') — a natural way for them to point at instances for you.\n" +
+      "Args: action ('get'|'set'|'add'|'clear'|'watch'), paths?, timeout? (watch, default 10s).\n" +
+      "Returns: { ok, selection: string[], changed? (watch) }.\n" +
+      "Example: ask the user to click the broken part, then action: 'watch' -> selection has its path.",
     inputSchema: Selection.shape,
     annotations: mut,
   });
@@ -110,10 +133,12 @@ export function registerStudioInfoTools(server: McpServer): void {
   forwardTool(server, "workspace_state", {
     title: "Workspace State Snapshot",
     description:
-      "High-level read-only snapshot of the session.\n" +
-      "Args: none.\n" +
-      "Returns: { ok, placeId, placeName, isRunning, gravity, childCounts, selectionCount, camera }.\n" +
-      "Use to orient before making changes.",
+      "High-level read-only snapshot of the session, or a tree diff since the last check.\n" +
+      "Args: action ('snapshot' [default] | 'changes').\n" +
+      "Returns: snapshot -> { ok, placeId, placeName, isRunning, gravity, childCounts, selectionCount, camera }; " +
+      "changes -> { ok, addedTotal, removedTotal, added:[{path,className}], removed:[paths] } " +
+      "(first call returns baselineCreated; renames show as remove+add; property edits aren't tracked).\n" +
+      "Use snapshot to orient; use changes to verify your own edits or spot what the user changed.",
     inputSchema: WorkspaceState.shape,
     annotations: read,
   });

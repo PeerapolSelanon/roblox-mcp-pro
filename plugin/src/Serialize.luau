@@ -90,6 +90,8 @@ function Serialize.path(inst: Instance): string
 end
 
 -- Resolve a dotted path to an instance, or nil. Accepts an optional leading "game".
+-- A segment may carry a 1-based sibling index — "Part[2]" picks the second child
+-- named "Part" — so duplicate-named instances stay addressable.
 function Serialize.resolve(path: string): Instance?
 	local segments = string.split(path, ".")
 	local current: Instance = game
@@ -99,6 +101,12 @@ function Serialize.resolve(path: string): Instance?
 	end
 	for i = startIndex, #segments do
 		local name = segments[i]
+		local index: number? = nil
+		local baseName, indexText = string.match(name, "^(.*)%[(%d+)%]$")
+		if baseName and indexText then
+			name = baseName
+			index = tonumber(indexText)
+		end
 		local nextInst: Instance?
 		-- Try service first (handles Workspace, ServerStorage, etc.).
 		local ok, svc = pcall(function()
@@ -106,6 +114,17 @@ function Serialize.resolve(path: string): Instance?
 		end)
 		if current == game and ok and svc then
 			nextInst = svc
+		elseif index then
+			local seen = 0
+			for _, child in current:GetChildren() do
+				if child.Name == name then
+					seen += 1
+					if seen == index then
+						nextInst = child
+						break
+					end
+				end
+			end
 		else
 			nextInst = current:FindFirstChild(name)
 		end

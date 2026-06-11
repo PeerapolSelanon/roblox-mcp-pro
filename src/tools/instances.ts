@@ -66,7 +66,7 @@ interface QueryResult {
 const OperationSchema = z
   .object({
     action: z
-      .enum(["create", "set_properties", "rename", "reparent", "delete", "clone"])
+      .enum(["create", "set_properties", "rename", "reparent", "delete", "clone", "duplicate"])
       .describe("What to do to the target instance."),
     path: InstancePath.optional().describe(
       "Target instance path. Required for all actions except 'create' (where it is " +
@@ -92,6 +92,21 @@ const OperationSchema = z
         "Property map to apply, e.g. {\"Anchored\": true, \"Size\": [4,1,2], " +
           "\"BrickColor\": \"Bright red\"}. Used by 'create' and 'set_properties'.",
       ),
+    count: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("For 'duplicate': number of copies (default 1)."),
+    offset: z
+      .array(z.number())
+      .length(3)
+      .optional()
+      .describe(
+        "For 'duplicate': [x,y,z] studs between consecutive copies — copy i sits at " +
+          "source pivot + offset*i. Great for rows/grids without N separate calls.",
+      ),
   })
   .strict();
 
@@ -112,6 +127,7 @@ interface OperationResult {
   action: string;
   path?: string;
   resultPath?: string;
+  resultPaths?: string[];
   error?: string;
 }
 
@@ -179,11 +195,13 @@ export function registerInstanceTools(server: McpServer): void {
       title: "Mutate Studio Instances",
       description:
         "Create/edit/move/clone/delete instances; ops run in order, each reports its own result.\n" +
-        "Args: operations:[{action:create|set_properties|rename|reparent|delete|clone, path?, class_name?, " +
-        "name?, parent?, properties?}]. create=class_name+parent; set_properties=path+properties; " +
-        "rename=path+name; reparent=path+parent; delete=path; clone=path(+parent,name). " +
-        "Property values accept primitives, [x,y,z] arrays, and color names.\n" +
-        "Returns: { results:[{ok,action,path?,resultPath?,error?}] }. Refuses to mutate protected services.",
+        "Args: operations:[{action:create|set_properties|rename|reparent|delete|clone|duplicate, path?, " +
+        "class_name?, name?, parent?, properties?, count?, offset?}]. create=class_name+parent; " +
+        "set_properties=path+properties; rename=path+name; reparent=path+parent; delete=path; " +
+        "clone=path(+parent,name); duplicate=path+count+offset (N spaced copies, e.g. a fence row). " +
+        "Property values accept primitives, [x,y,z] arrays, and color names. Paths accept a sibling " +
+        "index for duplicate names: 'Workspace.Part[2]' = second child named Part.\n" +
+        "Returns: { results:[{ok,action,path?,resultPath?,resultPaths?,error?}] }. Refuses to mutate protected services.",
       inputSchema: MutateInputSchema.shape,
       annotations: {
         readOnlyHint: false,
@@ -204,7 +222,7 @@ export function registerInstanceTools(server: McpServer): void {
           ...result.results.map(
             (r) =>
               `${r.ok ? "✅" : "❌"} ${r.action} ` +
-              `${r.resultPath ?? r.path ?? ""}` +
+              `${r.resultPath ?? (r.resultPaths ? `${r.resultPaths.length} copies (${r.resultPaths[0]} …)` : null) ?? r.path ?? ""}` +
               (r.error ? ` — ${r.error}` : ""),
           ),
         ];

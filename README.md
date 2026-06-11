@@ -242,22 +242,22 @@ activity, and sync status in real time. (Don't want it to open on its own? Set
 | `query_instances`   | Search the DataModel; serialize matching instances.   |
 | `find_instances`    | Targeted multi-filter search; compact grouped results. |
 | `scene_overview`    | One-call DataModel map: class histogram + shallow tree. |
-| `describe_instance` | One instance's properties + children + ancestry in one call. |
+| `describe_instance` | One instance's properties + children + ancestry; or class reflection via API dump. |
 | `mutate_instances`  | Create / edit / move / clone / delete instances.      |
-| `manage_properties` | Read or write properties on any instance.             |
+| `manage_properties` | Properties, attributes, and CollectionService tags.   |
 | `batch_execute`     | Run many operations in one round-trip + one undo.     |
 
 **World & visuals**
 
 | Tool               | Description                                           |
 | ------------------ | ----------------------------------------------------- |
-| `manage_terrain`   | Generate/edit voxel terrain (block, ball, region).    |
+| `manage_terrain`   | Voxel terrain: fills, ramps, material swap, smooth, procedural hills. |
 | `manage_lighting`  | Time of day, fog, ambient, exposure, shadows.         |
 | `manage_effects`   | Bloom, Blur, ColorCorrection, DoF, Atmosphere, Sky.   |
 | `manage_camera`    | Read, set, or aim the CurrentCamera.                  |
 | `manage_tween`     | Animate instance properties with TweenService.        |
 | `manage_physics`   | Physical properties and welds.                        |
-| `spatial_query`    | Box / radius / raycast / nearest searches.            |
+| `spatial_query`    | Box / radius / raycast / nearest / ground & placement checks. |
 
 **Content**
 
@@ -268,17 +268,17 @@ activity, and sync status in real time. (Don't want it to open on its own? Set
 | `manage_audio`      | Create, configure, and preview Sounds.              |
 | `manage_animation`  | Manage Animation instances; best-effort preview.    |
 | `manage_assets`     | Search the marketplace; insert assets; read product info. |
-| `manage_scripts`    | Read/write script source; create scripts.           |
+| `manage_scripts`    | Read/write/create scripts; line edits, search, find-replace. |
 
 **Sync & Studio**
 
 | Tool               | Description                                            |
 | ------------------ | ----------------------------------------------------- |
 | `manage_sync`      | Bidirectional Studio ↔ local mirror (+ sourcemap).    |
-| `manage_selection` | Read/change the Explorer selection.                   |
+| `manage_selection` | Read/change the Explorer selection; watch for user clicks. |
 | `manage_studio`    | Studio info + playtests: Run mode (run/pause/stop) and real Play Solo / multiplayer with test scripts + auto reports. |
 | `manage_logs`      | Recent Output log history (filter by type or `since`). |
-| `workspace_state`  | High-level read-only session snapshot.                |
+| `workspace_state`  | Session snapshot + tree diff since last check.        |
 | `capture_studio`   | Screenshot the Studio window so the agent sees the real render. |
 
 ---
