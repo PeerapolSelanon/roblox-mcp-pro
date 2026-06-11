@@ -16,17 +16,18 @@ import os from "node:os";
 import path from "node:path";
 
 /**
- * Which payment/license provider is active: "lemonsqueezy" (default) or "polar".
+ * Which payment/license provider is active: "polar" (default) or "lemonsqueezy".
  * Polar requires a deployed license proxy (see licensing-proxy/) because its API
  * needs an org token that must not ship in the package.
  */
-export const LICENSE_PROVIDER = (process.env.RMP_LICENSE_PROVIDER ?? "lemonsqueezy").toLowerCase();
+export const LICENSE_PROVIDER = (process.env.RMP_LICENSE_PROVIDER ?? "polar").toLowerCase();
 
 /**
  * URL of the self-hosted Polar license proxy (keyless validate/activate). Only
- * used when RMP_LICENSE_PROVIDER=polar. e.g. https://roblox-mcp-pro-license.you.workers.dev
+ * used when RMP_LICENSE_PROVIDER=polar. Override with RMP_LICENSE_PROXY_URL.
  */
-export const LICENSE_PROXY_URL = process.env.RMP_LICENSE_PROXY_URL ?? "";
+export const LICENSE_PROXY_URL =
+  process.env.RMP_LICENSE_PROXY_URL ?? "https://roblox-mcp-pro-license.peerapolselanon.workers.dev";
 
 /** Your Lemon Squeezy numeric Store ID. Find it in Settings → Stores. */
 export const LEMONSQUEEZY_STORE_ID = Number.parseInt(
@@ -43,7 +44,7 @@ export const LEMONSQUEEZY_PRODUCT_ID = Number.parseInt(
 /** Public-facing checkout / store URL shown when a license is required. */
 export const PURCHASE_URL =
   process.env.RMP_PURCHASE_URL ??
-  "https://roblox-mcp-pro.lemonsqueezy.com/checkout/buy/91ab6fc2-cbd5-42b8-8125-483bed295faa";
+  "https://polar.sh/checkout/polar_c_wDPC86UqRd2v5dMha6boGQDwbVIT0QPBtmsOe26qPfO";
 
 /** Human-readable product name used in messages. */
 export const PRODUCT_NAME = "Roblox MCP Pro";

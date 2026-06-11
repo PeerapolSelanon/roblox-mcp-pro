@@ -41,7 +41,7 @@ working forever**:
   physics, marketplace assets), spatial analysis, bulk/relative property edits, surgical script
   search & editing, bidirectional sync, and playtest automation.
 
-Get a key from [pricing/buy](https://roblox-mcp-pro.lemonsqueezy.com/checkout/buy/91ab6fc2-cbd5-42b8-8125-483bed295faa)
+Get a key from [pricing/buy](https://polar.sh/checkout/polar_c_wDPC86UqRd2v5dMha6boGQDwbVIT0QPBtmsOe26qPfO)
 and add it as shown in **[Part 1 → Add your license key](#add-your-license-key)**. Check status
 anytime by asking your agent to run `system_info` (it reports `trial`, `licensed`, or `locked`;
 `locked` means the free tier is active and Pro calls show an upgrade message).

@@ -12,7 +12,7 @@ compatibility_date = "2024-11-01"
 
 [vars]
 # Your Polar organization UUID (not a secret).
-POLAR_ORG_ID = "REPLACE_WITH_POLAR_ORG_ID"
+POLAR_ORG_ID = "ocean-alaska"
 # Optional: pin to one product's benefit so only its keys validate.
 # POLAR_BENEFIT_ID = "REPLACE_WITH_BENEFIT_ID"
 # Optional: use the sandbox while testing.
