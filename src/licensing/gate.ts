@@ -1,25 +1,25 @@
 /**
- * License gate. Wraps McpServer.registerTool so that every tool handler first
- * checks the resolved license state: when "locked", the call short-circuits with
- * a friendly "buy a license" error instead of running. A small whitelist stays
- * available so the agent can always report status and tell the user what to do.
+ * License gate. Wraps McpServer.registerTool so every tool handler first checks
+ * the resolved license state. The free tier always works; only Pro calls (see
+ * tiers.ts) are blocked when the license is "locked" (trial ended / no key),
+ * with a friendly upgrade message. While "trial" or "licensed", everything runs.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { fail } from "../services/format.js";
 import { currentLicense } from "./license.js";
 import { PRODUCT_NAME, PURCHASE_URL } from "./config.js";
+import { isProCall } from "./tiers.js";
 
-/** Tools that work even when locked (so the user can see why + how to fix it). */
-const ALWAYS_ALLOWED = new Set<string>(["system_info"]);
-
-function lockedMessage(): string {
+function upgradeMessage(toolName: string): string {
   const lic = currentLicense();
   return (
-    `🔒 ${PRODUCT_NAME} is locked — ${lic.message}\n` +
-    `Purchase or renew at ${PURCHASE_URL}, then set your key via the ` +
-    `ROBLOX_MCP_LICENSE env var (in your MCP client config) or save it to ` +
-    `~/.roblox-mcp-pro/license.key and restart.`
+    `🔒 ${toolName} is a ${PRODUCT_NAME} Pro feature — ${lic.message}\n` +
+    `Your free plan still includes the core tools (query/mutate instances, properties, ` +
+    `scripts, raw Luau, logs, selection, snapshots, one-way Studio→disk sync).\n` +
+    `Unlock Pro (advanced building, terrain, spatial analysis, bulk edits, ` +
+    `bidirectional sync, playtest automation, UI Studio) at ${PURCHASE_URL}, then set ` +
+    `your key via ROBLOX_MCP_LICENSE or ~/.roblox-mcp-pro/license.key and restart.`
   );
 }
 
@@ -35,8 +35,10 @@ export function installLicenseGate(server: McpServer): void {
   const wrapped: RegisterTool = (name, config, handler) => {
     const call = handler as (...args: unknown[]) => unknown;
     const guardedHandler = ((...args: unknown[]) => {
-      if (!ALWAYS_ALLOWED.has(name) && currentLicense().status === "locked") {
-        return fail(lockedMessage());
+      // Free tier works regardless of license; only Pro calls require an
+      // active trial or a license.
+      if (currentLicense().status === "locked" && isProCall(name, args[0])) {
+        return fail(upgradeMessage(name));
       }
       return call(...args);
     }) as typeof handler;

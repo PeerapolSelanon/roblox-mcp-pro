@@ -63,6 +63,45 @@ return function(args: any): any
 			note = "Playing. Visible preview of programmatic playback may require Play mode.",
 			length = track.Length,
 		}
+	elseif action == "stop" then
+		local target = args.target_path and Serialize.resolve(args.target_path) or nil
+		if not target then
+			return { ok = false, error = "target_path not found" }
+		end
+		local animator = target:FindFirstChildWhichIsA("Animator", true)
+		if not animator then
+			return { ok = false, error = "no Animator under target" }
+		end
+		local stopped = 0
+		for _, track in (animator :: Animator):GetPlayingAnimationTracks() do
+			track:Stop()
+			stopped += 1
+		end
+		return { ok = true, stopped = stopped }
+	elseif action == "get_tracks" then
+		-- List the AnimationTracks currently playing on a rig's Animator.
+		local target = args.target_path and Serialize.resolve(args.target_path) or nil
+		if not target then
+			return { ok = false, error = "target_path (a Humanoid or model with an Animator) not found" }
+		end
+		local animator = target:FindFirstChildWhichIsA("Animator", true)
+		if not animator then
+			return { ok = false, error = "no Animator found under target" }
+		end
+		local tracks = {}
+		for _, track in (animator :: Animator):GetPlayingAnimationTracks() do
+			table.insert(tracks, {
+				name = track.Name,
+				animationId = track.Animation and track.Animation.AnimationId or nil,
+				isPlaying = track.IsPlaying,
+				length = track.Length,
+				speed = track.Speed,
+				weight = track.WeightCurrent,
+				priority = track.Priority.Name,
+				looped = track.Looped,
+			})
+		end
+		return { ok = true, count = #tracks, tracks = tracks }
 	else
 		return { ok = false, error = "unknown manage_animation action: " .. tostring(action) }
 	end

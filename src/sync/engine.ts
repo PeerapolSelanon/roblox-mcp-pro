@@ -180,9 +180,82 @@ class SyncEngine {
   private readonly pendingFsChanges = new Set<string>();
   private readonly pendingFsUnlinks = new Set<string>();
   private sawStructuralDuringRun = false;
+  // Recent sync activity, newest last; capped so it never grows unbounded.
+  private readonly historyLog: { at: string; kind: string; detail: string }[] = [];
+  private lastPullAt: string | null = null;
+  private lastPushAt: string | null = null;
+
+  private record(kind: string, detail: string): void {
+    this.historyLog.push({ at: new Date().toISOString(), kind, detail });
+    if (this.historyLog.length > 100) this.historyLog.shift();
+  }
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  /** Recent sync events (newest last). */
+  history(limit = 30): { at: string; kind: string; detail: string }[] {
+    return this.historyLog.slice(-Math.max(1, Math.min(limit, 100)));
+  }
+
+  /** Counts + timing for a quick "where is sync at" answer. */
+  progress(): Record<string, unknown> {
+    return {
+      running: this.running,
+      mode: this.mode,
+      scriptCount: this.instanceToFile.size,
+      lastPullAt: this.lastPullAt,
+      lastPushAt: this.lastPushAt,
+      events: this.historyLog.length,
+      syncDir: this.explorerDir || syncRootDir(),
+    };
+  }
+
+  /** Resolve a read/write target to an absolute mirror path, or null. Accepts an
+   *  instance path ("game.ReplicatedStorage.Mod") or a path relative to the
+   *  explorer dir. Guards against escaping the mirror. */
+  private resolveMirrorPath(target: string): string | null {
+    const direct = this.instanceToFile.get(target);
+    if (direct) return direct;
+    const withGame = target.startsWith("game.") ? target : `game.${target}`;
+    const viaGame = this.instanceToFile.get(withGame);
+    if (viaGame) return viaGame;
+    // Treat as a relative file path under explorer/.
+    const abs = path.resolve(this.explorerDir, target);
+    const root = path.resolve(this.explorerDir);
+    if (abs === root || abs.startsWith(root + path.sep)) return abs;
+    return null;
+  }
+
+  /** Read a mirrored script file by instance path or relative file path. */
+  async readFile(target: string): Promise<{ ok: boolean; path?: string; content?: string; error?: string }> {
+    const abs = this.resolveMirrorPath(target);
+    if (!abs) return { ok: false, error: `not a tracked mirror file: ${target}` };
+    try {
+      const content = await fs.readFile(abs, "utf8");
+      this.record("read_file", target);
+      return { ok: true, path: abs, content };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Write a mirror file; in two-way / disk-to-studio the watcher pushes it to Studio. */
+  async writeFile(
+    target: string,
+    content: string,
+  ): Promise<{ ok: boolean; path?: string; error?: string }> {
+    const abs = this.resolveMirrorPath(target);
+    if (!abs) return { ok: false, error: `not a tracked mirror file: ${target}` };
+    try {
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, content, "utf8");
+      this.record("write_file", target);
+      return { ok: true, path: abs };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   status(): SyncStatus {
@@ -353,6 +426,8 @@ class SyncEngine {
     if (this.mode !== "studio-to-disk") {
       await this.startFileWatcher();
     }
+    this.lastPullAt = new Date().toISOString();
+    this.record("pull", `${this.instanceToFile.size} scripts`);
     log(`pulled ${this.instanceToFile.size} scripts from Studio`);
   }
 
@@ -365,6 +440,8 @@ class SyncEngine {
       await callStudio("sync_apply", { action: "set_source", path: instancePath, source });
       count += 1;
     }
+    this.lastPushAt = new Date().toISOString();
+    this.record("push", `${count} scripts`);
     log(`pushed ${count} scripts to Studio`);
     return count;
   }

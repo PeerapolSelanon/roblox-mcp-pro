@@ -11,8 +11,21 @@ import { ok, fail } from "../services/format.js";
 
 const Physics = z
   .object({
-    action: z.enum(["set", "weld"]).describe("set physical properties on a part, or weld two parts."),
-    path: InstancePath.optional().describe("Target BasePart for 'set'."),
+    action: z
+      .enum([
+        "set",
+        "weld",
+        "register_group",
+        "assign_group",
+        "set_collidable",
+        "get_groups",
+      ])
+      .describe(
+        "set physical properties on a part · weld two parts · collision groups: " +
+          "register_group (create), assign_group (put a part/subtree in a group), " +
+          "set_collidable (whether two groups collide), get_groups (list + matrix).",
+      ),
+    path: InstancePath.optional().describe("Target BasePart for 'set'/'assign_group'."),
     properties: z
       .record(z.unknown())
       .optional()
@@ -29,6 +42,24 @@ const Physics = z
       .describe("For 'set': CustomPhysicalProperties values."),
     part0: InstancePath.optional().describe("For 'weld': first BasePart."),
     part1: InstancePath.optional().describe("For 'weld': second BasePart (welded to part0)."),
+    group: z
+      .string()
+      .max(100)
+      .optional()
+      .describe("Collision group name for register_group/assign_group/set_collidable."),
+    other_group: z
+      .string()
+      .max(100)
+      .optional()
+      .describe("For 'set_collidable': the second group (pair with `group`)."),
+    collidable: z
+      .boolean()
+      .optional()
+      .describe("For 'set_collidable': should the two groups collide (default true)."),
+    recursive: z
+      .boolean()
+      .optional()
+      .describe("For 'assign_group': also assign every BasePart descendant (default false)."),
   })
   .strict();
 
@@ -249,11 +280,12 @@ export function registerBuildTools(server: McpServer): void {
   forwardTool(server, "manage_physics", {
     title: "Manage Physics",
     description:
-      "Set physical properties on parts or weld parts together.\n" +
-      "Args: action ('set'|'weld'), path?, properties?, physical_properties?, part0?, part1?.\n" +
-      "Returns: { ok, path?, error? }.\n" +
-      "Example: action: 'set', path: 'Workspace.Crate', properties: { Anchored: false },\n" +
-      "  physical_properties: { density: 2, friction: 0.4 }.",
+      "Set physical properties, weld parts, or manage collision groups (which parts pass through which).\n" +
+      "Args: action ('set'|'weld'|'register_group'|'assign_group'|'set_collidable'|'get_groups'), " +
+      "path?, properties?, physical_properties?, part0?/part1? (weld), group?/other_group?/collidable?/recursive? (groups).\n" +
+      "Returns: { ok, path?, group?, groups?, matrix?, assigned?, error? }.\n" +
+      "Collision-group flow: register_group {group:'Enemies'} -> assign_group {path:'Workspace.Mob', group:'Enemies', recursive:true} -> \n" +
+      "  set_collidable {group:'Enemies', other_group:'Players', collidable:false} (enemies stop blocking players).",
     inputSchema: Physics.shape,
     annotations: mut,
   });

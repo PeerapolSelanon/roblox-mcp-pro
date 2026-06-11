@@ -19,16 +19,29 @@ const Lighting = z
 
 const Effects = z
   .object({
-    action: z.enum(["create", "set", "delete"]).describe("Manage a post-processing/atmosphere effect."),
+    action: z
+      .enum(["create", "set", "delete", "emit", "toggle"])
+      .describe(
+        "Post-processing/atmosphere: create/set/delete. Particles: emit (fire a burst from a " +
+          "ParticleEmitter), toggle (enable/disable a ParticleEmitter/Beam/Trail/Fire/Smoke/Sparkles).",
+      ),
     effect_type: z
       .string()
       .max(50)
       .optional()
-      .describe("For 'create': BloomEffect, BlurEffect, ColorCorrectionEffect, DepthOfFieldEffect, SunRaysEffect, Atmosphere, Sky."),
-    parent: InstancePath.optional().describe("Parent for 'create' (default 'Lighting')."),
+      .describe(
+        "For 'create': post-processing (BloomEffect, BlurEffect, ColorCorrectionEffect, " +
+          "DepthOfFieldEffect, SunRaysEffect, Atmosphere, Sky) or particles (ParticleEmitter, Beam, Trail).",
+      ),
+    parent: InstancePath.optional().describe("Parent for 'create' (default 'Lighting'; use a part for particles)."),
     name: z.string().max(200).optional().describe("Name for the created effect."),
-    path: InstancePath.optional().describe("Target for 'set'/'delete'."),
+    path: InstancePath.optional().describe("Target for 'set'/'delete'/'emit'/'toggle'."),
     properties: z.record(z.unknown()).optional().describe("Properties for 'create'/'set'."),
+    count: z.number().int().min(1).max(1000).optional().describe("For 'emit': particles to emit (default 20)."),
+    enabled: z
+      .boolean()
+      .optional()
+      .describe("For 'toggle': set Enabled explicitly; omit to flip the current state."),
   })
   .strict();
 
@@ -78,10 +91,12 @@ export function registerWorldTools(server: McpServer): void {
   forwardTool(server, "manage_effects", {
     title: "Manage Visual Effects",
     description:
-      "Create, configure, or delete post-processing & atmosphere effects under Lighting.\n" +
-      "Args: action ('create'|'set'|'delete'), effect_type, parent?, name?, path?, properties?.\n" +
-      "Returns: { ok, path?, error? }.\n" +
-      "Example: action: 'create', effect_type: 'BloomEffect', properties: { Intensity: 1.5, Threshold: 0.9 }.",
+      "Post-processing & atmosphere effects, plus particle emitters.\n" +
+      "Args: action ('create'|'set'|'delete'|'emit'|'toggle'), effect_type, parent?, name?, path?, properties?, count?, enabled?.\n" +
+      "Returns: { ok, path?, emitted?, enabled?, error? }.\n" +
+      "Examples: action: 'create', effect_type: 'BloomEffect', properties: { Intensity: 1.5 } ·\n" +
+      "  action: 'emit', path: 'Workspace.Torch.Fire', count: 50 (burst) ·\n" +
+      "  action: 'toggle', path: 'Workspace.Rain', enabled: false (turn an emitter off).",
     inputSchema: Effects.shape,
     annotations: del,
   });

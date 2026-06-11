@@ -1,11 +1,35 @@
 --!strict
--- Handler for manage_audio: create, configure, and preview Sound instances.
+-- Handler for manage_audio: create, configure, and preview Sound instances,
+-- and aim the audio listener.
 
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
+local SoundService = game:GetService("SoundService")
 local Serialize = require(script.Parent.Parent.Serialize)
 
 return function(args: any): any
 	local action = args.action or "create"
+
+	if action == "set_listener" then
+		-- Aim where 3D audio is heard from: a part (ObjectCFrame) or the camera.
+		local kind = args.listener or "camera"
+		if kind == "camera" then
+			local cam = workspace.CurrentCamera
+			if not cam then
+				return { ok = false, error = "no CurrentCamera to use as listener" }
+			end
+			SoundService:SetListener(Enum.ListenerType.CFrame, cam.CFrame)
+			return { ok = true, listener = "camera" }
+		elseif kind == "object" then
+			local inst = args.path and Serialize.resolve(args.path) or nil
+			if not inst or not inst:IsA("BasePart") then
+				return { ok = false, error = "object listener needs a BasePart path" }
+			end
+			SoundService:SetListener(Enum.ListenerType.ObjectCFrame, inst)
+			return { ok = true, listener = "object", path = Serialize.path(inst) }
+		else
+			return { ok = false, error = "listener must be 'camera' or 'object'" }
+		end
+	end
 
 	if action == "create" then
 		local recording = ChangeHistoryService:TryBeginRecording("MCP manage_audio create")

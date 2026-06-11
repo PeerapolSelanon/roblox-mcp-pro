@@ -181,16 +181,16 @@ async function resolveTrial(): Promise<LicenseState> {
     return {
       status: "trial",
       message:
-        `Free trial: ${daysLeft} of ${TRIAL_DAYS} day(s) left. ` +
-        `Buy a license at ${PURCHASE_URL}`,
+        `Pro trial: ${daysLeft} of ${TRIAL_DAYS} day(s) left (full access). ` +
+        `Keep Pro after the trial at ${PURCHASE_URL}`,
       daysLeft,
     };
   }
   return {
     status: "locked",
     message:
-      `Your ${TRIAL_DAYS}-day free trial has ended. ` +
-      `Buy a license at ${PURCHASE_URL} and set ROBLOX_MCP_LICENSE.`,
+      `Your ${TRIAL_DAYS}-day Pro trial has ended — the free tier still works. ` +
+      `Re-unlock Pro at ${PURCHASE_URL} and set ROBLOX_MCP_LICENSE.`,
     daysLeft: 0,
   };
 }

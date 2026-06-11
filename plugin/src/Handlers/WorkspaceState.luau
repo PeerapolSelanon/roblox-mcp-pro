@@ -73,11 +73,50 @@ local function snapshot(): any
 	}
 end
 
+-- What the Studio camera is currently looking at: pose + the part under the
+-- center of the view + parts roughly in front of the camera.
+local function viewport(): any
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return { ok = false, error = "no CurrentCamera" }
+	end
+	local cf = camera.CFrame
+	local lookAt: any = nil
+	local hit = Workspace:Raycast(cf.Position, cf.LookVector * 2000)
+	if hit then
+		lookAt = {
+			instance = Serialize.path(hit.Instance),
+			position = Serialize.value(hit.Position),
+			distance = hit.Distance,
+		}
+	end
+	-- Parts in a box centred ~50 studs ahead of the camera (cheap "on screen").
+	local ahead = cf.Position + cf.LookVector * 50
+	local inFront = {}
+	for i, p in Workspace:GetPartBoundsInBox(CFrame.new(ahead), Vector3.new(120, 120, 120)) do
+		if i > 50 then
+			break
+		end
+		table.insert(inFront, Serialize.path(p))
+	end
+	return {
+		ok = true,
+		position = Serialize.value(cf.Position),
+		lookVector = Serialize.value(cf.LookVector),
+		fieldOfView = camera.FieldOfView,
+		viewportSize = { camera.ViewportSize.X, camera.ViewportSize.Y },
+		focus = lookAt,
+		partsInView = inFront,
+	}
+end
+
 return function(args: any): any
 	local action = (args and args.action) or "snapshot"
 
 	if action == "snapshot" then
 		return snapshot()
+	elseif action == "viewport" then
+		return viewport()
 	elseif action == "changes" then
 		local current, truncated = captureTree()
 		if baseline == nil then

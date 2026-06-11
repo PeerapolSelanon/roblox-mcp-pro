@@ -29,12 +29,22 @@ You **never start the server by hand** — your AI agent launches it automatical
 command you register below. Multiple agents (Claude Code, Codex, Antigravity, …) can drive the
 **same** Studio session at once.
 
-### 💳 License
+### 💳 License & free tier
 
-Roblox MCP Pro is a paid product with a **14-day free trial** — no key needed to try it. After the
-trial you need a license key (see [pricing/buy](https://roblox-mcp-pro.lemonsqueezy.com/checkout/buy/91ab6fc2-cbd5-42b8-8125-483bed295faa)). Once you
-have a key, add it as shown in **[Part 1 → Add your license key](#add-your-license-key)**. Check
-status anytime by asking your agent to run `system_info`.
+Roblox MCP Pro has a **permanent free tier** and a paid **Pro** tier. Every new install starts
+with a **14-day trial of full Pro** — no key needed. When the trial ends, the **free tier keeps
+working forever**:
+
+- **Free:** the core tools — query/mutate instances, read/write properties & scripts, run Luau,
+  read logs, manage the Explorer selection, session snapshots, and one-way Studio→disk sync.
+- **Pro:** the visual toolset (UI Studio, terrain, effects, tweens, camera, animation, audio,
+  physics, marketplace assets), spatial analysis, bulk/relative property edits, surgical script
+  search & editing, bidirectional sync, and playtest automation.
+
+Get a key from [pricing/buy](https://roblox-mcp-pro.lemonsqueezy.com/checkout/buy/91ab6fc2-cbd5-42b8-8125-483bed295faa)
+and add it as shown in **[Part 1 → Add your license key](#add-your-license-key)**. Check status
+anytime by asking your agent to run `system_info` (it reports `trial`, `licensed`, or `locked`;
+`locked` means the free tier is active and Pro calls show an upgrade message).
 
 ---
 

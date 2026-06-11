@@ -4,7 +4,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { callStudio } from "../services/studio.js";
+import { callStudio, getUsage } from "../services/studio.js";
 import { status as brokerStatus } from "../client/transport.js";
 import { ok } from "../services/format.js";
 import { currentLicense } from "../licensing/license.js";
@@ -17,6 +17,8 @@ interface StudioInfo {
   placeName?: string;
   studioVersion?: string;
   isRunning?: boolean;
+  sessionId?: string;
+  studioSettings?: Record<string, unknown>;
 }
 
 export function registerSystemTools(server: McpServer): void {
@@ -25,9 +27,12 @@ export function registerSystemTools(server: McpServer): void {
     {
       title: "Roblox MCP System Info",
       description:
-        "Connection status between the MCP server and Studio. Call first to confirm the plugin is attached.\n" +
-        "Args: none. Returns: { bridge:{ok,pluginConnected,queued,inflight,lastPollAt}, " +
-        "studio?:{placeId,placeName,studioVersion,isRunning} }. Always succeeds; studio omitted when not connected.",
+        "Connection status between the MCP server and Studio. Call first to confirm the plugin is attached. Free.\n" +
+        "Args: none. Returns: { version, license, usage:{studioCalls,uptimeSec}, " +
+        "bridge:{ok,pluginConnected,queued,inflight,lastPollAt}, " +
+        "studio?:{placeId,placeName,studioVersion,isRunning,sessionId,studioSettings} }. " +
+        "Always succeeds; studio omitted when not connected. license.status 'trial'/'licensed' = full Pro; " +
+        "'locked' = free tier only (Pro calls return an upgrade message).",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: true,
@@ -39,7 +44,8 @@ export function registerSystemTools(server: McpServer): void {
     async () => {
       const status = await brokerStatus();
       const license = currentLicense();
-      const out: Record<string, unknown> = { version: VERSION, bridge: status, license };
+      const usage = getUsage();
+      const out: Record<string, unknown> = { version: VERSION, bridge: status, license, usage };
       let text = [
         "# Roblox MCP — System Info",
         "",
@@ -57,7 +63,9 @@ export function registerSystemTools(server: McpServer): void {
           text +=
             `\n- Place: ${studio.placeName ?? "?"} (id ${studio.placeId ?? "?"})` +
             `\n- Studio version: ${studio.studioVersion ?? "?"}` +
-            `\n- Play session running: ${studio.isRunning ? "yes" : "no"}`;
+            `\n- Play session running: ${studio.isRunning ? "yes" : "no"}` +
+            (studio.sessionId ? `\n- Session id: ${studio.sessionId}` : "") +
+            (studio.studioSettings?.theme ? `\n- Theme: ${String(studio.studioSettings.theme)}` : "");
         } catch {
           // Plugin connected but didn't answer in time — still report bridge state.
           text += "\n- (Studio details unavailable: plugin did not respond.)";

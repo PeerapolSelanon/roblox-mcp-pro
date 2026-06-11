@@ -16,15 +16,19 @@ interface SyncStatus {
   scriptCount: number;
   syncDir: string;
   pushed?: number;
+  content?: string;
+  history?: { at: string; kind: string; detail: string }[];
 }
 
 const InputSchema = z
   .object({
     action: z
-      .enum(["start", "stop", "status", "pull", "push"])
+      .enum(["start", "stop", "status", "pull", "push", "progress", "history", "read_file", "write_file"])
       .describe(
         "start: snapshot + begin two-way watching · stop: end watching · " +
-          "status: report state · pull: force Studio->disk · push: force disk->Studio.",
+          "status: report state · pull: force Studio->disk · push: force disk->Studio · " +
+          "progress: counts + last pull/push times · history: recent sync events · " +
+          "read_file/write_file: read or edit a mirrored script by instance path (the watcher pushes writes to Studio).",
       ),
     roots: z
       .array(z.string().min(1))
@@ -50,6 +54,17 @@ const InputSchema = z
       .string()
       .optional()
       .describe("For 'start': the absolute path to the directory where files should be synced. Defaults to process.cwd()"),
+    file: z
+      .string()
+      .max(500)
+      .optional()
+      .describe("For 'read_file'/'write_file': instance path (e.g. 'ReplicatedStorage.Util') or mirror-relative file path."),
+    content: z
+      .string()
+      .max(500_000)
+      .optional()
+      .describe("For 'write_file': the new file content."),
+    limit: z.number().int().min(1).max(100).optional().describe("For 'history': max events (default 30)."),
   })
   .strict();
 
@@ -105,6 +120,17 @@ export function registerSyncTools(server: McpServer): void {
             return ok(structured, "Pulled latest from Studio to disk.");
           case "push":
             return ok(structured, `Pushed ${status.pushed ?? 0} scripts from disk to Studio.`);
+          case "progress":
+            return ok(structured, JSON.stringify(structured));
+          case "history": {
+            const events = status.history ?? [];
+            const lines = events.map((e) => `${e.at} · ${e.kind} — ${e.detail}`);
+            return ok(structured, lines.length ? lines.join("\n") : "No sync activity yet.");
+          }
+          case "read_file":
+            return ok(structured, status.content ?? "(empty)");
+          case "write_file":
+            return ok(structured, "Wrote mirror file (the watcher pushes it to Studio if running).");
           default:
             return fail("Error: unknown action.");
         }

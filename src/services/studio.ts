@@ -6,6 +6,17 @@
 import { StudioError } from "./errors.js";
 import { call } from "../client/transport.js";
 
+/** Lightweight activity stats for this MCP process (surfaced via system_info). */
+const usage = { studioCalls: 0, startedAt: Date.now(), lastCallAt: 0 };
+
+export function getUsage(): { studioCalls: number; uptimeSec: number; lastCallAt: number | null } {
+  return {
+    studioCalls: usage.studioCalls,
+    uptimeSec: Math.floor((Date.now() - usage.startedAt) / 1000),
+    lastCallAt: usage.lastCallAt || null,
+  };
+}
+
 /**
  * Run a handler in Studio and return its result.
  * Throws {@link StudioError} with an actionable message on failure.
@@ -14,6 +25,8 @@ export async function callStudio<T = unknown>(
   tool: string,
   args: unknown,
 ): Promise<T> {
+  usage.studioCalls += 1;
+  usage.lastCallAt = Date.now();
   return call<T>(tool, args);
 }
 

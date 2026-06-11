@@ -83,11 +83,12 @@ const Logs = z
 const WorkspaceState = z
   .object({
     action: z
-      .enum(["snapshot", "changes"])
+      .enum(["snapshot", "changes", "viewport"])
       .default("snapshot")
       .describe(
         "'snapshot': high-level session summary. 'changes': diff the instance tree against the " +
-          "previous 'changes' call — what was added/removed since (first call only sets the baseline).",
+          "previous 'changes' call — what was added/removed since (first call only sets the baseline). " +
+          "'viewport': what the Studio camera is looking at (pose, focus part, parts in view).",
       ),
   })
   .strict();
@@ -137,8 +138,9 @@ export function registerStudioInfoTools(server: McpServer): void {
       "Args: action ('snapshot' [default] | 'changes').\n" +
       "Returns: snapshot -> { ok, placeId, placeName, isRunning, gravity, childCounts, selectionCount, camera }; " +
       "changes -> { ok, addedTotal, removedTotal, added:[{path,className}], removed:[paths] } " +
-      "(first call returns baselineCreated; renames show as remove+add; property edits aren't tracked).\n" +
-      "Use snapshot to orient; use changes to verify your own edits or spot what the user changed.",
+      "(first call returns baselineCreated; renames show as remove+add; property edits aren't tracked); " +
+      "viewport -> { ok, position, lookVector, fieldOfView, viewportSize, focus:{instance,position,distance}, partsInView }.\n" +
+      "Use snapshot to orient; changes to verify edits/spot user changes; viewport to see what's on the user's screen.",
     inputSchema: WorkspaceState.shape,
     annotations: read,
   });

@@ -11,8 +11,11 @@ import { InstancePath } from "../schemas/common.js";
 const InputSchema = z
   .object({
     action: z
-      .enum(["create", "set", "play"])
-      .describe("create an Animation, set its properties, or play it on a rig's Animator."),
+      .enum(["create", "set", "play", "stop", "get_tracks"])
+      .describe(
+        "create an Animation, set its properties, play it on a rig's Animator, " +
+          "stop all tracks on a rig, or get_tracks (list playing tracks on a rig).",
+      ),
     parent: InstancePath.optional().describe("Parent for 'create' (default 'ReplicatedStorage')."),
     name: z.string().max(200).optional().describe("Name for the created Animation."),
     path: InstancePath.optional().describe("Existing Animation path for 'set'."),
@@ -38,16 +41,16 @@ export function registerAnimationTools(server: McpServer): void {
       description: `Create and configure Animation instances, and attempt playback on a rig.
 
 Args:
-  - action ('create'|'set'|'play').
+  - action ('create'|'set'|'play'|'stop'|'get_tracks').
   - parent (string): for 'create' (default 'ReplicatedStorage').
   - name (string): for 'create'.
   - animation_id (string): rbxassetid for 'create'/'play'.
   - path (string): existing Animation for 'set'.
-  - target_path (string): for 'play' — a rig with a Humanoid/Animator.
+  - target_path (string): for 'play'/'stop'/'get_tracks' — a rig with a Humanoid/Animator.
   - properties (object): for 'set'.
 
 Returns (structured):
-  { "ok": boolean, "path"?: string, "length"?: number, "note"?: string, "error"?: string }
+  { "ok": boolean, "path"?: string, "length"?: number, "tracks"?: [...], "note"?: string, "error"?: string }
 
 Examples:
   - Store an animation: action: "create", name: "Wave", animation_id: "rbxassetid://507770453"

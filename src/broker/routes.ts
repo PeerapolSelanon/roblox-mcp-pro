@@ -58,6 +58,9 @@ async function runSync(args: unknown): Promise<Record<string, unknown>> {
     mode?: SyncMode;
     initialDirection?: "studio-to-disk" | "disk-to-studio";
     syncDir?: string;
+    file?: string;
+    content?: string;
+    limit?: number;
   };
   switch (a.action) {
     case "start":
@@ -80,6 +83,21 @@ async function runSync(args: unknown): Promise<Record<string, unknown>> {
       if (!syncEngine.isRunning()) throw new StudioError("start sync before pushing.");
       const pushed = await syncEngine.push();
       return { ...syncEngine.status(), pushed } as unknown as Record<string, unknown>;
+    }
+    case "progress":
+      return syncEngine.progress();
+    case "history":
+      return { ok: true, history: syncEngine.history(a.limit ?? 30) };
+    case "read_file": {
+      if (!a.file) throw new StudioError("read_file requires 'file'.");
+      if (!syncEngine.isRunning()) throw new StudioError("start sync before reading mirror files.");
+      return (await syncEngine.readFile(a.file)) as unknown as Record<string, unknown>;
+    }
+    case "write_file": {
+      if (!a.file) throw new StudioError("write_file requires 'file'.");
+      if (typeof a.content !== "string") throw new StudioError("write_file requires 'content'.");
+      if (!syncEngine.isRunning()) throw new StudioError("start sync before writing mirror files.");
+      return (await syncEngine.writeFile(a.file, a.content)) as unknown as Record<string, unknown>;
     }
     default:
       throw new StudioError(`unknown sync action: ${String(a.action)}`);
