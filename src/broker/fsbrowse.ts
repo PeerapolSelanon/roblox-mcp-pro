@@ -90,6 +90,57 @@ export async function browseDir(dir: string): Promise<BrowseResult> {
   return { path: abs, parent: parent === abs ? null : parent, dirs };
 }
 
+// ---- Project tab web IDE: directory listing + text file read/write --------
+
+export interface TreeEntry {
+  name: string;
+  path: string;
+  type: "dir" | "file";
+}
+
+/**
+ * One level of the project file tree (dirs first, then files). Unlike the
+ * folder picker, dotfiles are included — .agents/.claude are part of a
+ * project — only system/noise folders are filtered.
+ */
+export async function listProjectDir(
+  dir: string,
+): Promise<{ path: string; isProject: boolean; entries: TreeEntry[] }> {
+  const abs = path.resolve(dir);
+  const raw = await fs.readdir(abs, { withFileTypes: true });
+  const entries: TreeEntry[] = [];
+  for (const entry of raw) {
+    const name = entry.name;
+    // .git is hidden like in VS Code; other dotfolders (.agents, .claude) matter.
+    if (name.startsWith("$") || name === ".git" || SKIP_NAMES.has(name.toLowerCase())) continue;
+    if (!entry.isDirectory() && !entry.isFile()) continue;
+    entries.push({ name, path: path.join(abs, name), type: entry.isDirectory() ? "dir" : "file" });
+  }
+  entries.sort((a, b) =>
+    a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1,
+  );
+  return { path: abs, isProject: await looksLikeProject(abs), entries };
+}
+
+/** Editor size cap — the dashboard editor is for scripts, not assets. */
+const MAX_EDIT_BYTES = 1024 * 1024;
+
+export async function readTextFile(file: string): Promise<{ path: string; content: string }> {
+  const abs = path.resolve(file);
+  const st = await fs.stat(abs);
+  if (!st.isFile()) throw new Error("not a file");
+  if (st.size > MAX_EDIT_BYTES) throw new Error("file is too large to edit here (>1 MB)");
+  const buf = await fs.readFile(abs);
+  if (buf.includes(0)) throw new Error("binary file — not editable here");
+  return { path: abs, content: buf.toString("utf8") };
+}
+
+export async function writeTextFile(file: string, content: string): Promise<{ path: string }> {
+  const abs = path.resolve(file);
+  await fs.writeFile(abs, content, "utf8");
+  return { path: abs };
+}
+
 /** Recently used project folders, most recent first. Existing dirs only. */
 export async function loadRecentProjects(): Promise<string[]> {
   let saved: string[];

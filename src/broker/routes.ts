@@ -25,7 +25,15 @@ import { VERSION } from "../version.js";
 import { BrokerState } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
 import { scaffoldProject } from "./scaffold.js";
-import { browseDir, listRoots, loadRecentProjects, rememberProject } from "./fsbrowse.js";
+import {
+  browseDir,
+  listRoots,
+  loadRecentProjects,
+  rememberProject,
+  listProjectDir,
+  readTextFile,
+  writeTextFile,
+} from "./fsbrowse.js";
 
 /** Studio session details, polled from the plugin for the dashboard. */
 interface StudioInfo {
@@ -361,6 +369,49 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       }
       return true;
     }
+    // Project tab web IDE: one tree level, plus text-file read/write. Same
+    // trust level as /api/scaffold (localhost-only broker on the user's box).
+    if (method === "GET" && path === "/api/fs/list") {
+      const target = url.searchParams.get("path");
+      if (!target) {
+        sendJson(res, 200, { ok: false, error: "missing path" });
+        return true;
+      }
+      try {
+        sendJson(res, 200, { ok: true, ...(await listProjectDir(target)) });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+      return true;
+    }
+    if (method === "GET" && path === "/api/fs/read") {
+      const target = url.searchParams.get("path");
+      if (!target) {
+        sendJson(res, 200, { ok: false, error: "missing path" });
+        return true;
+      }
+      try {
+        sendJson(res, 200, { ok: true, ...(await readTextFile(target)) });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+      return true;
+    }
+    if (method === "POST" && path === "/api/fs/write") {
+      const body = await readJson(req);
+      const target = String(body.path ?? "").trim();
+      if (!target || typeof body.content !== "string") {
+        sendJson(res, 200, { ok: false, error: "write requires 'path' and string 'content'" });
+        return true;
+      }
+      try {
+        sendJson(res, 200, { ok: true, ...(await writeTextFile(target, body.content)) });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+      return true;
+    }
+
     // Create a single new folder inside an existing one (for "New project").
     if (method === "POST" && path === "/api/fs/mkdir") {
       const body = await readJson(req);

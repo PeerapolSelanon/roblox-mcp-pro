@@ -208,6 +208,42 @@ export const DASHBOARD_HTML = `<!doctype html>
   td.placename .nomirror { color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 11px; margin-left: 8px; }
   .places-dir { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 8px; word-break: break-all; }
 
+  /* Project tab: VS Code-style mini IDE */
+  .ide-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; }
+  .ide-bar .blabel { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: .02em; }
+  .ide-bar .ide-folder { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  .ide { display: grid; grid-template-columns: 260px 1fr; height: 68vh; min-height: 400px; }
+  .ide-tree { border-right: 1px solid var(--border-soft); overflow: auto; padding: 8px 6px; }
+  .titem { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: var(--muted); white-space: nowrap; user-select: none; }
+  .titem:hover { background: var(--panel2); color: var(--text); }
+  .titem.sel { background: var(--accent-bg); color: var(--accent); }
+  .titem .twist { width: 10px; color: var(--faint); font-size: 10px; flex: none; }
+  .titem .ficon { width: 16px; flex: none; text-align: center; font-size: 12px; }
+  .tkids { margin-left: 15px; border-left: 1px solid var(--border-soft); padding-left: 2px; display: none; }
+  .tkids.open { display: block; }
+  .ide-editor { display: flex; flex-direction: column; min-width: 0; }
+  .ide-ehead { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border-soft); }
+  .ide-ehead .fname { font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; }
+  .ide-ehead .dirty { color: var(--amber); font-size: 15px; line-height: 1; display: none; }
+  .ide-body { position: relative; flex: 1; overflow: hidden; background: oklch(0.150 0.010 45); }
+  .ide-body pre, .ide-body textarea {
+    margin: 0; border: 0; padding: 14px 16px; font: 13px/1.5 var(--mono); tab-size: 4;
+    white-space: pre; word-wrap: normal; overflow-wrap: normal; box-sizing: border-box;
+  }
+  .ide-body pre { position: absolute; inset: 0; overflow: hidden; color: var(--text); pointer-events: none; }
+  .ide-body textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; overflow: auto;
+    background: transparent; color: transparent; caret-color: var(--text); outline: none; }
+  .ide-body textarea::selection { background: color-mix(in oklch, var(--accent) 30%, transparent); }
+  .tok-k { color: oklch(0.74 0.17 45); }
+  .tok-s { color: oklch(0.80 0.12 130); }
+  .tok-c { color: var(--faint); font-style: italic; }
+  .tok-n { color: oklch(0.82 0.13 85); }
+  .ide-empty { display: grid; place-items: center; padding: 56px 24px; }
+  .ide-empty .inner { max-width: 480px; display: grid; gap: 12px; justify-items: center; text-align: center; }
+  .ide-empty h3 { margin: 0; font-size: 18px; }
+  .ide-empty p { margin: 0; color: var(--muted); font-size: 13px; text-align: left; }
+
   /* Folder picker modal */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
     display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
@@ -251,7 +287,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="overview" role="tab">Overview<span class="tabdot" id="dotOverview"></span></button>
     <button class="tab" data-tab="sync" role="tab">Sync<span class="tabdot" id="dotSync"></span></button>
-    <button class="tab" data-tab="project" role="tab">New Project</button>
+    <button class="tab" data-tab="project" role="tab">Project</button>
     <button class="tab" data-tab="agents" role="tab">Agents</button>
     <button class="tab" data-tab="license" role="tab">License<span class="tabdot" id="dotLicense"></span></button>
   </nav>
@@ -374,19 +410,47 @@ export const DASHBOARD_HTML = `<!doctype html>
   </div><!-- /tab-sync -->
 
   <div class="tabpane" id="tab-project">
-    <div class="panel">
-      <div class="phead"><h3>New project</h3></div>
-      <p class="panel-note">Scaffold an empty, sync-ready project (one project = one universe): <b>places/</b>, selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</p>
-      <label class="flabel">Project folder</label>
-      <div class="folder-row">
-        <input type="text" id="inputScaffoldDir" placeholder="detecting…" class="control-input" />
-        <button class="btn" onclick="openPicker('inputScaffoldDir','scaffoldHint')">&#128193; Browse</button>
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="ide-bar">
+        <span class="blabel">PROJECT</span>
+        <span class="ide-folder" id="projDirLabel">detecting…</span>
+        <button class="btn" style="padding:5px 11px;font-size:12px;" onclick="changeProjectDir()">Change…</button>
+        <input type="hidden" id="projDirHidden" />
+        <div class="spacer"></div>
+        <span class="sync-msg" id="ideMsg" style="margin:0;"></span>
       </div>
-      <div class="wshint" id="scaffoldHint"></div>
-      <div class="btn-group" style="grid-template-columns:1fr;">
-        <button class="btn primary" onclick="doScaffold()">Create empty project</button>
+
+      <!-- IDE view: file tree + editor (shown when the folder is a project) -->
+      <div class="ide" id="ideView" style="display:none;">
+        <div class="ide-tree" id="ideTree"></div>
+        <div class="ide-editor">
+          <div class="ide-ehead">
+            <span class="fname" id="ideFname">No file open — pick one on the left</span>
+            <span class="dirty" id="ideDirty" title="Unsaved changes">&#9679;</span>
+            <div class="spacer"></div>
+            <button class="btn primary" id="ideSave" style="padding:5px 14px;font-size:12px;" disabled>Save</button>
+          </div>
+          <div class="ide-body">
+            <pre id="ideHl" aria-hidden="true"></pre>
+            <textarea id="ideTa" spellcheck="false" disabled aria-label="File editor"></textarea>
+          </div>
+        </div>
       </div>
-      <div id="scaffoldMsg" class="sync-msg"></div>
+
+      <!-- Empty state: no project here yet -->
+      <div class="ide-empty" id="ideEmpty" style="display:none;">
+        <div class="inner">
+          <h3>No project here yet</h3>
+          <p>Scaffold an empty, sync-ready project (one project = one universe): <b>places/</b>, selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</p>
+          <div class="folder-row" style="width:100%;">
+            <input type="text" id="inputScaffoldDir" placeholder="detecting…" class="control-input" />
+            <button class="btn" onclick="openPicker('inputScaffoldDir','scaffoldHint')">&#128193; Browse</button>
+          </div>
+          <div class="wshint" id="scaffoldHint"></div>
+          <button class="btn primary" style="padding:10px 26px;font-size:14px;" onclick="doScaffold()">+ New Project</button>
+          <div id="scaffoldMsg" class="sync-msg"></div>
+        </div>
+      </div>
     </div>
   </div><!-- /tab-project -->
 
@@ -471,6 +535,7 @@ const dur = (ms) => {
 };
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 const set = (id, v) => { $(id).textContent = v; };
+let last = null; // latest SSE state snapshot (declared early — used across sections)
 
 // Client-side pagination for the agents/activity tables (5 rows per page).
 const PAGE_SIZE = 5;
@@ -842,6 +907,10 @@ async function doScaffold() {
       const made = (r.created || []).length;
       const kept = (r.skipped || []).length;
       showMsg('Project ready at ' + (r.dir || dir) + ' \\u2014 ' + made + ' created, ' + kept + ' already present.');
+      // Flip the Project tab from the empty state into the IDE on the new folder.
+      try { localStorage.setItem('rmp-projdir', r.dir || dir); } catch {}
+      projLoadedFor = null;
+      projectShow(true);
     } else {
       showMsg('Error: ' + data.error, true);
     }
@@ -853,11 +922,13 @@ async function doScaffold() {
 // ---- Folder picker (Browse… modal backed by /api/fs/browse) ---------------
 let pickerTargetInput = null;
 let pickerTargetHint = null;
+let pickerOnDone = null;
 let pickerPath = null; // null = top level (suggestions + drives)
 
-function openPicker(inputId, hintId) {
+function openPicker(inputId, hintId, onDone) {
   pickerTargetInput = inputId;
   pickerTargetHint = hintId;
+  pickerOnDone = onDone || null;
   $('pickerOverlay').classList.add('open');
   $('pkErr').textContent = '';
   $('pkNewRow').classList.remove('open');
@@ -868,6 +939,7 @@ function openPicker(inputId, hintId) {
 function closePicker() {
   $('pickerOverlay').classList.remove('open');
   pickerTargetInput = null;
+  pickerOnDone = null;
 }
 
 async function pkNavigate(path) {
@@ -921,11 +993,13 @@ async function pkNavigate(path) {
 }
 
 function pkChoose(path) {
-  if (pickerTargetInput) {
+  if (pickerTargetInput && $(pickerTargetInput)) {
     $(pickerTargetInput).value = path;
-    if (pickerTargetHint) $(pickerTargetHint).innerHTML = 'Chosen via <b>Browse</b>';
+    if (pickerTargetHint && $(pickerTargetHint)) $(pickerTargetHint).innerHTML = 'Chosen via <b>Browse</b>';
   }
+  const done = pickerOnDone;
   closePicker();
+  if (done) done(path);
 }
 
 // List clicks: suggestions pick directly (double duty: single click navigates
@@ -993,6 +1067,233 @@ async function autoDetectFolders() {
   }
 }
 
+// ---- Project tab: VS Code-style mini IDE -----------------------------------
+// File tree (lazy, one level per fetch) + plain-textarea editor with a
+// syntax-highlight overlay. No frameworks, no external assets.
+let projDir = null;
+let projLoadedFor = null; // dir the tree is currently rendered for
+let ideFile = null;       // absolute path of the open file
+let ideDirtyFlag = false;
+
+function ideShowMsg(msg, isErr) {
+  const el = $('ideMsg');
+  el.textContent = msg;
+  el.style.color = isErr ? 'var(--red)' : 'var(--green)';
+}
+
+// Where the IDE looks: user's explicit choice > running sync > active agent
+// cwd > broker suggestions (recents work even before any agent connects).
+async function resolveProjectDir() {
+  try {
+    const saved = localStorage.getItem('rmp-projdir');
+    if (saved) return saved;
+  } catch {}
+  if (last && last.sync && last.sync.syncDir) return last.sync.syncDir;
+  if (last && last.agents && last.agents.length) {
+    const a = [...last.agents].sort((x, y) => y.lastSeenAt - x.lastSeenAt).find((x) => x.cwd);
+    if (a && a.cwd) return a.cwd;
+  }
+  try {
+    const d = await (await fetch('/api/fs/browse')).json();
+    if (d.ok && d.suggestions && d.suggestions.length) return d.suggestions[0].path;
+  } catch {}
+  return null;
+}
+
+async function projectShow(force) {
+  const dir = await resolveProjectDir();
+  projDir = dir;
+  $('projDirLabel').textContent = dir || 'no folder detected \\u2014 pick one with Change\\u2026';
+  if (!dir) { ideShowEmpty(); return; }
+  if (!force && projLoadedFor === dir) return;
+  try {
+    const data = await (await fetch('/api/fs/list?path=' + encodeURIComponent(dir))).json();
+    if (data.ok && data.isProject) {
+      projLoadedFor = dir;
+      $('ideEmpty').style.display = 'none';
+      $('ideView').style.display = 'grid';
+      $('ideTree').innerHTML = data.entries.map(ideRowHtml).join('') ||
+        "<div class='titem'><span class='twist'></span>empty project</div>";
+      ideCloseFile();
+    } else {
+      ideShowEmpty(dir);
+    }
+  } catch {
+    ideShowEmpty(dir);
+  }
+}
+
+function ideShowEmpty(dir) {
+  projLoadedFor = null;
+  $('ideView').style.display = 'none';
+  $('ideEmpty').style.display = 'grid';
+  // Always reflect the folder being looked at — it is what "+ New Project" will use.
+  if (dir) $('inputScaffoldDir').value = dir;
+}
+
+function changeProjectDir() {
+  $('projDirHidden').value = projDir || '';
+  openPicker('projDirHidden', null, (p) => {
+    try { localStorage.setItem('rmp-projdir', p); } catch {}
+    projLoadedFor = null;
+    projectShow(true);
+  });
+}
+
+function ideRowHtml(e) {
+  const ap = esc(e.path).replace(/'/g, '&#39;');
+  if (e.type === 'dir') {
+    return "<div class='titem' data-type='dir' data-path='" + ap + "'><span class='twist'>\\u25b8</span>" +
+      "<span class='ficon'>\\ud83d\\udcc1</span><span>" + esc(e.name) + "</span></div><div class='tkids'></div>";
+  }
+  return "<div class='titem' data-type='file' data-path='" + ap + "'><span class='twist'></span>" +
+    "<span class='ficon'>\\ud83d\\udcc4</span><span>" + esc(e.name) + "</span></div>";
+}
+
+$('ideTree').addEventListener('click', async (e) => {
+  const item = e.target.closest('.titem');
+  if (!item) return;
+  const p = item.getAttribute('data-path');
+  if (!p) return;
+  if (item.getAttribute('data-type') === 'dir') {
+    const kids = item.nextElementSibling;
+    if (!kids) return;
+    const open = kids.classList.toggle('open');
+    item.querySelector('.twist').textContent = open ? '\\u25be' : '\\u25b8';
+    if (open && !kids.dataset.loaded) {
+      kids.innerHTML = "<div class='titem'><span class='twist'></span><span class='muted'>loading\\u2026</span></div>";
+      try {
+        const d = await (await fetch('/api/fs/list?path=' + encodeURIComponent(p))).json();
+        kids.innerHTML = d.ok ? d.entries.map(ideRowHtml).join('') : '';
+        kids.dataset.loaded = '1';
+      } catch {
+        kids.innerHTML = '';
+      }
+    }
+  } else {
+    ideOpenFile(p, item);
+  }
+});
+
+function ideSetDirty(d) {
+  ideDirtyFlag = d;
+  $('ideDirty').style.display = d ? 'inline' : 'none';
+  $('ideSave').disabled = !d || !ideFile;
+}
+
+function ideCloseFile() {
+  ideFile = null;
+  ideSetDirty(false);
+  $('ideFname').textContent = 'No file open \\u2014 pick one on the left';
+  const ta = $('ideTa');
+  ta.value = '';
+  ta.disabled = true;
+  $('ideHl').textContent = '';
+}
+
+async function ideOpenFile(p, rowEl) {
+  if (ideDirtyFlag && !confirm('Discard unsaved changes in ' + (ideFile || 'this file') + '?')) return;
+  try {
+    const d = await (await fetch('/api/fs/read?path=' + encodeURIComponent(p))).json();
+    if (!d.ok) { ideShowMsg(d.error || 'Could not open file.', true); return; }
+    ideFile = d.path;
+    document.querySelectorAll('#ideTree .titem.sel').forEach((x) => x.classList.remove('sel'));
+    if (rowEl) rowEl.classList.add('sel');
+    const rel = projDir && d.path.indexOf(projDir) === 0 ? d.path.slice(projDir.length).replace(/^[\\\\/]/, '') : d.path;
+    $('ideFname').textContent = rel;
+    const ta = $('ideTa');
+    ta.value = d.content;
+    ta.disabled = false;
+    ideSetDirty(false);
+    ideHighlight();
+    ta.scrollTop = 0; ta.scrollLeft = 0;
+    $('ideHl').scrollTop = 0; $('ideHl').scrollLeft = 0;
+    ideShowMsg('');
+  } catch (err) {
+    ideShowMsg('Failed to open: ' + err, true);
+  }
+}
+
+async function ideSaveFile() {
+  if (!ideFile || !ideDirtyFlag) return;
+  ideShowMsg('Saving\\u2026');
+  try {
+    const res = await fetch('/api/fs/write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: ideFile, content: $('ideTa').value })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      ideSetDirty(false);
+      ideShowMsg('Saved ' + $('ideFname').textContent + ' \\u00b7 ' + new Date().toLocaleTimeString());
+    } else {
+      ideShowMsg('Save failed: ' + data.error, true);
+    }
+  } catch (err) {
+    ideShowMsg('Save failed: ' + err, true);
+  }
+}
+$('ideSave').addEventListener('click', ideSaveFile);
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && $('tab-project').classList.contains('active')) {
+    e.preventDefault();
+    ideSaveFile();
+  }
+});
+
+// Syntax highlight: single-pass tokenizer per language, rendered into the
+// overlay <pre> behind the transparent-text textarea.
+function hlTokens(src, re, classes) {
+  let out = '', lastIdx = 0, m;
+  while ((m = re.exec(src))) {
+    out += esc(src.slice(lastIdx, m.index));
+    let cls = '';
+    for (let g = 1; g < m.length; g++) {
+      if (m[g] !== undefined) { cls = classes[g - 1]; break; }
+    }
+    out += "<span class='" + cls + "'>" + esc(m[0]) + "</span>";
+    lastIdx = m.index + m[0].length;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  return out + esc(src.slice(lastIdx));
+}
+const HL_LUAU = {
+  re: /(--\\[\\[[\\s\\S]*?(?:\\]\\]|$)|--[^\\n]*)|("(?:\\\\.|[^"\\\\\\n])*"?|'(?:\\\\.|[^'\\\\\\n])*'?)|(\\b\\d[\\w.]*\\b)|(\\b(?:function|local|end|if|then|else|elseif|for|while|do|return|break|continue|and|or|not|nil|true|false|in|repeat|until|type|export|self)\\b)/g,
+  classes: ['tok-c', 'tok-s', 'tok-n', 'tok-k'],
+};
+const HL_JSON = {
+  re: /("(?:\\\\.|[^"\\\\])*")|(-?\\b\\d[\\w.+-]*\\b)|(\\b(?:true|false|null)\\b)/g,
+  classes: ['tok-s', 'tok-n', 'tok-k'],
+};
+function ideHighlight() {
+  const src = $('ideTa').value;
+  const f = (ideFile || '').toLowerCase();
+  let html;
+  if (f.endsWith('.luau') || f.endsWith('.lua')) html = hlTokens(src, HL_LUAU.re, HL_LUAU.classes);
+  else if (f.endsWith('.json')) html = hlTokens(src, HL_JSON.re, HL_JSON.classes);
+  else html = esc(src);
+  $('ideHl').innerHTML = html + '\\n';
+}
+
+let hlRaf = 0;
+$('ideTa').addEventListener('input', () => {
+  ideSetDirty(true);
+  cancelAnimationFrame(hlRaf);
+  hlRaf = requestAnimationFrame(ideHighlight);
+});
+$('ideTa').addEventListener('scroll', () => {
+  $('ideHl').scrollTop = $('ideTa').scrollTop;
+  $('ideHl').scrollLeft = $('ideTa').scrollLeft;
+});
+$('ideTa').addEventListener('keydown', (e) => {
+  // Tab inserts a real tab (execCommand keeps native undo working).
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    document.execCommand('insertText', false, '\\t');
+  }
+});
+
 // ---- Tabs: hash-based, last tab remembered, Overview by default ------------
 const TAB_NAMES = ['overview', 'sync', 'project', 'agents', 'license'];
 function switchTab(name) {
@@ -1001,6 +1302,7 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
   try { localStorage.setItem('rmp-tab', name); } catch {}
   if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+  if (name === 'project') projectShow();
 }
 document.querySelectorAll('.tab').forEach((t) => {
   t.addEventListener('click', () => switchTab(t.dataset.tab));
@@ -1019,7 +1321,6 @@ function setStream(ok) {
   $("streamText").textContent = ok ? "live" : "disconnected — retrying";
 }
 
-let last = null;
 function apply(s) { last = s; render(s); }
 
 let es;
