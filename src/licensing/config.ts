@@ -44,7 +44,7 @@ export const LEMONSQUEEZY_PRODUCT_ID = Number.parseInt(
 /** Public-facing checkout / store URL shown when a license is required. */
 export const PURCHASE_URL =
   process.env.RMP_PURCHASE_URL ??
-  "https://polar.sh/checkout/polar_c_wDPC86UqRd2v5dMha6boGQDwbVIT0QPBtmsOe26qPfO";
+  "https://buy.polar.sh/polar_cl_ZOs8s5PTV2KAyj0y71A7xtBzIpPbdclQfrQBP3IHCyH";
 
 /** Human-readable product name used in messages. */
 export const PRODUCT_NAME = "Roblox MCP Pro";
