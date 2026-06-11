@@ -125,6 +125,8 @@ async function main(): Promise<void> {
     clearInterval(heartbeat);
     stopAndExit();
   };
+  // Let a newer client replace us via POST /rpc/shutdown.
+  routes.setShutdownHook(shutdown);
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

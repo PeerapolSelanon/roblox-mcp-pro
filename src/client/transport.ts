@@ -14,6 +14,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { BRIDGE_HOST, BRIDGE_PORT, BRIDGE_TOKEN, COMMAND_TIMEOUT_MS } from "../constants.js";
 import { StudioError } from "../services/errors.js";
+import { VERSION } from "../version.js";
 import type { BridgeStatus } from "../types.js";
 
 const BASE = `http://${BRIDGE_HOST}:${BRIDGE_PORT}`;
@@ -32,7 +33,23 @@ function headers(): Record<string, string> {
   return h;
 }
 
-type PingResult = "ours" | "foreign" | "down";
+// "stale" = a roblox-mcp-pro broker running an OLDER version than this client.
+// We try to replace it so a package update actually takes effect (new routes,
+// new dashboard) instead of new clients silently attaching to the old broker.
+type PingResult = "ours" | "stale" | "foreign" | "down";
+
+/** True if `brokerVersion` is older than this client's VERSION (missing = old). */
+function brokerIsOlder(brokerVersion: string | undefined): boolean {
+  if (!brokerVersion) return true;
+  const a = brokerVersion.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const b = VERSION.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i += 1) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
 
 async function ping(): Promise<PingResult> {
   try {
@@ -41,10 +58,24 @@ async function ping(): Promise<PingResult> {
       signal: AbortSignal.timeout(800),
     });
     if (!res.ok) return "foreign";
-    const body = (await res.json()) as { broker?: string };
-    return body.broker === "roblox-mcp-pro" ? "ours" : "foreign";
+    const body = (await res.json()) as { broker?: string; version?: string };
+    if (body.broker !== "roblox-mcp-pro") return "foreign";
+    return brokerIsOlder(body.version) ? "stale" : "ours";
   } catch {
     return "down";
+  }
+}
+
+/** Ask an older broker to shut down so we can spawn a current one. Best-effort. */
+async function requestBrokerShutdown(): Promise<void> {
+  try {
+    await fetch(`${BASE}/rpc/shutdown`, {
+      method: "POST",
+      headers: headers(),
+      signal: AbortSignal.timeout(1500),
+    });
+  } catch {
+    // Pre-1.0.27 brokers have no /rpc/shutdown; we fall back to attaching.
   }
 }
 
@@ -71,6 +102,20 @@ export async function ensureBroker(): Promise<void> {
       `Port ${BRIDGE_PORT} is held by a process that isn't a roblox-mcp-pro broker. ` +
         "Stop it or set ROBLOX_MCP_PORT to a free port.",
     );
+  }
+
+  if (first === "stale") {
+    // An older broker is holding the port. Ask it to exit, then take over so the
+    // update's new routes/dashboard actually load. If it won't leave (a very old
+    // broker without /rpc/shutdown), attach to it rather than failing.
+    await requestBrokerShutdown();
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      await delay(300);
+      const state = await ping();
+      if (state === "down") break;
+      if (state === "ours") return; // a newer broker won the race
+    }
+    if ((await ping()) === "stale") return; // old broker stayed; use it as-is
   }
 
   spawnBroker();

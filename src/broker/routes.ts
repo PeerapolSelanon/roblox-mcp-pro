@@ -19,6 +19,7 @@ import { StudioError } from "../services/errors.js";
 import { BRIDGE_PORT } from "../constants.js";
 import { syncEngine, type SyncMode } from "../sync/engine.js";
 import { resolveLicense, saveLicenseKey } from "../licensing/license.js";
+import { VERSION } from "../version.js";
 import { BrokerState } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
 import { scaffoldProject } from "./scaffold.js";
@@ -49,6 +50,8 @@ export interface BrokerRoutes {
   /** Periodic housekeeping: prune dead agents and refresh dashboard listeners. */
   tick: () => void;
   state: BrokerState;
+  /** Wire the graceful-shutdown action a newer client can trigger via /rpc/shutdown. */
+  setShutdownHook: (fn: () => void) => void;
 }
 
 /** Run a `manage_sync` action against the shared engine; throws on failure. */
@@ -110,6 +113,9 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
   const sseClients = new Set<http.ServerResponse>();
   let totalCommands = 0;
   const startedAt = Date.now();
+  // Graceful-shutdown action, wired by main(). A newer client hits /rpc/shutdown
+  // so this (older) broker exits and frees the port for the new one.
+  let shutdownHook: (() => void) | null = null;
 
   // During a StudioTestService playtest ('play'/'multiplayer') the edit-mode
   // plugin stops long-polling, so bridge.enqueue fail-fasts with "not
@@ -384,8 +390,14 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     }
 
     // --- client RPC --------------------------------------------------------
+    if (method === "POST" && path === "/rpc/shutdown") {
+      // A newer client is replacing us. Ack, then exit so it can bind the port.
+      sendJson(res, 200, { ok: true, version: VERSION });
+      if (shutdownHook) setTimeout(shutdownHook, 100);
+      return true;
+    }
     if (method === "GET" && path === "/rpc/ping") {
-      sendJson(res, 200, { broker: "roblox-mcp-pro" });
+      sendJson(res, 200, { broker: "roblox-mcp-pro", version: VERSION });
       return true;
     }
     if (method === "GET" && path === "/rpc/status") {
@@ -507,5 +519,5 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     broadcast();
   }
 
-  return { handle, tick, state };
+  return { handle, tick, state, setShutdownHook: (fn) => { shutdownHook = fn; } };
 }
