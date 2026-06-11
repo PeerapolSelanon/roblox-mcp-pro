@@ -9,7 +9,7 @@
  * agent is connected (e.g. the user opens the dashboard before their AI client).
  */
 
-import { promises as fs } from "node:fs";
+import { promises as fs, watch, type FSWatcher } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -139,6 +139,63 @@ export async function writeTextFile(file: string, content: string): Promise<{ pa
   const abs = path.resolve(file);
   await fs.writeFile(abs, content, "utf8");
   return { path: abs };
+}
+
+// ---- Change watching: powers the dashboard's live AI-edit diff view --------
+// One recursive fs.watch per project root (the dashboard shows one project at
+// a time). The session self-closes when the dashboard stops polling.
+
+interface WatchSession {
+  root: string;
+  watcher: FSWatcher;
+  /** file path -> last event timestamp (insertion order ≈ oldest first) */
+  events: Map<string, number>;
+  lastPollAt: number;
+}
+
+let watchSession: WatchSession | null = null;
+
+setInterval(() => {
+  if (watchSession && Date.now() - watchSession.lastPollAt > 60_000) {
+    watchSession.watcher.close();
+    watchSession = null;
+  }
+}, 30_000).unref();
+
+/** Ensure `root` is being watched and return events newer than `since`. */
+export function pollChanges(
+  root: string,
+  since: number,
+): { now: number; events: { path: string; ts: number }[] } {
+  const abs = path.resolve(root);
+  if (!watchSession || watchSession.root !== abs) {
+    watchSession?.watcher.close();
+    const events = new Map<string, number>();
+    const watcher = watch(abs, { recursive: true }, (_event, filename) => {
+      if (!filename) return;
+      const rel = String(filename);
+      const low = rel.toLowerCase();
+      if (low.startsWith(".git") || low.includes("node_modules") || rel.startsWith("$")) return;
+      const full = path.join(abs, rel);
+      events.delete(full); // refresh insertion order so the cap drops oldest
+      events.set(full, Date.now());
+      if (events.size > 500) {
+        const oldest = events.keys().next().value;
+        if (oldest !== undefined) events.delete(oldest);
+      }
+    });
+    watcher.on("error", () => {
+      // e.g. the root was deleted — drop the session; next poll restarts it.
+      watchSession = null;
+    });
+    watchSession = { root: abs, watcher, events, lastPollAt: Date.now() };
+  }
+  watchSession.lastPollAt = Date.now();
+  const out: { path: string; ts: number }[] = [];
+  for (const [p, ts] of watchSession.events) {
+    if (ts > since) out.push({ path: p, ts });
+  }
+  return { now: Date.now(), events: out };
 }
 
 /** Recently used project folders, most recent first. Existing dirs only. */

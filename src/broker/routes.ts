@@ -33,6 +33,7 @@ import {
   listProjectDir,
   readTextFile,
   writeTextFile,
+  pollChanges,
 } from "./fsbrowse.js";
 
 /** Studio session details, polled from the plugin for the dashboard. */
@@ -379,6 +380,20 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       }
       try {
         sendJson(res, 200, { ok: true, ...(await listProjectDir(target)) });
+      } catch (e) {
+        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+      return true;
+    }
+    if (method === "GET" && path === "/api/fs/changes") {
+      const target = url.searchParams.get("path");
+      const since = Number(url.searchParams.get("since") ?? 0) || 0;
+      if (!target) {
+        sendJson(res, 200, { ok: false, error: "missing path" });
+        return true;
+      }
+      try {
+        sendJson(res, 200, { ok: true, ...pollChanges(target, since) });
       } catch (e) {
         sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
       }
