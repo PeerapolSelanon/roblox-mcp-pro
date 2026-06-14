@@ -135,6 +135,11 @@ export const DASHBOARD_HTML = `<!doctype html>
   tbody tr:hover { background: var(--panel2); }
   td.tool { color: var(--accent); }
   td.agentcell { display: flex; align-items: center; gap: 8px; }
+  .rolesel { font-family: var(--mono); font-size: 11.5px; padding: 3px 6px; border-radius: 7px;
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border); cursor: pointer; }
+  .rolesel:hover { border-color: var(--faint); }
+  .rolesel.lead { border-color: color-mix(in oklch, var(--accent) 60%, var(--border)); color: var(--accent); }
+  .rolesel.worker { border-color: color-mix(in oklch, var(--green) 55%, var(--border)); color: var(--green); }
   .ok { color: var(--green); } .err { color: var(--red); } .muted { color: var(--muted); }
   .empty { color: var(--faint); padding: 18px; text-align: center; font-family: var(--sans); }
 
@@ -492,10 +497,20 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section>
     <h2>Connected agents</h2>
     <table>
-      <thead><tr><th>Agent</th><th>Version</th><th>PID</th><th>Client ID</th><th>Commands</th><th>Connected</th><th>Last seen</th></tr></thead>
-      <tbody id="agents"><tr><td class="empty" colspan="7">No agents connected.</td></tr></tbody>
+      <thead><tr><th>Agent</th><th>Role</th><th>Version</th><th>PID</th><th>Client ID</th><th>Commands</th><th>Connected</th><th>Last seen</th></tr></thead>
+      <tbody id="agents"><tr><td class="empty" colspan="8">No agents connected.</td></tr></tbody>
     </table>
     <div class="pager" id="agentsPager"></div>
+  </section>
+
+  <section>
+    <h2>Agent mailbox</h2>
+    <p class="muted" style="margin:-4px 0 10px;font-size:12px;">Direct tasks/messages passed between agents via <b>manage_agents</b>. Recipients read these by calling <b>inbox</b>.</p>
+    <table>
+      <thead><tr><th>Time</th><th>From</th><th>To</th><th>Subject</th><th>Message</th><th>Status</th></tr></thead>
+      <tbody id="mailbox"><tr><td class="empty" colspan="6">No messages yet.</td></tr></tbody>
+    </table>
+    <div class="pager" id="mailboxPager"></div>
   </section>
 
   <section>
@@ -556,7 +571,7 @@ let last = null; // latest SSE state snapshot (declared early — used across se
 
 // Client-side pagination for the agents/activity tables (5 rows per page).
 const PAGE_SIZE = 5;
-let agentsPage = 0, activityPage = 0;
+let agentsPage = 0, activityPage = 0, mailboxPage = 0;
 function renderPaged(id, items, rowFn, page, colspan, emptyText) {
   const total = items.length;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -740,11 +755,44 @@ function render(state) {
   }
 
   // agents table (paginated, 5 per page)
+  const ROLES = ['idle', 'lead', 'worker'];
+  const roleSelect = (a) => {
+    const role = a.role || 'idle';
+    return "<select class='rolesel " + role + "' data-cid='" + a.clientId + "'>" +
+      ROLES.map((r) => "<option value='" + r + "'" + (role === r ? " selected" : "") + ">" + r + "</option>").join("") +
+      "</select>";
+  };
   const agentRow = (a) =>
-    "<tr><td class=agentcell><span class='dot on'></span>" + esc(a.name) + "</td><td class=muted>" + esc(a.version || "—") +
+    "<tr><td class=agentcell><span class='dot on'></span>" + esc(a.name) + "</td><td>" + roleSelect(a) +
+    "</td><td class=muted>" + esc(a.version || "—") +
     "</td><td class=muted>" + (a.pid ?? "—") + "</td><td class=muted>" + esc((a.clientId || "").slice(0, 8)) +
     "</td><td>" + a.commandCount + "</td><td class=muted>" + ago(a.connectedAt) + "</td><td class=muted>" + ago(a.lastSeenAt) + "</td></tr>";
-  agentsPage = renderPaged("agents", agents, agentRow, agentsPage, 7, "No agents connected.");
+  // Don't rebuild the agents table while a role dropdown is open: re-rendering
+  // the tbody innerHTML would destroy the focused <select> and snap it shut
+  // before the user can pick. Skip this cycle; it refreshes on the next update
+  // once focus leaves the dropdown.
+  const ae = document.activeElement;
+  const editingRole = ae && ae.classList && ae.classList.contains('rolesel');
+  if (!editingRole) {
+    agentsPage = renderPaged("agents", agents, agentRow, agentsPage, 8, "No agents connected.");
+  }
+
+  // mailbox table (agent-to-agent messages, paginated)
+  const mailbox = state.mailbox || [];
+  const liveIds = new Set(agents.map((a) => a.clientId));
+  const statusPill = (m) => {
+    if (!liveIds.has(m.toClientId)) return "<span class=err>recipient offline</span>";
+    if (m.status === "done") return "<span class=ok>done</span>";
+    if (m.status === "read") return "<span class=muted>read</span>";
+    return "<span style='color:var(--accent)'>unread</span>";
+  };
+  const clip = (s, n) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; };
+  const mailRow = (m) =>
+    "<tr><td class=muted>" + fmtTime(m.ts) + "</td><td>" + esc(m.fromName) +
+    "</td><td>" + esc(m.toName) + "</td><td>" + esc(clip(m.subject, 40) || "—") +
+    "</td><td class=muted title='" + esc(m.body) + "'>" + esc(clip(m.body, 60)) +
+    "</td><td>" + statusPill(m) + "</td></tr>";
+  mailboxPage = renderPaged("mailbox", mailbox, mailRow, mailboxPage, 6, "No messages yet.");
 
   // activity table (paginated, 5 per page)
   const recent = state.recent || [];
@@ -1535,10 +1583,32 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('.pgbtn');
   if (!b || b.disabled) return;
   const d = parseInt(b.getAttribute('data-d'), 10) || 0;
-  if (b.getAttribute('data-pg') === 'agents') agentsPage += d;
+  const pg = b.getAttribute('data-pg');
+  if (pg === 'agents') agentsPage += d;
+  else if (pg === 'mailbox') mailboxPage += d;
   else activityPage += d;
   if (last) render(last);
 });
+
+// Agent role dropdowns (delegated — rows are re-rendered on every SSE update).
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest('.rolesel');
+  if (!sel) return;
+  setAgentRole(sel.getAttribute('data-cid'), sel.value);
+});
+
+// Assign an agent's coordination role from the dashboard (human-driven).
+// The broker enforces a single lead; the SSE stream re-renders with the result.
+function setAgentRole(clientId, role) {
+  fetch('/api/agents/role', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, role }),
+  })
+    .then((r) => r.json())
+    .then((d) => { if (d && d.ok === false && d.error) alert('Could not set role: ' + d.error); })
+    .catch(() => {});
+}
 
 connect();
 loadLicense();

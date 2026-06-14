@@ -18,6 +18,7 @@ import { registerWorldTools } from "./world.js";
 import { registerBuildTools } from "./build.js";
 import { registerStudioInfoTools } from "./studioInfo.js";
 import { registerCaptureTools } from "./capture.js";
+import { registerAgentTools } from "./agents.js";
 
 export function registerAllTools(server: McpServer): void {
   registerSystemTools(server);
@@ -35,4 +36,5 @@ export function registerAllTools(server: McpServer): void {
   registerWorldTools(server);
   registerBuildTools(server);
   registerStudioInfoTools(server);
+  registerAgentTools(server);
 }

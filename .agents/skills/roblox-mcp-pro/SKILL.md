@@ -82,6 +82,45 @@ captured print/warn plus `return` values.
 | Studio version/theme/run state | `manage_studio` |
 | Recent Output logs | `manage_logs` |
 | High-level session snapshot | `workspace_state` |
+| See other AI agents / claim a role / hand a task to one | `manage_agents` (list, set_role, send, inbox, read, done) |
+
+## Multi-agent coordination (`manage_agents`)
+
+When several AI agents drive the same Studio session, `manage_agents` lets them
+pass tasks directly to one another through the shared broker (no Studio round-trip):
+
+- `list` — who's connected, each with a `clientId` and `role` (your row has
+  `self: true`); the response's `lead` names the current lead.
+- `set_role` — claim a role: `lead` (you plan and dispatch), `worker` (you execute
+  tasks others send), or `idle`. Only **one lead at a time** — claiming lead demotes
+  the previous lead to worker.
+- `send` — deliver a task by `to`: an agent name (`claude-code`), an exact `clientId`
+  (when names collide), or a group keyword — `workers` (all workers), `lead`, `all`.
+  Include `subject`/`body`.
+- `inbox` — messages addressed to you (`unreadOnly` to skip read ones).
+- `read` / `done` — mark your messages read or complete.
+
+### Lead / worker pattern
+
+- **Lead agent**: `set_role {role:"lead"}`, plan the work, then fan it out with
+  `send {to:"workers", subject, body}` (or to one named agent). Poll `inbox` for the
+  workers' results.
+- **Worker agent**: `set_role {role:"worker"}`, then **check `inbox` at the start of
+  every turn and poll it while idle** — execute each task and report back with
+  `send {to:"lead", body:"<result>"}`, then `done {messageId}`.
+
+### Single agent (solo = both planner and worker)
+
+If you are the **only** agent connected, roles and the mailbox add nothing — just
+plan and do the work in your own turn. Don't `send` tasks to yourself and don't sit
+polling `inbox`. Check `list` first: if there are no other agents (or no `worker`),
+act as both — make the plan, then execute it yourself. A `lead` whose `send
+{to:"workers"}` reports no workers should simply carry out the task directly rather
+than wait. Only switch to delegating once another worker agent actually connects.
+
+MCP is request/response, so a recipient only sees a message when it calls `inbox` —
+nothing pushes a task to an agent automatically. The roles are a coordination
+convention the broker tracks and routes by; each agent still acts per its own prompt.
 
 ## Patterns that work well
 
