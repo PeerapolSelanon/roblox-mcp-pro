@@ -25,7 +25,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   :root {
     --bg: oklch(0.165 0.012 45); --panel: oklch(0.205 0.014 45); --panel2: oklch(0.245 0.016 45);
     --border: oklch(0.30 0.016 45); --border-soft: oklch(0.26 0.015 45);
-    --text: oklch(0.96 0.008 70); --muted: oklch(0.745 0.014 55); --faint: oklch(0.60 0.012 55);
+    --text: oklch(0.96 0.008 70); --muted: oklch(0.745 0.014 55); --faint: oklch(0.65 0.012 55);
     --accent: oklch(0.70 0.19 45);
     --green: oklch(0.80 0.15 155); --red: oklch(0.66 0.20 25); --amber: oklch(0.80 0.15 80);
     --green-bg: color-mix(in oklch, var(--green) 12%, transparent);
@@ -262,6 +262,12 @@ export const DASHBOARD_HTML = `<!doctype html>
   .ide-body textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; overflow: auto;
     background: transparent; color: transparent; caret-color: var(--text); outline: none; }
   .ide-body textarea::selection { background: color-mix(in oklch, var(--accent) 30%, transparent); }
+  /* Narrow viewports: stack the file tree above the editor instead of a fixed
+     260px sidebar that crushes the editor on phones / split panes. */
+  @media (max-width: 680px) {
+    .ide { grid-template-columns: 1fr; grid-template-rows: minmax(120px, 28vh) 1fr; height: 80vh; }
+    .ide-tree { border-right: none; border-bottom: 1px solid var(--border-soft); }
+  }
   .tok-k { color: oklch(0.74 0.17 45); }
   .tok-s { color: oklch(0.80 0.12 130); }
   .tok-c { color: var(--faint); font-style: italic; }
