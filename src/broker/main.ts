@@ -118,7 +118,7 @@ async function main(): Promise<void> {
     }
   };
 
-  const armTeardown = (): void => {
+  const armTeardown = (delayMs: number = graceMs): void => {
     cancelTeardown();
     teardownTimer = setTimeout(() => {
       // Re-check at fire time: an agent may have (re)connected during the grace.
@@ -126,14 +126,15 @@ async function main(): Promise<void> {
         log("last agent left — shutting down and freeing the port.");
         stopAndExit();
       }
-    }, graceMs);
+    }, delayMs);
     // Don't let a pending teardown keep the event loop alive on its own.
     teardownTimer.unref();
   };
 
   // The registry fires onEmpty the moment the connected-agent count hits zero —
-  // whether from a clean deregister or from pruning a crashed agent.
-  routes.state.onEmpty = armTeardown;
+  // whether from a clean deregister or from pruning a crashed agent. Steady-state
+  // teardown honors graceMs (which may be 0 for immediate shutdown).
+  routes.state.onEmpty = () => armTeardown();
 
   // Housekeeping: prune dead agents + refresh the dashboard. Also cancels any
   // pending teardown as soon as an agent is present again (belt-and-suspenders
@@ -145,7 +146,10 @@ async function main(): Promise<void> {
   heartbeat.unref();
 
   // If the broker spawned but no agent ever registers (rare race), don't linger.
-  if (routes.state.agentCount() === 0) armTeardown();
+  // Use a floor independent of graceMs: the client that spawned us must still
+  // ping until we're up, then register — a tiny configured grace (even 0) must
+  // not tear us down before our own spawning client can connect.
+  if (routes.state.agentCount() === 0) armTeardown(Math.max(graceMs, 3000));
 
   const shutdown = (): void => {
     log("shutting down…");
