@@ -111,13 +111,23 @@ async function main(): Promise<void> {
   await server.connect(transport);
   log("MCP server ready (stdio)");
 
+  // MCP hosts usually stop the server by closing the stdio pipe rather than
+  // sending a signal (especially on Windows). Treat every one of these as the
+  // same clean exit so the broker always hears our deregister and can free the
+  // port promptly. Guarded so the duplicate triggers only deregister once.
+  let shuttingDown = false;
   const shutdown = async (): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     log("shutting down…");
     await deregister();
     process.exit(0);
   };
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
+  server.server.onclose = () => void shutdown();
+  process.stdin.on("end", () => void shutdown());
+  process.stdin.on("close", () => void shutdown());
 }
 
 main().catch((error: unknown) => {

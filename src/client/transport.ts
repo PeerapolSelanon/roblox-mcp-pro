@@ -176,7 +176,10 @@ export async function register(name: string, version?: string): Promise<void> {
       body: JSON.stringify({ clientId }),
       signal: AbortSignal.timeout(3000),
     }).catch(() => {});
-  }, 10_000);
+    // 2s (was 10s): a faster pulse lets the broker prune a crashed agent — one
+    // that died without deregistering — within a few seconds, so it can free
+    // the port promptly. Local HTTP, so the extra traffic is negligible.
+  }, 2_000);
   heartbeatTimer.unref();
 }
 
