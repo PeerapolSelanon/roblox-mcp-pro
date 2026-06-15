@@ -73,6 +73,14 @@ async function waitDown(timeoutMs) {
   }
   return -1;
 }
+/** True if the child process actually exited within the timeout. */
+function waitExit(child, timeoutMs) {
+  if (child.exitCode !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(false), timeoutMs);
+    child.once("exit", () => { clearTimeout(t); resolve(true); });
+  });
+}
 
 const results = [];
 function record(name, pass, detail) {
@@ -96,8 +104,9 @@ async function scenario1() {
   if (!(await ping())) return record("S1 single clean exit", false, "broker died while agent connected");
   await deregister(id);
   const downMs = await waitDown(6000);
-  const ok = downMs >= 0 && downMs < 4000;
-  record("S1 single clean exit", ok, ok ? `down in ~${downMs}ms (default grace 1500)` : `downMs=${downMs}`);
+  const exited = await waitExit(child, 2000);
+  const ok = downMs >= 0 && downMs < 4000 && exited;
+  record("S1 single clean exit", ok, ok ? `down ~${downMs}ms, process exited (grace 1500)` : `downMs=${downMs} exited=${exited}`);
   await killIfAlive(child);
 }
 
@@ -114,8 +123,9 @@ async function scenario2() {
   if (!stillUp) { await killIfAlive(child); return record("S2 two agents", false, "broker died while agentB still connected"); }
   await deregister(b);
   const downMs = await waitDown(6000);
-  const ok = downMs >= 0 && downMs < 4000;
-  record("S2 two agents", ok, ok ? `survived 1st leave; down ~${downMs}ms after last leave` : `downMs=${downMs} after last leave`);
+  const exited = await waitExit(child, 2000);
+  const ok = downMs >= 0 && downMs < 4000 && exited;
+  record("S2 two agents", ok, ok ? `survived 1st leave; down ~${downMs}ms + exited after last leave` : `downMs=${downMs} exited=${exited} after last leave`);
   await killIfAlive(child);
 }
 
@@ -127,8 +137,9 @@ async function scenario3() {
   await sleep(300);
   if (!(await ping())) { await killIfAlive(child); return record("S3 crash (no heartbeat)", false, "died too early"); }
   const downMs = await waitDown(15000); // expect ~6s TTL + ~1s tick + 1.5s grace
-  const ok = downMs >= 4000 && downMs < 12000;
-  record("S3 crash (no heartbeat)", ok, ok ? `pruned + down in ~${downMs}ms` : `downMs=${downMs} (expected ~6-9s)`);
+  const exited = await waitExit(child, 2000);
+  const ok = downMs >= 4000 && downMs < 12000 && exited;
+  record("S3 crash (no heartbeat)", ok, ok ? `pruned + down/exited in ~${downMs}ms` : `downMs=${downMs} exited=${exited} (expected ~6-9s)`);
   await killIfAlive(child);
 }
 
@@ -158,9 +169,10 @@ async function scenario5() {
   await sleep(300);
   await deregister(id);
   const downMs = await waitDown(4000);
+  const exited = await waitExit(child, 2000);
   const fast = downMs >= 0 && downMs < 1500;
-  const ok = upDuringFloor && fast;
-  record("S5 grace=0", ok, `startupFloorHeld=${upDuringFloor}; steady-state down in ~${downMs}ms`);
+  const ok = upDuringFloor && fast && exited;
+  record("S5 grace=0", ok, `startupFloorHeld=${upDuringFloor}; steady-state down ~${downMs}ms; exited=${exited}`);
   await killIfAlive(child);
 }
 

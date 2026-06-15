@@ -148,7 +148,9 @@ async function main(): Promise<void> {
   // If the broker spawned but no agent ever registers (rare race), don't linger.
   // Use a floor independent of graceMs: the client that spawned us must still
   // ping until we're up, then register — a tiny configured grace (even 0) must
-  // not tear us down before our own spawning client can connect.
+  // not tear us down before our own spawning client can connect. Registration
+  // doesn't cancel this timer; the fire-time agentCount()===0 re-check (and the
+  // 1s heartbeat cancel) handle a client that attaches during the floor.
   if (routes.state.agentCount() === 0) armTeardown(Math.max(graceMs, 3000));
 
   const shutdown = (): void => {
