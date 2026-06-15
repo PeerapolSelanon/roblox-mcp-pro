@@ -61,6 +61,24 @@ export const DASHBOARD_HTML = `<!doctype html>
   button.badge:hover { border-color: var(--faint); color: var(--text); }
   main { padding: 24px; display: grid; gap: 22px; max-width: 1100px; margin: 0 auto; }
 
+  /* Scrollbars: thin and tinted to the dark surfaces so they don't read as
+     bright OS chrome on the panels. Native behaviour kept — not a drawn scrollbar. */
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); background-clip: padding-box;
+    border: 2px solid transparent; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+
+  /* Respect reduced-motion: collapse the short state transitions to instant. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: .001ms !important; animation-duration: .001ms !important;
+      animation-iteration-count: 1 !important; scroll-behavior: auto !important;
+    }
+  }
+
   /* Tab navigation (second header row, stays visible with the sticky header) */
   .tabs { display: flex; gap: 2px; width: 100%; overflow-x: auto; margin-top: 6px; }
   .tab { position: relative; background: none; border: none; border-bottom: 2px solid transparent;
@@ -235,6 +253,10 @@ export const DASHBOARD_HTML = `<!doctype html>
   .ide-body pre, .ide-body textarea {
     margin: 0; border: 0; padding: 14px 16px; font: 13px/1.5 var(--mono); tab-size: 4;
     white-space: pre; word-wrap: normal; overflow-wrap: normal; box-sizing: border-box;
+    /* Reserve the scrollbar gutter on BOTH layers so the editor's vertical
+       scrollbar never narrows the textarea relative to the highlight <pre>;
+       keeps caret and syntax colours aligned on long/scrolled lines. */
+    scrollbar-gutter: stable;
   }
   .ide-body pre { position: absolute; inset: 0; overflow: hidden; color: var(--text); pointer-events: none; }
   .ide-body textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; overflow: auto;
@@ -309,16 +331,16 @@ export const DASHBOARD_HTML = `<!doctype html>
   <span class="badge muted" id="clock"></span>
   <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="overview" role="tab">Overview<span class="tabdot" id="dotOverview"></span></button>
-    <button class="tab" data-tab="project" role="tab">Project &amp; Sync<span class="tabdot" id="dotSync"></span></button>
-    <button class="tab" data-tab="agents" role="tab">Agents</button>
-    <button class="tab" data-tab="license" role="tab">License<span class="tabdot" id="dotLicense"></span></button>
+    <button class="tab active" data-tab="overview" role="tab" id="tabBtn-overview" aria-controls="tab-overview" aria-selected="true">Overview<span class="tabdot" id="dotOverview"></span></button>
+    <button class="tab" data-tab="project" role="tab" id="tabBtn-project" aria-controls="tab-project" aria-selected="false">Project &amp; Sync<span class="tabdot" id="dotSync"></span></button>
+    <button class="tab" data-tab="agents" role="tab" id="tabBtn-agents" aria-controls="tab-agents" aria-selected="false">Agents</button>
+    <button class="tab" data-tab="license" role="tab" id="tabBtn-license" aria-controls="tab-license" aria-selected="false">License<span class="tabdot" id="dotLicense"></span></button>
   </nav>
 </header>
 <main>
   <div id="banner" class="banner warn"><div class="head">Loading…</div></div>
 
-  <div class="tabpane active" id="tab-overview">
+  <div class="tabpane active" id="tab-overview" role="tabpanel" aria-labelledby="tabBtn-overview">
   <div class="heroes">
     <div id="pluginHero" class="hero">
       <div class="label">① Roblox Studio plugin</div>
@@ -365,7 +387,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   </div>
   </div><!-- /tab-overview -->
 
-  <div class="tabpane" id="tab-project">
+  <div class="tabpane" id="tab-project" role="tabpanel" aria-labelledby="tabBtn-project">
   <div class="panel" id="syncPanel">
     <div class="phead"><h3>Sync · Studio ↔ disk</h3><span class="pill" id="syncPill"><span class="dot" id="syncPillDot"></span><span id="syncPillText">off</span></span></div>
 
@@ -476,7 +498,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   </section>
   </div><!-- /tab-project -->
 
-  <div class="tabpane" id="tab-license">
+  <div class="tabpane" id="tab-license" role="tabpanel" aria-labelledby="tabBtn-license">
     <div class="panel">
       <div class="phead"><h3>License</h3></div>
       <div id="licStatus" style="font-size:14px;margin-bottom:10px;">Checking…</div>
@@ -493,7 +515,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     </div>
   </div><!-- /tab-license -->
 
-  <div class="tabpane" id="tab-agents">
+  <div class="tabpane" id="tab-agents" role="tabpanel" aria-labelledby="tabBtn-agents">
   <section>
     <h2>Connected agents</h2>
     <table>
@@ -1530,7 +1552,11 @@ function switchTab(name) {
   if (name === 'sync') name = 'project'; // old bookmark/hash compatibility
   if (!TAB_NAMES.includes(name)) name = 'overview';
   document.querySelectorAll('.tabpane').forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab').forEach((t) => {
+    const on = t.dataset.tab === name;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
   try { localStorage.setItem('rmp-tab', name); } catch {}
   if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
   if (name === 'project') projectShow();
