@@ -58,7 +58,7 @@ export interface MailboxMessage {
   doneAt?: number;
 }
 
-const AGENT_TTL_MS = 30_000; // drop agents that haven't heartbeat in this long
+const AGENT_TTL_MS = 6_000; // drop agents that haven't heartbeat in this long (was 30s)
 const LOG_CAP = 200; // rolling activity feed size
 const MAILBOX_CAP = 500; // rolling cap on stored messages
 
@@ -69,6 +69,9 @@ export class BrokerState {
 
   /** Set by the route layer to push a fresh snapshot to dashboard listeners. */
   onChange: (() => void) | null = null;
+  /** Fired when the connected-agent count transitions from 1 → 0. The broker
+   *  uses this to start its prompt-teardown timer (see broker/main.ts). */
+  onEmpty: (() => void) | null = null;
 
   register(name: string, version: string | undefined, pid: number | undefined, cwd?: string): string {
     const clientId = randomUUID();
@@ -105,7 +108,10 @@ export class BrokerState {
   }
 
   deregister(clientId: string): void {
-    if (this.agents.delete(clientId)) this.notify();
+    if (this.agents.delete(clientId)) {
+      this.notify();
+      if (this.agents.size === 0) this.onEmpty?.();
+    }
   }
 
   agentName(clientId: string): string {
@@ -222,7 +228,10 @@ export class BrokerState {
         removed = true;
       }
     }
-    if (removed) this.notify();
+    if (removed) {
+      this.notify();
+      if (this.agents.size === 0) this.onEmpty?.();
+    }
   }
 
   agentCount(): number {
