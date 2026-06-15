@@ -84,6 +84,11 @@ means you **always get the newest version automatically** — updates need zero 
 > the server it fetches the newest release. The Studio plugin also self-updates: the server copies
 > the latest bundled plugin into your Plugins folder on startup (just restart Studio when it tells
 > you a new plugin was installed). You never have to reinstall anything by hand.
+>
+> If you pin a specific version in your MCP config (e.g. `roblox-mcp-pro@1.0.31` instead of
+> `@latest`) you opt out of auto-update — you'll stay on that version until you change it. The
+> broker also shuts down as soon as your last AI client disconnects, so the next launch always
+> starts a fresh server on the newest version rather than reattaching to an old one.
 
 ### Part 1 — Install the MCP server
 
