@@ -30,13 +30,18 @@ function log(message: string): void {
 }
 
 /**
- * Exit after this long with no connected AI agents. Liveness is driven by agents
- * only (NOT the Studio plugin): when no MCP client is connected there is nothing
- * to drive Studio, so the broker frees the port and shuts down. This avoids a
- * stale broker squatting :3690 across upgrades — the next agent spawns a fresh
- * one. The Studio plugin reconnects automatically once a new broker is up.
+ * How long to wait after the LAST agent leaves before shutting down. Liveness is
+ * driven by agents only (NOT the Studio plugin): when no MCP client is connected
+ * there is nothing to drive Studio, so the broker frees the port and exits. The
+ * grace is small by design — just enough to absorb an MCP host that restarts its
+ * server (agents briefly hit zero then reconnect) so we don't kill+respawn the
+ * broker on every reconnect. Tunable via ROBLOX_MCP_IDLE_SHUTDOWN_MS; set 0 for
+ * immediate teardown. The Studio plugin reconnects automatically to the next broker.
  */
-const IDLE_SHUTDOWN_MS = 20_000;
+function idleShutdownMs(): number {
+  const raw = Number(process.env.ROBLOX_MCP_IDLE_SHUTDOWN_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 1500;
+}
 
 /**
  * Open the monitoring dashboard in the default browser once, when the broker
@@ -103,26 +108,49 @@ async function main(): Promise<void> {
   // loses the bind race exits above, so the dashboard opens at most once.
   maybeOpenDashboard(dashboardUrl);
 
-  let idleSince: number | null = null;
-  const heartbeat = setInterval(() => {
-    routes.tick();
-    const busy = routes.state.agentCount() > 0;
-    if (busy) {
-      idleSince = null;
-    } else {
-      idleSince ??= Date.now();
-      if (Date.now() - idleSince >= IDLE_SHUTDOWN_MS) {
-        log("no connected agents — shutting down and freeing the port.");
-        clearInterval(heartbeat);
+  const graceMs = idleShutdownMs();
+  let teardownTimer: NodeJS.Timeout | null = null;
+
+  const cancelTeardown = (): void => {
+    if (teardownTimer) {
+      clearTimeout(teardownTimer);
+      teardownTimer = null;
+    }
+  };
+
+  const armTeardown = (): void => {
+    cancelTeardown();
+    teardownTimer = setTimeout(() => {
+      // Re-check at fire time: an agent may have (re)connected during the grace.
+      if (routes.state.agentCount() === 0) {
+        log("last agent left — shutting down and freeing the port.");
         stopAndExit();
       }
-    }
+    }, graceMs);
+    // Don't let a pending teardown keep the event loop alive on its own.
+    teardownTimer.unref();
+  };
+
+  // The registry fires onEmpty the moment the connected-agent count hits zero —
+  // whether from a clean deregister or from pruning a crashed agent.
+  routes.state.onEmpty = armTeardown;
+
+  // Housekeeping: prune dead agents + refresh the dashboard. Also cancels any
+  // pending teardown as soon as an agent is present again (belt-and-suspenders
+  // alongside the re-check inside the timer).
+  const heartbeat = setInterval(() => {
+    routes.tick();
+    if (routes.state.agentCount() > 0) cancelTeardown();
   }, 1000);
   heartbeat.unref();
+
+  // If the broker spawned but no agent ever registers (rare race), don't linger.
+  if (routes.state.agentCount() === 0) armTeardown();
 
   const shutdown = (): void => {
     log("shutting down…");
     clearInterval(heartbeat);
+    cancelTeardown();
     stopAndExit();
   };
   // Let a newer client replace us via POST /rpc/shutdown.
