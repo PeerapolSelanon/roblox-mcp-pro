@@ -18,10 +18,8 @@ import type { StudioEvent } from "../types.js";
 /**
  * The sync engine runs *inside the broker process*, so it talks to Studio
  * directly via the local bridge queue rather than the client transport.
+ * Session routing is handled via SyncEngine#callStudio (instance method).
  */
-function callStudio<T = unknown>(tool: string, args: unknown): Promise<T> {
-  return bridge.enqueue(tool, args) as Promise<T>;
-}
 import {
   writeTree,
   escapeName,
@@ -174,6 +172,8 @@ class SyncEngine {
   private readonly suppressFile = new Map<string, number>();
   private readonly suppressStudio = new Map<string, number>();
   private resyncTimer: NodeJS.Timeout | null = null;
+  /** The Studio session this sync engine is pinned to. */
+  private pinnedSession = "default";
   // Run-mode awareness: while Studio is in a playtest, FS edits are queued
   // (replayed after stop) and Studio events are dropped (transient sim state).
   private runActive = false;
@@ -184,6 +184,11 @@ class SyncEngine {
   private readonly historyLog: { at: string; kind: string; detail: string }[] = [];
   private lastPullAt: string | null = null;
   private lastPushAt: string | null = null;
+
+  /** Forward a tool call to the pinned Studio session via the bridge. */
+  private callStudio<T = unknown>(tool: string, args: unknown): Promise<T> {
+    return bridge.enqueue(this.pinnedSession, tool, args) as Promise<T>;
+  }
 
   private record(kind: string, detail: string): void {
     this.historyLog.push({ at: new Date().toISOString(), kind, detail });
@@ -279,7 +284,9 @@ class SyncEngine {
     mode?: SyncMode,
     initialDirection?: "studio-to-disk" | "disk-to-studio",
     customSyncDir?: string,
+    sessionId: string = "default",
   ): Promise<SyncStatus> {
+    this.pinnedSession = sessionId;
     if (this.running) await this.stop();
     this.mode = normalizeMode(mode);
     this.initialDirection = initialDirection;
@@ -308,7 +315,7 @@ class SyncEngine {
     // sync change events from Studio are only requested when we mirror them.
     this.unsubscribe = bridge.onEvent((event) => void this.onStudioEvent(event));
     if (this.mode !== "disk-to-studio") {
-      await callStudio("sync_watch", { action: "watch", roots: this.roots });
+      await this.callStudio("sync_watch", { action: "watch", roots: this.roots });
     }
 
     this.running = true;
@@ -375,7 +382,7 @@ class SyncEngine {
    * layout (explorer/ at the project root) is kept instead.
    */
   private async resolvePlaceDirs(): Promise<void> {
-    const info = await callStudio<{ placeId?: number; placeName?: string }>("system_info", {});
+    const info = await this.callStudio<{ placeId?: number; placeName?: string }>("system_info", {});
     this.placeId = info.placeId ?? 0;
     this.placeName = info.placeName ?? "Untitled";
 
@@ -401,7 +408,7 @@ class SyncEngine {
     if (before !== null && before !== this.placeId) {
       log(`place changed (${before} -> ${this.placeId}); mirroring to ${this.explorerDir}`);
     }
-    const snap = await callStudio<SnapshotResponse>("sync_snapshot", { roots: this.roots });
+    const snap = await this.callStudio<SnapshotResponse>("sync_snapshot", { roots: this.roots });
     if (this.watcher) {
       await this.watcher.close();
       this.watcher = null;
@@ -437,7 +444,7 @@ class SyncEngine {
     for (const [instancePath, absPath] of this.instanceToFile) {
       const source = await fs.readFile(absPath, "utf8");
       this.suppressStudio.set(instancePath, Date.now() + SUPPRESS_MS);
-      await callStudio("sync_apply", { action: "set_source", path: instancePath, source });
+      await this.callStudio("sync_apply", { action: "set_source", path: instancePath, source });
       count += 1;
     }
     this.lastPushAt = new Date().toISOString();
@@ -457,7 +464,7 @@ class SyncEngine {
     }
     if (this.running) {
       try {
-        await callStudio("sync_watch", { action: "unwatch" });
+        await this.callStudio("sync_watch", { action: "unwatch" });
       } catch {
         // Plugin may already be gone; ignore.
       }
@@ -522,7 +529,7 @@ class SyncEngine {
     try {
       const source = await fs.readFile(absPath, "utf8");
       this.suppressStudio.set(instancePath, Date.now() + SUPPRESS_MS);
-      await callStudio("sync_apply", { action: "set_source", path: instancePath, source });
+      await this.callStudio("sync_apply", { action: "set_source", path: instancePath, source });
       log(`FS->Studio ${instancePath}`);
     } catch (error) {
       log(`FS->Studio failed for ${instancePath}: ${String(error)}`);
@@ -550,7 +557,7 @@ class SyncEngine {
       const source = await fs.readFile(absPath, "utf8");
       const instancePath = `${parentPath}.${name}`;
       this.suppressStudio.set(instancePath, Date.now() + SUPPRESS_MS);
-      const res = await callStudio<{ ok: boolean; path?: string; error?: string }>(
+      const res = await this.callStudio<{ ok: boolean; path?: string; error?: string }>(
         "manage_scripts",
         { action: "create", class_name: className, parent: parentPath, name, source },
       );
@@ -583,7 +590,7 @@ class SyncEngine {
     this.instanceToFile.delete(instancePath);
     try {
       this.suppressStudio.set(instancePath, Date.now() + SUPPRESS_MS);
-      await callStudio("mutate_instances", {
+      await this.callStudio("mutate_instances", {
         operations: [{ action: "delete", path: instancePath }],
       });
       log(`FS->Studio deleted ${instancePath}`);
