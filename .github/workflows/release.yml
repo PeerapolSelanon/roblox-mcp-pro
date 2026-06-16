@@ -27,10 +27,17 @@ jobs:
           rojo build default.project.json --output RobloxMcpPro.rbxmx
 
       - name: Create / update GitHub Release with the plugin artifact
-        uses: softprops/action-gh-release@v2
-        with:
-          files: plugin/RobloxMcpPro.rbxmx
-          generate_release_notes: true
+        # Use the gh CLI (pre-installed on the runner) instead of a third-party
+        # JS action, so the release step has no Node-runtime deprecation to chase.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" plugin/RobloxMcpPro.rbxmx --clobber
+          else
+            gh release create "$tag" plugin/RobloxMcpPro.rbxmx --generate-notes
+          fi
 
   npm:
     name: Publish to npm
