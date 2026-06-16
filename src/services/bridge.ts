@@ -1,15 +1,19 @@
 /**
- * Bridge: a localhost HTTP server that connects the MCP server (tools) to the
- * Roblox Studio plugin.
+ * Bridge: a localhost HTTP server connecting the MCP tools to the Roblox Studio
+ * plugin(s). Each connected Studio window is a *session*, keyed by a sessionId
+ * the plugin mints and carries in the `x-session-id` header. The bridge keeps a
+ * per-session queue/waiters/liveness so a command only ever reaches the session
+ * it was routed to — two open Places never share a queue.
  *
- * Flow:
- *   - A tool calls `enqueue(tool, args)` and awaits a Promise.
- *   - The Studio plugin long-polls `GET /dequeue`; we hand it one command.
- *   - The plugin executes it and `POST`s the result to `/respond`, which
- *     resolves the matching Promise.
+ * Flow per session:
+ *   - A tool calls `enqueue(sessionId, tool, args)` and awaits a Promise.
+ *   - That session's plugin long-polls `GET /dequeue` (with x-session-id); we
+ *     hand it one of *its* commands.
+ *   - The plugin executes it and `POST`s the result to `/respond`; we resolve
+ *     the matching Promise (inflight is keyed by command id, globally unique).
  *
- * The server binds to 127.0.0.1 only. An optional shared token (ROBLOX_MCP_TOKEN)
- * adds a header check on top of the loopback restriction.
+ * Binds to 127.0.0.1 only. An optional shared token (ROBLOX_MCP_TOKEN) adds a
+ * header check on top of the loopback restriction.
  */
 
 import http from "node:http";
@@ -26,11 +30,18 @@ import type {
   BridgeStatus,
   Command,
   CommandResponse,
+  SessionMeta,
+  SessionStatus,
   StudioEvent,
 } from "../types.js";
 import { StudioError } from "./errors.js";
 
 export { StudioError };
+
+/** Header the plugin uses to identify its Studio session. */
+const SESSION_HEADER = "x-session-id";
+/** Fallback id for a plugin that predates session support (single-Place mode). */
+const DEFAULT_SESSION = "default";
 
 interface InflightEntry {
   resolve: (value: unknown) => void;
@@ -43,13 +54,16 @@ interface Waiter {
   timer: NodeJS.Timeout;
 }
 
+interface Session {
+  pending: Command[];
+  waiters: Waiter[];
+  lastPollAt: number | null;
+  forcedOffline: boolean;
+  meta: SessionMeta;
+}
+
 type EventListener = (event: StudioEvent) => void;
 
-/**
- * Handler for routes the bridge itself doesn't serve (the broker layers its
- * client RPC API and monitoring dashboard on top via this hook). Returns true
- * if it handled the request, in which case the bridge skips its 404.
- */
 export type UnhandledRoute = (
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -58,32 +72,102 @@ export type UnhandledRoute = (
 
 export class Bridge {
   private server: http.Server | null = null;
-  private readonly pending: Command[] = [];
+  private readonly sessions = new Map<string, Session>();
+  /** Inflight commands keyed by their globally-unique id (cross-session safe). */
   private readonly inflight = new Map<string, InflightEntry>();
-  private readonly waiters: Waiter[] = [];
   private readonly eventListeners = new Set<EventListener>();
-  private lastPollAt: number | null = null;
-  /**
-   * Set true when the plugin explicitly told us it disconnected, so the
-   * dashboard reflects it immediately instead of waiting out the long-poll
-   * liveness window. Cleared as soon as the plugin polls again.
-   */
-  private forcedOffline = false;
 
-  /**
-   * Optional hook the broker sets to serve its own routes (`/rpc/*`, the
-   * dashboard, `/api/*`) on the same socket. Left null in any other context.
-   */
   onUnhandled: UnhandledRoute | null = null;
 
-  /** Start listening. Resolves once the socket is bound. */
+  // --- session bookkeeping ------------------------------------------------
+
+  private ensure(sessionId: string): Session {
+    let s = this.sessions.get(sessionId);
+    if (!s) {
+      s = {
+        pending: [],
+        waiters: [],
+        lastPollAt: null,
+        forcedOffline: false,
+        meta: { sessionId },
+      };
+      this.sessions.set(sessionId, s);
+    }
+    return s;
+  }
+
+  /** True if a given session polled recently enough to be considered live. */
+  isConnected(sessionId: string): boolean {
+    const s = this.sessions.get(sessionId);
+    return (
+      !!s &&
+      !s.forcedOffline &&
+      s.lastPollAt !== null &&
+      Date.now() - s.lastPollAt < PLUGIN_LIVENESS_MS
+    );
+  }
+
+  /** All currently-live sessions with their metadata (for routing + dashboard). */
+  connectedSessions(): SessionStatus[] {
+    const out: SessionStatus[] = [];
+    for (const [id, s] of this.sessions) {
+      if (this.isConnected(id)) {
+        out.push({ ...s.meta, connected: true, queued: s.pending.length, lastPollAt: s.lastPollAt });
+      }
+    }
+    return out;
+  }
+
+  /** Every known session, live or not (dashboard shows recently-dropped too). */
+  allSessions(): SessionStatus[] {
+    return [...this.sessions].map(([id, s]) => ({
+      ...s.meta,
+      connected: this.isConnected(id),
+      queued: s.pending.length,
+      lastPollAt: s.lastPollAt,
+    }));
+  }
+
+  /**
+   * Explicit connect/disconnect signal from a plugin, so the dashboard updates
+   * within ~1s instead of waiting out the liveness window. Optionally updates
+   * the session's metadata (placeId/placeName/jobId/studioPid).
+   */
+  setPresence(sessionId: string, connected: boolean, meta?: Partial<SessionMeta>): void {
+    const s = this.ensure(sessionId);
+    s.forcedOffline = !connected;
+    if (connected) s.lastPollAt = Date.now();
+    if (meta) s.meta = { ...s.meta, ...meta, sessionId };
+  }
+
+  /** Aggregate status (back-compat): pluginConnected = any session is live. */
+  status(): BridgeStatus {
+    let queued = 0;
+    let lastPollAt: number | null = null;
+    let anyConnected = false;
+    for (const [id, s] of this.sessions) {
+      queued += s.pending.length;
+      if (s.lastPollAt !== null && (lastPollAt === null || s.lastPollAt > lastPollAt)) {
+        lastPollAt = s.lastPollAt;
+      }
+      if (this.isConnected(id)) anyConnected = true;
+    }
+    return {
+      ok: true,
+      pluginConnected: anyConnected,
+      queued,
+      inflight: this.inflight.size,
+      lastPollAt,
+    };
+  }
+
+  // --- lifecycle ----------------------------------------------------------
+
   async start(): Promise<void> {
     if (this.server) return;
     const server = http.createServer((req, res) => {
       this.handle(req, res).catch((err: unknown) => {
-        this.sendJson(res, 500, {
-          error: err instanceof Error ? err.message : String(err),
-        });
+        this.sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
       });
     });
     this.server = server;
@@ -96,131 +180,96 @@ export class Bridge {
     });
   }
 
-  /** Stop listening and reject any outstanding work. */
   async stop(): Promise<void> {
     for (const entry of this.inflight.values()) {
       clearTimeout(entry.timer);
       entry.reject(new StudioError("Bridge shutting down"));
     }
     this.inflight.clear();
-    this.pending.length = 0;
-    for (const waiter of this.waiters) {
-      clearTimeout(waiter.timer);
-      waiter.res.statusCode = 204;
-      waiter.res.end();
+    for (const s of this.sessions.values()) {
+      s.pending.length = 0;
+      for (const waiter of s.waiters) {
+        clearTimeout(waiter.timer);
+        waiter.res.statusCode = 204;
+        waiter.res.end();
+      }
+      s.waiters.length = 0;
     }
-    this.waiters.length = 0;
     const server = this.server;
     this.server = null;
-    if (server) {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
+    if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
-  /** True if the plugin polled recently enough to be considered live. */
-  isPluginConnected(): boolean {
-    return (
-      !this.forcedOffline &&
-      this.lastPollAt !== null &&
-      Date.now() - this.lastPollAt < PLUGIN_LIVENESS_MS
-    );
-  }
-
-  /**
-   * Explicit connect/disconnect signal from the plugin, so the dashboard updates
-   * within ~1s instead of waiting out the liveness window on disconnect.
-   */
-  setPluginPresence(connected: boolean): void {
-    this.forcedOffline = !connected;
-    if (connected) this.lastPollAt = Date.now();
-  }
-
-  status(): BridgeStatus {
-    return {
-      ok: true,
-      pluginConnected: this.isPluginConnected(),
-      queued: this.pending.length,
-      inflight: this.inflight.size,
-      lastPollAt: this.lastPollAt,
-    };
-  }
-
-  /** Subscribe to Studio->server change events (used by sync). Returns an unsubscribe fn. */
   onEvent(listener: EventListener): () => void {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
   }
 
+  // --- enqueue ------------------------------------------------------------
+
   /**
-   * Queue a command for the plugin and await its result.
-   * Fails fast with an actionable message if the plugin is not connected.
+   * Queue a command for a specific session and await its result. Fails fast if
+   * that session's plugin is not connected.
    */
-  enqueue(tool: string, args: unknown, opts?: { internal?: boolean }): Promise<unknown> {
-    if (!this.isPluginConnected()) {
+  enqueue(sessionId: string, tool: string, args: unknown, opts?: { internal?: boolean }): Promise<unknown> {
+    if (!this.isConnected(sessionId)) {
       return Promise.reject(
         new StudioError(
-          "Roblox Studio plugin is not connected. Open Roblox Studio, make sure " +
-            "the roblox-mcp-pro plugin is installed, and click its Connect button.",
+          `Studio session '${sessionId}' is not connected. Open the Place, make sure the ` +
+            "roblox-mcp-pro plugin is installed, and click its Connect button.",
         ),
       );
     }
+    const s = this.ensure(sessionId);
     const command: Command = {
       id: randomUUID(),
       tool,
       args,
       createdAt: Date.now(),
+      sessionId,
       internal: opts?.internal,
     };
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.inflight.delete(command.id);
-        // Drop it from the pending queue if it was never delivered.
-        const idx = this.pending.findIndex((c) => c.id === command.id);
-        if (idx !== -1) this.pending.splice(idx, 1);
+        const idx = s.pending.findIndex((c) => c.id === command.id);
+        if (idx !== -1) s.pending.splice(idx, 1);
         reject(
           new StudioError(
-            `Command '${tool}' timed out after ${COMMAND_TIMEOUT_MS}ms with no ` +
-              "response from Studio. The plugin may be busy or the action may have " +
-              "yielded indefinitely.",
+            `Command '${tool}' timed out after ${COMMAND_TIMEOUT_MS}ms with no response from ` +
+              "Studio. The plugin may be busy or the action may have yielded indefinitely.",
           ),
         );
       }, COMMAND_TIMEOUT_MS);
       this.inflight.set(command.id, { resolve, reject, timer });
-      this.pending.push(command);
-      this.flush();
+      s.pending.push(command);
+      this.flush(s);
     });
   }
 
-  // --- internals -----------------------------------------------------------
+  // --- internals ----------------------------------------------------------
 
-  /** Deliver queued commands to any waiting long-poll responses. */
-  private flush(): void {
-    while (this.pending.length > 0 && this.waiters.length > 0) {
-      const waiter = this.waiters.shift()!;
-      const command = this.pending.shift()!;
+  private flush(s: Session): void {
+    while (s.pending.length > 0 && s.waiters.length > 0) {
+      const waiter = s.waiters.shift()!;
+      const command = s.pending.shift()!;
       clearTimeout(waiter.timer);
       this.sendJson(waiter.res, 200, command);
     }
   }
 
-  private async handle(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-  ): Promise<void> {
+  private sessionIdOf(req: http.IncomingMessage): string {
+    const raw = req.headers[SESSION_HEADER];
+    const id = Array.isArray(raw) ? raw[0] : raw;
+    return id && id.trim() ? id.trim() : DEFAULT_SESSION;
+  }
+
+  private async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${BRIDGE_HOST}`);
     const path = url.pathname;
 
-    // The monitoring dashboard is meant to be opened in a browser, which can't
-    // attach the shared token — exempt its read-only routes from auth.
-    const isDashboard =
-      req.method === "GET" && (path === "/" || path.startsWith("/api/"));
-
-    // Auth (optional shared token).
-    if (
-      BRIDGE_TOKEN &&
-      !isDashboard &&
-      req.headers["x-auth-token"] !== BRIDGE_TOKEN
-    ) {
+    const isDashboard = req.method === "GET" && (path === "/" || path.startsWith("/api/"));
+    if (BRIDGE_TOKEN && !isDashboard && req.headers["x-auth-token"] !== BRIDGE_TOKEN) {
       this.sendJson(res, 401, { error: "Invalid or missing x-auth-token" });
       return;
     }
@@ -231,31 +280,35 @@ export class Bridge {
     }
 
     if (req.method === "GET" && path === "/dequeue") {
-      this.lastPollAt = Date.now();
-      this.forcedOffline = false;
-      if (this.pending.length > 0) {
-        const command = this.pending.shift()!;
-        this.sendJson(res, 200, command);
+      const sessionId = this.sessionIdOf(req);
+      const s = this.ensure(sessionId);
+      s.lastPollAt = Date.now();
+      s.forcedOffline = false;
+      if (s.pending.length > 0) {
+        this.sendJson(res, 200, s.pending.shift()!);
         return;
       }
-      // Hold the connection open until a command arrives or we time out.
       const timer = setTimeout(() => {
-        const idx = this.waiters.findIndex((w) => w.res === res);
-        if (idx !== -1) this.waiters.splice(idx, 1);
+        const idx = s.waiters.findIndex((w) => w.res === res);
+        if (idx !== -1) s.waiters.splice(idx, 1);
         res.statusCode = 204;
         res.end();
       }, LONG_POLL_TIMEOUT_MS);
       const waiter: Waiter = { res, timer };
-      this.waiters.push(waiter);
+      s.waiters.push(waiter);
       res.on("close", () => {
         clearTimeout(timer);
-        const idx = this.waiters.indexOf(waiter);
-        if (idx !== -1) this.waiters.splice(idx, 1);
+        const idx = s.waiters.indexOf(waiter);
+        if (idx !== -1) s.waiters.splice(idx, 1);
       });
       return;
     }
 
     if (req.method === "POST" && path === "/respond") {
+      const sessionId = this.sessionIdOf(req);
+      const s = this.ensure(sessionId);
+      s.lastPollAt = Date.now();
+      s.forcedOffline = false;
       const body = await this.readBody(req);
       const reply = JSON.parse(body) as CommandResponse;
       const entry = this.inflight.get(reply.id);
@@ -270,8 +323,10 @@ export class Bridge {
     }
 
     if (req.method === "POST" && path === "/event") {
-      this.lastPollAt = Date.now();
-      this.forcedOffline = false;
+      const sessionId = this.sessionIdOf(req);
+      const s = this.ensure(sessionId);
+      s.lastPollAt = Date.now();
+      s.forcedOffline = false;
       const body = await this.readBody(req);
       const event = JSON.parse(body) as StudioEvent;
       for (const listener of this.eventListeners) listener(event);
@@ -291,23 +346,16 @@ export class Bridge {
     return new Promise((resolve, reject) => {
       let data = "";
       req.setEncoding("utf8");
-      req.on("data", (chunk: string) => {
-        data += chunk;
-      });
+      req.on("data", (chunk: string) => (data += chunk));
       req.on("end", () => resolve(data));
       req.on("error", reject);
     });
   }
 
-  private sendJson(
-    res: http.ServerResponse,
-    status: number,
-    payload: unknown,
-  ): void {
+  private sendJson(res: http.ServerResponse, status: number, payload: unknown): void {
     if (res.writableEnded) return;
-    const text = JSON.stringify(payload);
     res.writeHead(status, { "Content-Type": "application/json" });
-    res.end(text);
+    res.end(JSON.stringify(payload));
   }
 }
 
