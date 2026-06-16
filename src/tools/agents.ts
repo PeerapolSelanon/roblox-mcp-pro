@@ -17,11 +17,13 @@ import { ok, fail } from "../services/format.js";
 const InputSchema = z
   .object({
     action: z
-      .enum(["list", "set_role", "send", "inbox", "read", "done"])
+      .enum(["list", "set_role", "send", "inbox", "read", "done", "sessions", "attach", "detach"])
       .describe(
-        "list: connected agents (roles + clientIds) · set_role: claim lead/worker/idle · " +
+        "list: connected agents (roles + bound Place) · set_role: claim lead/worker/idle · " +
           "send: deliver a task/message · inbox: messages addressed to you · " +
-          "read: mark your unread messages read · done: mark one of your messages complete.",
+          "read: mark unread read · done: mark a message complete · " +
+          "sessions: list connected Studio Places · attach: bind yourself to a Place (by name) · " +
+          "detach: unbind.",
       ),
     role: z
       .enum(["lead", "worker", "idle"])
@@ -47,6 +49,19 @@ const InputSchema = z
       .max(200)
       .optional()
       .describe("For 'read': specific message ids to mark read (default: all your unread)."),
+    place: z
+      .string()
+      .max(200)
+      .optional()
+      .describe(
+        "For 'attach': the Place name to bind to (e.g. 'Lobby'). Case-insensitive; " +
+          "if the name is ambiguous, attach by 'session' instead.",
+      ),
+    session: z
+      .string()
+      .max(100)
+      .optional()
+      .describe("For 'attach': an exact sessionId (use when Place names collide)."),
   })
   .strict();
 
@@ -80,7 +95,10 @@ export function registerAgentTools(server: McpServer): void {
         "unreadOnly? (for inbox), messageId? (for done), messageIds? (for read).\n" +
         "Returns: list → { lead, agents:[{clientId,name,role,self}] } · send → { sent:[{id,to}] } · " +
         "inbox → { count, messages:[{id,fromName,subject,body,status}] }.\n" +
-        "Recipients only see a message when they call 'inbox' — poll it when collaborating.",
+        "Recipients only see a message when they call 'inbox' — poll it when collaborating.\n" +
+        "Multi-Place: when several Studio Places are connected, run action:'sessions' to see them, " +
+        "then action:'attach' with place:'<name>' to bind yourself before editing — commands refuse to " +
+        "run while you're unbound and more than one Place is connected.",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: false,
@@ -126,6 +144,21 @@ export function registerAgentTools(server: McpServer): void {
             return ok(result, `Marked ${result.marked ?? 0} message(s) read.`);
           case "done":
             return ok(result, `Marked ${String(result.done)} done.`);
+          case "sessions": {
+            const sessions = (result.sessions as { sessionId: string; placeName?: string; placeId?: number; boundAgents?: string[] }[]) ?? [];
+            if (!sessions.length) return ok(result, "No Studio Places connected.");
+            const lines = sessions.map((s) => {
+              const who = s.boundAgents?.length ? `  ← ${s.boundAgents.join(", ")}` : "";
+              return `• ${s.placeName ?? "(unnamed)"}${s.placeId ? ` (placeId ${s.placeId})` : ""}  [${s.sessionId}]${who}`;
+            });
+            return ok(result, `${sessions.length} Place(s) connected:\n${lines.join("\n")}`);
+          }
+          case "attach": {
+            const at = result.attached as { placeName?: string; sessionId?: string } | undefined;
+            return ok(result, `Bound to '${at?.placeName ?? at?.sessionId ?? "?"}'. Your commands now target this Place.`);
+          }
+          case "detach":
+            return ok(result, "Unbound. With >1 Place connected, attach before running commands.");
           default:
             return ok(result, JSON.stringify(result));
         }
