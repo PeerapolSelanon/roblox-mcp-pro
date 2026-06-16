@@ -135,4 +135,18 @@ Also: `UIGradient` **multiplies** with the object's own color, so set the fill `
     button: one `"Border"` (the lighter-tint edge) and one `"Contextual"` (the text). They target
     different parts and both render.
   - The **text** stroke should be a **dark/near-black** color so white button text stays legible.
+- **Procedural Layered/Volumetric Borders (3-Layer Neon Glow with BorderOffset)**: To create a premium, volumetric glowing border (like a neon tube or rich glowing panels) without overlapping strokes or helper nested frames:
+  - **Single Frame Placement**: Place three `UIStroke` instances directly under the same object, named `OuterStroke` (outermost shadow), `CenterStroke` (glow core), and `InnerStroke` (innermost shadow).
+  - **Position & Mode Settings**:
+    - Set `BorderStrokePosition = Enum.BorderStrokePosition.Inner` for all three.
+    - Set `ApplyStrokeMode = Enum.ApplyStrokeMode.Border` for all three.
+  - **Consecutive Offset Calculation**:
+    - `OuterStroke`: `BorderOffset = UDim.new(0, 0)`. Set it thin (e.g. 1.5px) and dark (e.g. black/dark shadow).
+    - `CenterStroke`: `BorderOffset = UDim.new(0, -OuterStroke.Thickness)`. Set it thick (e.g. 4.0px - 6.0px) and bright neon.
+    - `InnerStroke`: `BorderOffset = UDim.new(0, -(OuterStroke.Thickness + CenterStroke.Thickness))`. Set it thin (e.g. 1.5px) and dark.
+  - **Result & ScrollingFrame Clipping Protection**: They align perfectly side-by-side going inwards from the frame edge, creating a flawless 3-segment consecutive border (e.g. 1.5px black -> 6.0px neon pink -> 1.5px dark red). Crucially, because all strokes are set to `BorderStrokePosition.Inner`, **they are guaranteed not to be cut off or clipped by `ScrollingFrame` canvas edges or `ClipsDescendants`** (which always clips `Center` or `Outer` stroke boundaries that bleed outside the frame bounding box).
+- **Gradient Strokes & Gradients**: You can place a `UIGradient` *inside* a `UIStroke` to make the border itself gradient-shaded. When setting UIGradients, set base colors/transparencies dynamically in a LocalScript if using ColorSequence or NumberSequence to avoid JSON coercion issues.
+- **ScrollingFrame Best Practices**: When creating vertical lists, grids, or long text scroll areas inside a `ScrollingFrame`:
+  - **Dynamic Canvas Sizing**: Set `AutomaticCanvasSize = Enum.AutomaticSize.Y` and `CanvasSize = UDim2.new(0, 0, 0, 0)`. This forces Roblox to automatically recalculate the canvas height based on the total height of child layouts (like `UIListLayout` or `UIGridLayout`) without manual script updates.
+  - **Lock Scrolling Axis**: Set `ScrollingDirection = Enum.ScrollingDirection.Y` to lock scrolling vertically and prevent accidental horizontal scrolling/panning.
 - After previewing, always `ui_preview hide` so the overlay doesn't linger in CoreGui.

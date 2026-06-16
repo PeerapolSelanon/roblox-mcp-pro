@@ -29,6 +29,7 @@
     "plugin/default.project.json",
     "plugin/RobloxMcpPro.rbxmx",
     ".agents/skills/roblox-mcp-pro",
+    ".agents/skills/roblox-mcp-multi-agent",
     ".agents/skills/roblox-studio-plugin",
     ".agents/skills/roblox-ui-animation",
     ".agents/skills/roblox-ui-from-image",

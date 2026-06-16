@@ -215,6 +215,37 @@ Optional flourish seen in reference clips: a **burst/sparkle** sprite that scale
 center on open/close — an `ImageLabel` with a starburst asset, `UIScale` 0.5→1.4 + `ImageTransparency`
 0→1 over ~0.25s. Needs a real `rbxassetid://` image.
 
+### 3. Animating 3-Layer Volumetric Borders (Neon Glow/Highlight)
+
+When animating or hovering a 3-layer volumetric border (using `BorderStrokePosition` set to `Outer`, `Center`, and `Inner` directly on the parent frame):
+- **Contrast Rule**: Keep the `OuterStroke` (Outer shadow) and `InnerStroke` (Inner shadow) thin and dark (e.g. `Thickness = 1.2` or `1.5`, very dark colors) to maintain high contrast and sharp border details.
+- **Center Stroke Expansion**: Only expand and brighten the `CenterStroke` (Center position) on hover. For example, tweening `CenterStroke.Thickness` from `3.0` to `4.5` and its color to a brighter neon tint. Do not thicken the outer and inner strokes, as doing so will cause the dark shadows to bleed into the neon core, destroying the volumetric illusion.
+
+Example LocalScript hover implementation:
+```lua
+local TweenService = game:GetService("TweenService")
+local TWEEN_INFO = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function hookHover(button)
+    local outerStroke = button:FindFirstChild("OuterStroke")
+    local centerStroke = button:FindFirstChild("CenterStroke")
+    local innerStroke = button:FindFirstChild("InnerStroke")
+
+    button.MouseEnter:Connect(function()
+        if centerStroke then
+            TweenService:Create(centerStroke, TWEEN_INFO, {Thickness = 4.5, Color = Color3.fromRGB(220, 100, 255)}):Play()
+        end
+        -- Keep outerStroke and innerStroke at their thin 1.2px - 1.5px thickness
+    end)
+
+    button.MouseLeave:Connect(function()
+        if centerStroke then
+            TweenService:Create(centerStroke, TWEEN_INFO, {Thickness = 3.0, Color = Color3.fromRGB(160, 50, 240)}):Play()
+        end
+    end)
+end
+```
+
 <!-- Append new patterns here as they're decoded: scale-pop, slide-in, fade+blur backdrop, stagger list, etc. -->
 
 ## Gotchas

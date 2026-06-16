@@ -17,6 +17,7 @@ import { promises as fs } from "node:fs";
 /** Product skills bundled in the package (must match package.json `files`). */
 const SKILLS = [
   "roblox-mcp-pro",
+  "roblox-mcp-multi-agent",
   "roblox-studio-plugin",
   "roblox-ui-animation",
   "roblox-ui-from-image",

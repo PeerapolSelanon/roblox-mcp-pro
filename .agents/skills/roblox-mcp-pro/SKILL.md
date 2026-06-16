@@ -313,3 +313,26 @@ If the user asks the AI agent to initialize a full Roblox project (e.g., "ช่
 3. **Generate sourcemap.json:**
    Create a basic/empty `sourcemap.json` or run `rojo sourcemap default.project.json --output sourcemap.json` if Rojo is available.
 
+## UI Layout & Advanced Designing Techniques
+
+### 1. Multi-Layer Glowing Borders with Consecutive Offsets
+When designing complex multi-layer borders (e.g. inner/center/outer strokes) on frames, avoid nesting helper transparent frames. Instead:
+- Put all `UIStroke` instances directly under the target frame.
+- Set all `UIStroke` positions to `Enum.BorderStrokePosition.Inner` and mode to `Enum.ApplyStrokeMode.Border`.
+- Use math-driven consecutive negative `BorderOffset` values to keep them flush without gaps:
+  - `OuterStroke` (shadow/border): `BorderOffset = 0` (Thickness = `T1`)
+  - `CenterStroke` (core glow): `BorderOffset = -T1` (Thickness = `T2`)
+  - `InnerStroke` (inner shadow): `BorderOffset = -(T1 + T2)` (Thickness = `T3`)
+  This guarantees that borders don't get clipped by parent `ScrollingFrame` boundaries or `ClipsDescendants`.
+
+### 2. Auto-Resizing ScrollingFrame Settings
+When building list menus or scroll views:
+- Set `AutomaticCanvasSize = Enum.AutomaticSize.Y` and `ScrollingDirection = Enum.ScrollingDirection.Y` to allow the vertical scrolling canvas to automatically scale to its contents without manually calculating canvas heights.
+- Make sure `ScrollBarThickness` is non-zero (e.g. `6`) so scrollbars are visible and functional when the contents exceed the container size.
+
+### 3. Responsive Scaling using UIScale
+To make a GUI larger/smaller proportionally on different viewport sizes:
+- Place a `UIScale` instance (named e.g. `MainScale`) inside the main frame.
+- Animate the `UIScale.Scale` property on window open/close rather than tweening the `Size` of the frame, which preserves all layout constraints and child ratios (fonts, strokes, paddings) perfectly.
+
+
