@@ -26,6 +26,8 @@ export interface Agent {
   commandCount: number;
   /** lead = plans & dispatches · worker = executes tasks · idle = unassigned. */
   role: AgentRole;
+  /** sessionId this agent is bound to (its target Place), or null if unbound. */
+  boundSession: string | null;
 }
 
 /** One executed command, for the dashboard activity feed. */
@@ -37,6 +39,9 @@ export interface CommandLogEntry {
   ok: boolean;
   durationMs: number;
   error?: string;
+  /** The Studio session the command was routed to (multi-Place feed column). */
+  sessionId?: string;
+  placeName?: string;
 }
 
 /**
@@ -86,6 +91,7 @@ export class BrokerState {
       lastSeenAt: now,
       commandCount: 0,
       role: "idle",
+      boundSession: null,
     });
     this.notify();
     return clientId;
@@ -143,6 +149,36 @@ export class BrokerState {
     agent.role = role;
     this.notify();
     return agent;
+  }
+
+  // --- agent → session binding ------------------------------------------
+
+  /** Bind an agent to a Studio session (its target Place). False if unknown. */
+  attach(clientId: string, sessionId: string): boolean {
+    const agent = this.agents.get(clientId);
+    if (!agent) return false;
+    agent.boundSession = sessionId;
+    this.notify();
+    return true;
+  }
+
+  /** Clear an agent's binding. False if unknown. */
+  detach(clientId: string): boolean {
+    const agent = this.agents.get(clientId);
+    if (!agent) return false;
+    agent.boundSession = null;
+    this.notify();
+    return true;
+  }
+
+  /** The session an agent is bound to, or null. */
+  boundSessionOf(clientId: string): string | null {
+    return this.agents.get(clientId)?.boundSession ?? null;
+  }
+
+  /** Agents currently bound to a given session (dashboard: warn if >1). */
+  agentsBoundTo(sessionId: string): Agent[] {
+    return [...this.agents.values()].filter((a) => a.boundSession === sessionId);
   }
 
   /** The current lead, if any. */
