@@ -43,7 +43,7 @@ export function resolveTargetSession(input: ResolveInput): ResolveResult {
     );
   }
   if (connected.length === 1) {
-    return { sessionId: connected[0].sessionId, autoBind: true };
+    return { sessionId: connected[0]!.sessionId, autoBind: true };
   }
   const choices = connected.map((s) => `  • ${label(s)}`).join("\n");
   throw new StudioError(
