@@ -438,6 +438,10 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       port: BRIDGE_PORT,
       plugin: bridge.status(),
       studio,
+      sessions: bridge.allSessions().map((s) => ({
+        ...s,
+        boundAgents: state.agentsBoundTo(s.sessionId).map((ag) => ({ clientId: ag.clientId, name: ag.name })),
+      })),
       sync: syncEngine.status(),
       places: places !== null ? { dir: placesDir, list: places } : null,
       totalCommands,
