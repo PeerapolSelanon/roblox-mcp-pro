@@ -1,15 +1,15 @@
 /**
- * Local filesystem browsing for the dashboard's folder picker. The broker only
- * listens on 127.0.0.1, so exposing read-only directory listings (plus a
- * single-level mkdir for "New project") is the same trust level as the
- * existing /api/scaffold endpoint, which already writes into arbitrary dirs.
+ * Local filesystem browsing for the dashboard's folder picker, so the Sync tab
+ * can offer a real "Browse…" picker for the project folder. The broker only
+ * listens on 127.0.0.1, so exposing read-only directory listings plus a
+ * single-level mkdir stays within the localhost-only trust boundary.
  *
  * Also keeps a small "recent project folders" list at
  * ~/.roblox-mcp-pro/recent-projects.json so auto-detection works even when no
  * agent is connected (e.g. the user opens the dashboard before their AI client).
  */
 
-import { promises as fs, watch, type FSWatcher } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -88,114 +88,6 @@ export async function browseDir(dir: string): Promise<BrowseResult> {
   dirs.sort((a, b) => Number(b.isProject) - Number(a.isProject) || a.name.localeCompare(b.name));
   const parent = path.dirname(abs);
   return { path: abs, parent: parent === abs ? null : parent, dirs };
-}
-
-// ---- Project tab web IDE: directory listing + text file read/write --------
-
-export interface TreeEntry {
-  name: string;
-  path: string;
-  type: "dir" | "file";
-}
-
-/**
- * One level of the project file tree (dirs first, then files). Unlike the
- * folder picker, dotfiles are included — .agents/.claude are part of a
- * project — only system/noise folders are filtered.
- */
-export async function listProjectDir(
-  dir: string,
-): Promise<{ path: string; isProject: boolean; entries: TreeEntry[] }> {
-  const abs = path.resolve(dir);
-  const raw = await fs.readdir(abs, { withFileTypes: true });
-  const entries: TreeEntry[] = [];
-  for (const entry of raw) {
-    const name = entry.name;
-    // .git is hidden like in VS Code; other dotfolders (.agents, .claude) matter.
-    if (name.startsWith("$") || name === ".git" || SKIP_NAMES.has(name.toLowerCase())) continue;
-    if (!entry.isDirectory() && !entry.isFile()) continue;
-    entries.push({ name, path: path.join(abs, name), type: entry.isDirectory() ? "dir" : "file" });
-  }
-  entries.sort((a, b) =>
-    a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1,
-  );
-  return { path: abs, isProject: await looksLikeProject(abs), entries };
-}
-
-/** Editor size cap — the dashboard editor is for scripts, not assets. */
-const MAX_EDIT_BYTES = 1024 * 1024;
-
-export async function readTextFile(file: string): Promise<{ path: string; content: string }> {
-  const abs = path.resolve(file);
-  const st = await fs.stat(abs);
-  if (!st.isFile()) throw new Error("not a file");
-  if (st.size > MAX_EDIT_BYTES) throw new Error("file is too large to edit here (>1 MB)");
-  const buf = await fs.readFile(abs);
-  if (buf.includes(0)) throw new Error("binary file — not editable here");
-  return { path: abs, content: buf.toString("utf8") };
-}
-
-export async function writeTextFile(file: string, content: string): Promise<{ path: string }> {
-  const abs = path.resolve(file);
-  await fs.writeFile(abs, content, "utf8");
-  return { path: abs };
-}
-
-// ---- Change watching: powers the dashboard's live AI-edit diff view --------
-// One recursive fs.watch per project root (the dashboard shows one project at
-// a time). The session self-closes when the dashboard stops polling.
-
-interface WatchSession {
-  root: string;
-  watcher: FSWatcher;
-  /** file path -> last event timestamp (insertion order ≈ oldest first) */
-  events: Map<string, number>;
-  lastPollAt: number;
-}
-
-let watchSession: WatchSession | null = null;
-
-setInterval(() => {
-  if (watchSession && Date.now() - watchSession.lastPollAt > 60_000) {
-    watchSession.watcher.close();
-    watchSession = null;
-  }
-}, 30_000).unref();
-
-/** Ensure `root` is being watched and return events newer than `since`. */
-export function pollChanges(
-  root: string,
-  since: number,
-): { now: number; events: { path: string; ts: number }[] } {
-  const abs = path.resolve(root);
-  if (!watchSession || watchSession.root !== abs) {
-    watchSession?.watcher.close();
-    const events = new Map<string, number>();
-    const watcher = watch(abs, { recursive: true }, (_event, filename) => {
-      if (!filename) return;
-      const rel = String(filename);
-      const low = rel.toLowerCase();
-      if (low.startsWith(".git") || low.includes("node_modules") || rel.startsWith("$")) return;
-      const full = path.join(abs, rel);
-      events.delete(full); // refresh insertion order so the cap drops oldest
-      events.set(full, Date.now());
-      if (events.size > 500) {
-        const oldest = events.keys().next().value;
-        if (oldest !== undefined) events.delete(oldest);
-      }
-    });
-    watcher.on("error", () => {
-      // e.g. the root was deleted — drop the session; next poll restarts it.
-      watchSession = null;
-    });
-    watchSession = { root: abs, watcher, events, lastPollAt: Date.now() };
-  }
-  watchSession.lastPollAt = Date.now();
-  const out: { path: string; ts: number }[] = [];
-  for (const [p, ts] of watchSession.events) {
-    if (ts > since) out.push({ path: p, ts });
-  }
-  return { now: Date.now(), events: out };
 }
 
 /** Recently used project folders, most recent first. Existing dirs only. */

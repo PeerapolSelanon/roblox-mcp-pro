@@ -220,82 +220,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   .syncfact .fv { font-size: 13px; font-weight: 600; margin-top: 2px; word-break: break-all; }
   .syncfact .fv.mono { font-family: var(--mono); font-weight: 400; font-size: 12px; color: var(--muted); }
 
-  /* Places: per-place status badges (label + color, never color alone) */
-  .pbadge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; margin-right: 6px;
-    border-radius: 999px; border: 1px solid var(--border); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
-  .pbadge .dot { width: 6px; height: 6px; }
-  .pbadge.open { color: var(--green); border-color: color-mix(in oklch, var(--green) 45%, var(--border)); background: var(--green-bg); }
-  .pbadge.syncing { color: var(--accent); border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); background: var(--accent-bg); }
-  .pbadge.paused { color: var(--amber); border-color: color-mix(in oklch, var(--amber) 45%, var(--border)); background: var(--amber-bg); }
-  td.placename { font-family: var(--sans); font-weight: 600; font-size: 13px; }
-  td.placename .nomirror { color: var(--faint); font-weight: 400; font-family: var(--mono); font-size: 11px; margin-left: 8px; }
-  .places-dir { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 8px; word-break: break-all; }
-
-  /* Project tab: VS Code-style mini IDE */
-  .ide-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border-soft); flex-wrap: wrap; }
-  .ide-bar .blabel { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: .02em; }
-  .ide-bar .ide-folder { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
-  .ide { display: grid; grid-template-columns: 260px 1fr; height: 68vh; min-height: 400px; }
-  .ide-tree { border-right: 1px solid var(--border-soft); overflow: auto; padding: 8px 6px; }
-  .titem { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer;
-    font-size: 13px; color: var(--muted); white-space: nowrap; user-select: none; }
-  .titem:hover { background: var(--panel2); color: var(--text); }
-  .titem.sel { background: var(--accent-bg); color: var(--accent); }
-  .titem .twist { width: 10px; color: var(--faint); font-size: 10px; flex: none; }
-  .titem .ficon { width: 16px; flex: none; text-align: center; font-size: 12px; }
-  .tkids { margin-left: 15px; border-left: 1px solid var(--border-soft); padding-left: 2px; display: none; }
-  .tkids.open { display: block; }
-  .ide-editor { display: flex; flex-direction: column; min-width: 0; }
-  .ide-ehead { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--border-soft); }
-  .ide-ehead .fname { font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; }
-  .ide-ehead .dirty { color: var(--amber); font-size: 15px; line-height: 1; display: none; }
-  .ide-body { position: relative; flex: 1; overflow: hidden; background: oklch(0.150 0.010 45); }
-  .ide-body pre, .ide-body textarea {
-    margin: 0; border: 0; padding: 14px 16px; font: 13px/1.5 var(--mono); tab-size: 4;
-    white-space: pre; word-wrap: normal; overflow-wrap: normal; box-sizing: border-box;
-    /* Reserve the scrollbar gutter on BOTH layers so the editor's vertical
-       scrollbar never narrows the textarea relative to the highlight <pre>;
-       keeps caret and syntax colours aligned on long/scrolled lines. */
-    scrollbar-gutter: stable;
-  }
-  .ide-body pre { position: absolute; inset: 0; overflow: hidden; color: var(--text); pointer-events: none; }
-  .ide-body textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; overflow: auto;
-    background: transparent; color: transparent; caret-color: var(--text); outline: none; }
-  .ide-body textarea::selection { background: color-mix(in oklch, var(--accent) 30%, transparent); }
-  /* Narrow viewports: stack the file tree above the editor instead of a fixed
-     260px sidebar that crushes the editor on phones / split panes. */
-  @media (max-width: 680px) {
-    .ide { grid-template-columns: 1fr; grid-template-rows: minmax(120px, 28vh) 1fr; height: 80vh; }
-    .ide-tree { border-right: none; border-bottom: 1px solid var(--border-soft); }
-  }
-  .tok-k { color: oklch(0.74 0.17 45); }
-  .tok-s { color: oklch(0.80 0.12 130); }
-  .tok-c { color: var(--faint); font-style: italic; }
-  .tok-n { color: oklch(0.82 0.13 85); }
-
-  /* Live diff view: green = added, red = removed (full-width line tint) */
-  .dl-add { display: block; background: color-mix(in oklch, var(--green) 16%, transparent);
-    box-shadow: inset 2px 0 0 var(--green); }
-  .dl-del { display: block; background: color-mix(in oklch, var(--red) 14%, transparent);
-    box-shadow: inset 2px 0 0 var(--red); opacity: .8; }
-  .diffstat { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
-  .diffstat .plus { color: var(--green); } .diffstat .minus { color: var(--red); }
-  .ide-ehead .diffbar { display: none; align-items: center; gap: 8px; }
-  .ide-ehead .diffbar.on { display: flex; }
-
-  /* Changes feed at the top of the file tree */
-  .chghead { font-size: 10.5px; font-family: var(--mono); color: var(--faint); letter-spacing: .04em; padding: 4px 8px 2px; }
-  .chgitem { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer;
-    font-size: 12.5px; color: var(--amber); white-space: nowrap; }
-  .chgitem:hover { background: var(--panel2); }
-  .chgitem .nm { overflow: hidden; text-overflow: ellipsis; }
-  .chgitem .when { margin-left: auto; color: var(--faint); font-size: 10.5px; font-family: var(--mono); }
-  .chgsep { border-bottom: 1px solid var(--border-soft); margin: 6px 4px; }
-  .ide-empty { display: grid; place-items: center; padding: 56px 24px; }
-  .ide-empty .inner { max-width: 480px; display: grid; gap: 12px; justify-items: center; text-align: center; }
-  .ide-empty h3 { margin: 0; font-size: 18px; }
-  .ide-empty p { margin: 0; color: var(--muted); font-size: 13px; text-align: left; }
-
   /* Folder picker modal */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
     display: none; align-items: center; justify-content: center; z-index: 50; padding: 24px; }
@@ -338,7 +262,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <span class="badge"><span id="streamDot" class="dot warn"></span><span id="streamText">connecting…</span></span>
   <nav class="tabs" role="tablist">
     <button class="tab active" data-tab="overview" role="tab" id="tabBtn-overview" aria-controls="tab-overview" aria-selected="true">Overview<span class="tabdot" id="dotOverview"></span></button>
-    <button class="tab" data-tab="project" role="tab" id="tabBtn-project" aria-controls="tab-project" aria-selected="false">Project &amp; Sync<span class="tabdot" id="dotSync"></span></button>
+    <button class="tab" data-tab="project" role="tab" id="tabBtn-project" aria-controls="tab-project" aria-selected="false">Sync<span class="tabdot" id="dotSync"></span></button>
     <button class="tab" data-tab="agents" role="tab" id="tabBtn-agents" aria-controls="tab-agents" aria-selected="false">Agents</button>
     <button class="tab" data-tab="license" role="tab" id="tabBtn-license" aria-controls="tab-license" aria-selected="false">License<span class="tabdot" id="dotLicense"></span></button>
   </nav>
@@ -412,8 +336,14 @@ export const DASHBOARD_HTML = `<!doctype html>
       </div>
     </div>
 
-    <!-- Setup view (syncs the project folder shown below) -->
+    <!-- Setup view (folder picker + sync options) -->
     <div id="syncSetup">
+      <label class="flabel">Project folder</label>
+      <div class="folder-row">
+        <input type="text" id="projDirInput" class="control-input" readonly placeholder="detecting…" />
+        <button class="btn" onclick="changeProjectDir()">Browse…</button>
+      </div>
+
       <label class="flabel">Direction</label>
       <div class="seg-group cols3" id="segDir" role="group" aria-label="Sync direction">
         <button type="button" class="seg active" data-dir="studio-to-disk">Studio &#8594; Disk<span class="segsub">snapshot to files</span></button>
@@ -438,70 +368,12 @@ export const DASHBOARD_HTML = `<!doctype html>
       <div class="btn-group" style="grid-template-columns:1fr;">
         <button class="btn primary" onclick="doSyncAction('start')">&#9654; Start sync</button>
       </div>
-      <div class="wshint" style="margin-top:6px;">Syncs the project folder shown in the panel below.</div>
+      <div class="wshint" style="margin-top:6px;">Syncs the project folder selected above.</div>
     </div>
 
     <div id="syncControlMsg" class="sync-msg"></div>
   </div>
 
-    <div class="panel" style="padding:0;overflow:hidden;">
-      <div class="ide-bar">
-        <span class="blabel">PROJECT</span>
-        <span class="ide-folder" id="projDirLabel">detecting…</span>
-        <button class="btn" style="padding:5px 11px;font-size:12px;" onclick="changeProjectDir()">Change…</button>
-        <input type="hidden" id="projDirHidden" />
-        <div class="spacer"></div>
-        <span class="sync-msg" id="ideMsg" style="margin:0;"></span>
-      </div>
-
-      <!-- IDE view: file tree + editor (shown when the folder is a project) -->
-      <div class="ide" id="ideView" style="display:none;">
-        <div class="ide-tree">
-          <div id="ideChanges"></div>
-          <div id="ideTree"></div>
-        </div>
-        <div class="ide-editor">
-          <div class="ide-ehead">
-            <span class="fname" id="ideFname">No file open — pick one on the left</span>
-            <span class="dirty" id="ideDirty" title="Unsaved changes">&#9679;</span>
-            <span class="diffbar" id="ideDiffBar">
-              <span class="diffstat" id="ideDiffStat"></span>
-              <button class="btn" id="ideDiffClose" style="padding:4px 10px;font-size:11.5px;">Back to editor</button>
-            </span>
-            <div class="spacer"></div>
-            <button class="btn primary" id="ideSave" style="padding:5px 14px;font-size:12px;" disabled>Save</button>
-          </div>
-          <div class="ide-body">
-            <pre id="ideHl" aria-hidden="true"></pre>
-            <textarea id="ideTa" spellcheck="false" disabled aria-label="File editor"></textarea>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty state: no project here yet -->
-      <div class="ide-empty" id="ideEmpty" style="display:none;">
-        <div class="inner">
-          <h3>No project here yet</h3>
-          <p>Scaffold an empty, sync-ready project (one project = one universe): <b>places/</b>, selene.toml, wally.toml, and the roblox skills under <b>.agents</b> + <b>.claude</b>. Nothing existing is overwritten.</p>
-          <div class="folder-row" style="width:100%;">
-            <input type="text" id="inputScaffoldDir" placeholder="detecting…" class="control-input" />
-            <button class="btn" onclick="openPicker('inputScaffoldDir','scaffoldHint')">&#128193; Browse</button>
-          </div>
-          <div class="wshint" id="scaffoldHint"></div>
-          <button class="btn primary" style="padding:10px 26px;font-size:14px;" onclick="doScaffold()">+ New Project</button>
-          <div id="scaffoldMsg" class="sync-msg"></div>
-        </div>
-      </div>
-    </div>
-
-  <section id="placesSection" style="display:none;">
-    <h2>Universe · places</h2>
-    <table>
-      <thead><tr><th>Place</th><th>Place ID</th><th>Status</th><th>Last synced</th><th>Folder</th></tr></thead>
-      <tbody id="placesBody"></tbody>
-    </table>
-    <div class="places-dir" id="placesDir"></div>
-  </section>
   </div><!-- /tab-project -->
 
   <div class="tabpane" id="tab-license" role="tabpanel" aria-labelledby="tabBtn-license">
@@ -746,42 +618,6 @@ function render(state) {
   set("dCmds", state.totalCommands ?? 0);
   set("dQueue", (plugin.queued ?? 0) + " queued · " + (plugin.inflight ?? 0) + " in flight");
 
-  // Universe places: every mirrored place, with the open / syncing one flagged.
-  const placesState = state.places;
-  if (placesState) {
-    $("placesSection").style.display = "block";
-    const list = (placesState.list || []).slice();
-    const openId = ps.level !== "bad" && studio && studio.placeId != null ? studio.placeId : null;
-    // The open place may have no mirror yet — surface it anyway so the row
-    // count always matches what the user can see in Studio.
-    if (openId !== null && !list.some((p) => p.placeId === openId)) {
-      list.unshift({ folder: null, placeId: openId, name: (studio && studio.placeName) || "?", lastSyncedAt: null });
-    }
-    const rowFor = (p) => {
-      const badges = [];
-      if (openId !== null && p.placeId === openId) {
-        badges.push("<span class='pbadge open'><span class='dot on'></span>open in Studio</span>");
-      }
-      if (sync.running && sync.placeId === p.placeId) {
-        badges.push(sync.playtestActive
-          ? "<span class='pbadge paused'><span class='dot warn'></span>playtest · sync paused</span>"
-          : "<span class='pbadge syncing'><span class='dot on' style='background:var(--accent);box-shadow:none;'></span>syncing</span>");
-      }
-      return "<tr><td class=placename>" + esc(p.name) +
-        (p.folder === null ? "<span class='nomirror'>no mirror yet</span>" : "") +
-        "</td><td class=muted>" + (p.placeId > 0 ? p.placeId : "unsaved") +
-        "</td><td>" + (badges.join("") || "<span class=muted>—</span>") +
-        "</td><td class=muted>" + (p.lastSyncedAt ? ago(p.lastSyncedAt) : "never") +
-        "</td><td class=muted>" + (p.folder !== null ? "places/" + esc(p.folder) : "—") + "</td></tr>";
-    };
-    $("placesBody").innerHTML = list.length
-      ? list.map(rowFor).join("")
-      : "<tr><td class=empty colspan=5>No place mirrors yet — open a place in Studio and start sync; its folder appears here.</td></tr>";
-    $("placesDir").textContent = placesState.dir || "";
-  } else {
-    $("placesSection").style.display = "none";
-  }
-
   // agents table (paginated, 5 per page)
   const ROLES = ['idle', 'lead', 'worker'];
   const roleSelect = (a) => {
@@ -833,14 +669,6 @@ function render(state) {
   $("hdrsub").textContent = "broker monitor · :" + (state.port ?? "3690");
   $("clock").textContent = "updated " + new Date().toLocaleTimeString();
 
-  if (!$('inputScaffoldDir').value) {
-    const activeAgent = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
-    if (activeAgent && activeAgent.cwd) {
-      $('inputScaffoldDir').value = activeAgent.cwd;
-      $('scaffoldHint').innerHTML = 'Auto-detected from <b>' + esc(activeAgent.name) + '</b>';
-    }
-  }
-
   // Sync panel: pill + compact "running" view vs the setup form.
   const DIR_LABEL = { "two-way": "Two-way (live)", "studio-to-disk": "Studio \\u2192 Disk", "disk-to-studio": "Disk \\u2192 Studio" };
   $('syncSetup').style.display = sync.running ? 'none' : 'block';
@@ -871,7 +699,7 @@ async function doSyncAction(action) {
     // One source of truth: the project folder in the IDE bar below.
     const syncDir = projDir || '';
     if (!syncDir) {
-      showMsg('Pick a project folder first (Change\\u2026 in the panel below).', true);
+      showMsg('Pick a project folder first (Browse\\u2026 above).', true);
       return;
     }
     const activeSeg = document.querySelector('#segDir .seg.active');
@@ -958,42 +786,6 @@ async function saveLicense() {
     } else {
       showMsg('Error: ' + (data.error || data.message || 'invalid key'), true);
       renderLicense(data);
-    }
-  } catch (err) {
-    showMsg('Failed to connect to broker: ' + err, true);
-  }
-}
-
-async function doScaffold() {
-  const elMsg = $('scaffoldMsg');
-  const showMsg = (msg, isErr = false) => {
-    elMsg.textContent = msg;
-    elMsg.style.color = isErr ? 'var(--red)' : 'var(--green)';
-  };
-  const dir = $('inputScaffoldDir').value.trim();
-  if (!dir) {
-    showMsg('Pick a project folder first.', true);
-    return;
-  }
-  showMsg('Creating project...');
-  try {
-    const res = await fetch('/api/scaffold', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dir })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      const r = data.result || {};
-      const made = (r.created || []).length;
-      const kept = (r.skipped || []).length;
-      showMsg('Project ready at ' + (r.dir || dir) + ' \\u2014 ' + made + ' created, ' + kept + ' already present.');
-      // Flip the Project tab from the empty state into the IDE on the new folder.
-      try { localStorage.setItem('rmp-projdir', r.dir || dir); } catch {}
-      projLoadedFor = null;
-      projectShow(true);
-    } else {
-      showMsg('Error: ' + data.error, true);
     }
   } catch (err) {
     showMsg('Failed to connect to broker: ' + err, true);
@@ -1127,38 +919,12 @@ $('pkNewOk').addEventListener('click', async () => {
 });
 $('pkNewName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pkNewOk').click(); });
 
-// Auto-detect project folders at page load — works even before any agent
-// connects, using the broker's suggestions (sync dir, agent cwds, recents).
-async function autoDetectFolders() {
-  try {
-    const res = await fetch('/api/fs/browse');
-    const data = await res.json();
-    if (!data.ok || !(data.suggestions || []).length) return;
-    const s = data.suggestions[0];
-    if (!$('inputScaffoldDir').value) {
-      $('inputScaffoldDir').value = s.path;
-      $('scaffoldHint').innerHTML = 'Auto-detected from <b>' + esc(s.source) + '</b>';
-    }
-  } catch {
-    // broker unreachable — SSE reconnect will sort the page out
-  }
-}
-
-// ---- Project tab: VS Code-style mini IDE -----------------------------------
-// File tree (lazy, one level per fetch) + plain-textarea editor with a
-// syntax-highlight overlay. No frameworks, no external assets.
+// ---- Project tab: folder selector for Sync --------------------------------
+// The mini-IDE was removed - edit scripts in your own editor (VS Code). This
+// just tracks which folder Sync reads/writes and shows it in the panel.
 let projDir = null;
-let projLoadedFor = null; // dir the tree is currently rendered for
-let ideFile = null;       // absolute path of the open file
-let ideDirtyFlag = false;
 
-function ideShowMsg(msg, isErr) {
-  const el = $('ideMsg');
-  el.textContent = msg;
-  el.style.color = isErr ? 'var(--red)' : 'var(--green)';
-}
-
-// Where the IDE looks: user's explicit choice > running sync > active agent
+// Where Sync looks: user's explicit choice > running sync > active agent
 // cwd > broker suggestions (recents work even before any agent connects).
 async function resolveProjectDir() {
   try {
@@ -1177,380 +943,18 @@ async function resolveProjectDir() {
   return null;
 }
 
-async function projectShow(force) {
+async function projectShow() {
   const dir = await resolveProjectDir();
   projDir = dir;
-  $('projDirLabel').textContent = dir || 'no folder detected \\u2014 pick one with Change\\u2026';
-  if (!dir) { ideShowEmpty(); return; }
-  if (!force && projLoadedFor === dir) return;
-  try {
-    const data = await (await fetch('/api/fs/list?path=' + encodeURIComponent(dir))).json();
-    if (data.ok && data.isProject) {
-      projLoadedFor = dir;
-      $('ideEmpty').style.display = 'none';
-      $('ideView').style.display = 'grid';
-      $('ideTree').innerHTML = data.entries.map(ideRowHtml).join('') ||
-        "<div class='titem'><span class='twist'></span>empty project</div>";
-      ideCloseFile();
-    } else {
-      ideShowEmpty(dir);
-    }
-  } catch {
-    ideShowEmpty(dir);
-  }
-}
-
-function ideShowEmpty(dir) {
-  projLoadedFor = null;
-  $('ideView').style.display = 'none';
-  $('ideEmpty').style.display = 'grid';
-  // Always reflect the folder being looked at — it is what "+ New Project" will use.
-  if (dir) $('inputScaffoldDir').value = dir;
+  $('projDirInput').value = dir || '';
 }
 
 function changeProjectDir() {
-  $('projDirHidden').value = projDir || '';
-  openPicker('projDirHidden', null, (p) => {
+  openPicker('projDirInput', null, (p) => {
     try { localStorage.setItem('rmp-projdir', p); } catch {}
-    projLoadedFor = null;
-    projectShow(true);
+    projectShow();
   });
 }
-
-function ideRowHtml(e) {
-  const ap = esc(e.path).replace(/'/g, '&#39;');
-  if (e.type === 'dir') {
-    return "<div class='titem' data-type='dir' data-path='" + ap + "'><span class='twist'>\\u25b8</span>" +
-      "<span class='ficon'>\\ud83d\\udcc1</span><span>" + esc(e.name) + "</span></div><div class='tkids'></div>";
-  }
-  return "<div class='titem' data-type='file' data-path='" + ap + "'><span class='twist'></span>" +
-    "<span class='ficon'>\\ud83d\\udcc4</span><span>" + esc(e.name) + "</span></div>";
-}
-
-$('ideTree').addEventListener('click', async (e) => {
-  const item = e.target.closest('.titem');
-  if (!item) return;
-  const p = item.getAttribute('data-path');
-  if (!p) return;
-  if (item.getAttribute('data-type') === 'dir') {
-    const kids = item.nextElementSibling;
-    if (!kids) return;
-    const open = kids.classList.toggle('open');
-    item.querySelector('.twist').textContent = open ? '\\u25be' : '\\u25b8';
-    if (open && !kids.dataset.loaded) {
-      kids.innerHTML = "<div class='titem'><span class='twist'></span><span class='muted'>loading\\u2026</span></div>";
-      try {
-        const d = await (await fetch('/api/fs/list?path=' + encodeURIComponent(p))).json();
-        kids.innerHTML = d.ok ? d.entries.map(ideRowHtml).join('') : '';
-        kids.dataset.loaded = '1';
-      } catch {
-        kids.innerHTML = '';
-      }
-    }
-  } else {
-    ideOpenFile(p, item);
-  }
-});
-
-function ideSetDirty(d) {
-  ideDirtyFlag = d;
-  $('ideDirty').style.display = d ? 'inline' : 'none';
-  $('ideSave').disabled = !d || !ideFile;
-}
-
-function ideCloseFile() {
-  ideExitDiff();
-  ideFile = null;
-  ideSetDirty(false);
-  $('ideFname').textContent = 'No file open \\u2014 pick one on the left';
-  const ta = $('ideTa');
-  ta.value = '';
-  ta.disabled = true;
-  $('ideHl').textContent = '';
-}
-
-async function ideOpenFile(p, rowEl) {
-  if (ideDirtyFlag && !confirm('Discard unsaved changes in ' + (ideFile || 'this file') + '?')) return;
-  try {
-    const d = await (await fetch('/api/fs/read?path=' + encodeURIComponent(p))).json();
-    if (!d.ok) { ideShowMsg(d.error || 'Could not open file.', true); return; }
-    ideExitDiff();
-    ideFile = d.path;
-    ideCachePut(d.path, d.content);
-    document.querySelectorAll('#ideTree .titem.sel').forEach((x) => x.classList.remove('sel'));
-    if (rowEl) rowEl.classList.add('sel');
-    const rel = projDir && d.path.indexOf(projDir) === 0 ? d.path.slice(projDir.length).replace(/^[\\\\/]/, '') : d.path;
-    $('ideFname').textContent = rel;
-    const ta = $('ideTa');
-    ta.value = d.content;
-    ta.disabled = false;
-    ideSetDirty(false);
-    ideHighlight();
-    ta.scrollTop = 0; ta.scrollLeft = 0;
-    $('ideHl').scrollTop = 0; $('ideHl').scrollLeft = 0;
-    ideShowMsg('');
-  } catch (err) {
-    ideShowMsg('Failed to open: ' + err, true);
-  }
-}
-
-async function ideSaveFile() {
-  if (!ideFile || !ideDirtyFlag) return;
-  ideShowMsg('Saving\\u2026');
-  try {
-    const res = await fetch('/api/fs/write', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: ideFile, content: $('ideTa').value })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      ideSetDirty(false);
-      ideCachePut(ideFile, $('ideTa').value); // own save — don't diff it back at us
-      ideShowMsg('Saved ' + $('ideFname').textContent + ' \\u00b7 ' + new Date().toLocaleTimeString());
-    } else {
-      ideShowMsg('Save failed: ' + data.error, true);
-    }
-  } catch (err) {
-    ideShowMsg('Save failed: ' + err, true);
-  }
-}
-$('ideSave').addEventListener('click', ideSaveFile);
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && $('tab-project').classList.contains('active')) {
-    e.preventDefault();
-    ideSaveFile();
-  }
-});
-
-// Syntax highlight: single-pass tokenizer per language, rendered into the
-// overlay <pre> behind the transparent-text textarea.
-function hlTokens(src, re, classes) {
-  let out = '', lastIdx = 0, m;
-  while ((m = re.exec(src))) {
-    out += esc(src.slice(lastIdx, m.index));
-    let cls = '';
-    for (let g = 1; g < m.length; g++) {
-      if (m[g] !== undefined) { cls = classes[g - 1]; break; }
-    }
-    out += "<span class='" + cls + "'>" + esc(m[0]) + "</span>";
-    lastIdx = m.index + m[0].length;
-    if (m[0].length === 0) re.lastIndex++;
-  }
-  return out + esc(src.slice(lastIdx));
-}
-const HL_LUAU = {
-  re: /(--\\[\\[[\\s\\S]*?(?:\\]\\]|$)|--[^\\n]*)|("(?:\\\\.|[^"\\\\\\n])*"?|'(?:\\\\.|[^'\\\\\\n])*'?)|(\\b\\d[\\w.]*\\b)|(\\b(?:function|local|end|if|then|else|elseif|for|while|do|return|break|continue|and|or|not|nil|true|false|in|repeat|until|type|export|self)\\b)/g,
-  classes: ['tok-c', 'tok-s', 'tok-n', 'tok-k'],
-};
-const HL_JSON = {
-  re: /("(?:\\\\.|[^"\\\\])*")|(-?\\b\\d[\\w.+-]*\\b)|(\\b(?:true|false|null)\\b)/g,
-  classes: ['tok-s', 'tok-n', 'tok-k'],
-};
-function ideHighlight() {
-  const src = $('ideTa').value;
-  const f = (ideFile || '').toLowerCase();
-  let html;
-  if (f.endsWith('.luau') || f.endsWith('.lua')) html = hlTokens(src, HL_LUAU.re, HL_LUAU.classes);
-  else if (f.endsWith('.json')) html = hlTokens(src, HL_JSON.re, HL_JSON.classes);
-  else html = esc(src);
-  $('ideHl').innerHTML = html + '\\n';
-}
-
-// ---- Live AI-edit diffs ------------------------------------------------------
-// The broker watches the project folder; we poll for change events. When a
-// tracked file changes we show a green/red line diff — the open file flips
-// into diff view automatically, so you can watch an AI edit land.
-const ideCache = new Map(); // path -> last-known content (capped)
-const IDE_CACHE_MAX = 40;
-let changesSince = 0;
-let ideDiffMode = false;
-let ideChangeLog = []; // [{path, ts, add, del}] newest first
-let pollTimer = 0;
-let pollBusy = false;
-
-function ideCachePut(p, content) {
-  ideCache.delete(p);
-  ideCache.set(p, content);
-  if (ideCache.size > IDE_CACHE_MAX) {
-    const oldest = ideCache.keys().next().value;
-    if (oldest !== undefined) ideCache.delete(oldest);
-  }
-}
-
-function ideRel(p) {
-  return projDir && p.indexOf(projDir) === 0 ? p.slice(projDir.length).replace(/^[\\\\/]/, '') : p;
-}
-
-// Line diff: trim common prefix/suffix, LCS on the middle (bounded).
-function lineDiff(oldText, newText) {
-  const A = oldText.split('\\n'), B = newText.split('\\n');
-  let s = 0;
-  while (s < A.length && s < B.length && A[s] === B[s]) s++;
-  let e = 0;
-  while (e < A.length - s && e < B.length - s && A[A.length - 1 - e] === B[B.length - 1 - e]) e++;
-  const am = A.slice(s, A.length - e), bm = B.slice(s, B.length - e);
-  let ops = [];
-  if (am.length * bm.length > 400000) {
-    // Too big for DP — degrade to whole-block replace.
-    ops = am.map((l) => ({ t: 'del', l })).concat(bm.map((l) => ({ t: 'add', l })));
-  } else {
-    const n = am.length, m = bm.length;
-    const dp = new Array((n + 1) * (m + 1)).fill(0);
-    for (let i = n - 1; i >= 0; i--) {
-      for (let j = m - 1; j >= 0; j--) {
-        dp[i * (m + 1) + j] = am[i] === bm[j]
-          ? dp[(i + 1) * (m + 1) + j + 1] + 1
-          : Math.max(dp[(i + 1) * (m + 1) + j], dp[i * (m + 1) + j + 1]);
-      }
-    }
-    let i = 0, j = 0;
-    while (i < n && j < m) {
-      if (am[i] === bm[j]) { ops.push({ t: 'ctx', l: am[i] }); i++; j++; }
-      else if (dp[(i + 1) * (m + 1) + j] >= dp[i * (m + 1) + j + 1]) { ops.push({ t: 'del', l: am[i] }); i++; }
-      else { ops.push({ t: 'add', l: bm[j] }); j++; }
-    }
-    while (i < n) { ops.push({ t: 'del', l: am[i] }); i++; }
-    while (j < m) { ops.push({ t: 'add', l: bm[j] }); j++; }
-  }
-  const adds = ops.filter((o) => o.t === 'add').length;
-  const dels = ops.filter((o) => o.t === 'del').length;
-  return { pre: A.slice(0, s), ops, post: e ? A.slice(A.length - e) : [], adds, dels };
-}
-
-function ideShowDiff(p, oldText, newText) {
-  const d = lineDiff(oldText, newText);
-  let html = esc(d.pre.join('\\n'));
-  if (d.pre.length) html += '\\n';
-  for (const op of d.ops) {
-    if (op.t === 'ctx') html += esc(op.l) + '\\n';
-    else html += "<span class='" + (op.t === 'add' ? 'dl-add' : 'dl-del') + "'>" + esc(op.l) + '</span>';
-  }
-  html += esc(d.post.join('\\n'));
-  $('ideHl').innerHTML = html + '\\n';
-  ideDiffMode = true;
-  $('ideTa').style.visibility = 'hidden';
-  $('ideDiffBar').classList.add('on');
-  $('ideDiffStat').innerHTML = "<span class='plus'>+" + d.adds + "</span> <span class='minus'>\\u2212" + d.dels + "</span>";
-  $('ideFname').textContent = ideRel(p);
-  $('ideHl').scrollTop = 0;
-  return d;
-}
-
-function ideExitDiff() {
-  if (!ideDiffMode) return;
-  ideDiffMode = false;
-  $('ideTa').style.visibility = 'visible';
-  $('ideDiffBar').classList.remove('on');
-  ideHighlight();
-  $('ideHl').scrollTop = $('ideTa').scrollTop;
-  $('ideHl').scrollLeft = $('ideTa').scrollLeft;
-}
-$('ideDiffClose').addEventListener('click', ideExitDiff);
-
-function renderChangeLog() {
-  const el = $('ideChanges');
-  if (!ideChangeLog.length) { el.innerHTML = ''; return; }
-  const rows = ideChangeLog.slice(0, 12).map((c) => {
-    const ap = esc(c.path).replace(/'/g, '&#39;');
-    const stat = c.add != null
-      ? " <span class='diffstat'><span class='plus'>+" + c.add + "</span> <span class='minus'>\\u2212" + c.del + "</span></span>"
-      : '';
-    return "<div class='chgitem' data-path='" + ap + "' title='" + ap + "'>\\u270e <span class='nm'>" +
-      esc(ideRel(c.path)) + "</span>" + stat + "<span class='when'>" + ago(c.ts) + "</span></div>";
-  }).join('');
-  el.innerHTML = "<div class='chghead'>CHANGES</div>" + rows + "<div class='chgsep'></div>";
-}
-
-$('ideChanges').addEventListener('click', async (e) => {
-  const item = e.target.closest('.chgitem');
-  if (!item) return;
-  const p = item.getAttribute('data-path');
-  if (!p) return;
-  if (ideDirtyFlag && !confirm('Discard unsaved changes?')) return;
-  const prior = ideCache.get(p);
-  try {
-    const d = await (await fetch('/api/fs/read?path=' + encodeURIComponent(p))).json();
-    if (!d.ok) { ideShowMsg(d.error || 'Could not open file.', true); return; }
-    ideFile = d.path;
-    $('ideTa').value = d.content;
-    $('ideTa').disabled = false;
-    ideSetDirty(false);
-    if (prior !== undefined && prior !== d.content) ideShowDiff(d.path, prior, d.content);
-    else { ideExitDiff(); $('ideFname').textContent = ideRel(d.path); ideHighlight(); }
-    ideCachePut(d.path, d.content);
-  } catch (err) {
-    ideShowMsg('Failed to open: ' + err, true);
-  }
-});
-
-async function pollProjectChanges() {
-  if (pollBusy || !projDir || projLoadedFor !== projDir) return;
-  if (!$('tab-project').classList.contains('active') || document.hidden) return;
-  pollBusy = true;
-  try {
-    const d = await (await fetch('/api/fs/changes?path=' + encodeURIComponent(projDir) +
-      '&since=' + changesSince)).json();
-    if (!d.ok) return;
-    changesSince = d.now;
-    let fetched = 0;
-    for (const ev of d.events || []) {
-      if (fetched >= 8) break; // bound work per poll during bulk edits
-      let r;
-      try {
-        r = await (await fetch('/api/fs/read?path=' + encodeURIComponent(ev.path))).json();
-      } catch { continue; }
-      if (!r || !r.ok) continue; // folder, binary, or too large — skip
-      fetched++;
-      const prior = ideCache.get(r.path);
-      if (prior === r.content) continue; // our own save, or already seen
-      let stat = null;
-      if (prior !== undefined) {
-        const dd = lineDiff(prior, r.content);
-        stat = { add: dd.adds, del: dd.dels };
-      }
-      ideChangeLog = [{ path: r.path, ts: ev.ts, add: stat ? stat.add : null, del: stat ? stat.del : null }]
-        .concat(ideChangeLog.filter((c) => c.path !== r.path)).slice(0, 30);
-      if (r.path === ideFile) {
-        if (ideDirtyFlag) {
-          ideShowMsg('\\u26a0 This file changed on disk while you have unsaved edits.', true);
-        } else if (prior !== undefined) {
-          ideShowDiff(r.path, prior, r.content);
-          $('ideTa').value = r.content;
-          ideShowMsg('AI edited this file \\u2014 showing what changed.');
-        } else {
-          $('ideTa').value = r.content;
-          ideHighlight();
-        }
-      }
-      ideCachePut(r.path, r.content);
-    }
-    if (d.events && d.events.length) renderChangeLog();
-  } catch {
-    // broker briefly unreachable — next poll retries
-  } finally {
-    pollBusy = false;
-  }
-}
-pollTimer = setInterval(pollProjectChanges, 2500);
-
-let hlRaf = 0;
-$('ideTa').addEventListener('input', () => {
-  ideSetDirty(true);
-  cancelAnimationFrame(hlRaf);
-  hlRaf = requestAnimationFrame(ideHighlight);
-});
-$('ideTa').addEventListener('scroll', () => {
-  $('ideHl').scrollTop = $('ideTa').scrollTop;
-  $('ideHl').scrollLeft = $('ideTa').scrollLeft;
-});
-$('ideTa').addEventListener('keydown', (e) => {
-  // Tab inserts a real tab (execCommand keeps native undo working).
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    document.execCommand('insertText', false, '\\t');
-  }
-});
 
 // ---- Tabs: hash-based, last tab remembered, Overview by default ------------
 const TAB_NAMES = ['overview', 'project', 'agents', 'license'];
@@ -1644,7 +1048,7 @@ function setAgentRole(clientId, role) {
 
 connect();
 loadLicense();
-autoDetectFolders();
+
 // keep relative timestamps fresh between server pushes
 setInterval(() => { if (last) render(last); }, 2000);
 </script>

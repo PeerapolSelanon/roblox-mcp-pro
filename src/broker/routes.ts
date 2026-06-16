@@ -24,16 +24,11 @@ import { resolveLicense, saveLicenseKey } from "../licensing/license.js";
 import { VERSION } from "../version.js";
 import { BrokerState, type Agent, type AgentRole } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
-import { scaffoldProject } from "./scaffold.js";
 import {
   browseDir,
   listRoots,
   loadRecentProjects,
   rememberProject,
-  listProjectDir,
-  readTextFile,
-  writeTextFile,
-  pollChanges,
 } from "./fsbrowse.js";
 
 /** Studio session details, polled from the plugin for the dashboard. */
@@ -493,63 +488,6 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       }
       return true;
     }
-    // Project tab web IDE: one tree level, plus text-file read/write. Same
-    // trust level as /api/scaffold (localhost-only broker on the user's box).
-    if (method === "GET" && path === "/api/fs/list") {
-      const target = url.searchParams.get("path");
-      if (!target) {
-        sendJson(res, 200, { ok: false, error: "missing path" });
-        return true;
-      }
-      try {
-        sendJson(res, 200, { ok: true, ...(await listProjectDir(target)) });
-      } catch (e) {
-        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
-      }
-      return true;
-    }
-    if (method === "GET" && path === "/api/fs/changes") {
-      const target = url.searchParams.get("path");
-      const since = Number(url.searchParams.get("since") ?? 0) || 0;
-      if (!target) {
-        sendJson(res, 200, { ok: false, error: "missing path" });
-        return true;
-      }
-      try {
-        sendJson(res, 200, { ok: true, ...pollChanges(target, since) });
-      } catch (e) {
-        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
-      }
-      return true;
-    }
-    if (method === "GET" && path === "/api/fs/read") {
-      const target = url.searchParams.get("path");
-      if (!target) {
-        sendJson(res, 200, { ok: false, error: "missing path" });
-        return true;
-      }
-      try {
-        sendJson(res, 200, { ok: true, ...(await readTextFile(target)) });
-      } catch (e) {
-        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
-      }
-      return true;
-    }
-    if (method === "POST" && path === "/api/fs/write") {
-      const body = await readJson(req);
-      const target = String(body.path ?? "").trim();
-      if (!target || typeof body.content !== "string") {
-        sendJson(res, 200, { ok: false, error: "write requires 'path' and string 'content'" });
-        return true;
-      }
-      try {
-        sendJson(res, 200, { ok: true, ...(await writeTextFile(target, body.content)) });
-      } catch (e) {
-        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
-      }
-      return true;
-    }
-
     // Create a single new folder inside an existing one (for "New project").
     if (method === "POST" && path === "/api/fs/mkdir") {
       const body = await readJson(req);
@@ -563,31 +501,6 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
         const dir = nodePath.join(nodePath.resolve(parent), name);
         await fs.mkdir(dir);
         sendJson(res, 200, { ok: true, path: dir });
-      } catch (e) {
-        sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
-      }
-      return true;
-    }
-
-    // --- new project scaffold ---------------------------------------------
-    // Create an empty, sync-ready project skeleton on disk. The folder may be
-    // given explicitly or resolved from the most recently active agent's cwd.
-    if (method === "POST" && path === "/api/scaffold") {
-      const body = await readJson(req);
-      let dir = body.dir ? String(body.dir).trim() : "";
-      if (!dir) {
-        const agents = state.snapshot().agents;
-        const active = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
-        if (active?.cwd) dir = active.cwd;
-      }
-      if (!dir) {
-        sendJson(res, 200, { ok: false, error: "no project folder given and no active agent to detect one from." });
-        return true;
-      }
-      try {
-        const result = await scaffoldProject(dir);
-        void rememberProject(dir);
-        sendJson(res, 200, { ok: true, result });
       } catch (e) {
         sendJson(res, 200, { ok: false, error: e instanceof Error ? e.message : String(e) });
       }
