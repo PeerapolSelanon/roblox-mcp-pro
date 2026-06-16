@@ -5,6 +5,6 @@ set -euo pipefail
 
 cat > /dev/null || true
 
-code-review-graph update --skip-flows --repo "C:/RobloxProject/roblox-mcp-pro" >/dev/null 2>&1 || true
+code-review-graph update --skip-flows --repo "D:/roblox-mcp-pro" >/dev/null 2>&1 || true
 echo '{"suppressOutput": true}'
 exit 0
