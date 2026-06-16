@@ -185,9 +185,20 @@ end
 
 task.spawn(function()
 	local last = currentRunState()
+	local tick = 0
 	while true do
 		task.wait(1)
 		if connected then
+			-- Re-announce identity periodically so the broker always knows this
+			-- session's Place name — even after a broker restart/handover, which
+			-- the poll loop may not see as an outage (so it never re-announces on
+			-- its own). Cheap heartbeat-with-identity; keeps attach-by-name working.
+			tick += 1
+			if tick % 10 == 0 then
+				task.spawn(function()
+					Bridge.notifyPresence(true, sessionMeta())
+				end)
+			end
 			local state = currentRunState()
 			if state ~= last then
 				last = state
