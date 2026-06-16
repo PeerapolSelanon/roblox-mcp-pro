@@ -5,10 +5,7 @@
 
 local RunService = game:GetService("RunService")
 local resolvePlaceName = require(script.Parent.Parent.PlaceName)
-
--- Generated once when this plugin instance loads; stays constant for the life of
--- the Studio session and changes when the plugin reloads / Studio restarts.
-local SESSION_ID = game:GetService("HttpService"):GenerateGUID(false)
+local Bridge = require(script.Parent.Parent.Bridge)
 
 local function studioSettings(): any
 	local out: { [string]: any } = {}
@@ -26,7 +23,9 @@ return function(_args: any): any
 		placeName = resolvePlaceName(),
 		studioVersion = version(),
 		isRunning = RunService:IsRunning(),
-		sessionId = SESSION_ID,
+		-- The SAME id the bridge sends as x-session-id, so a value read here can be
+		-- used directly with manage_agents { action:"attach", session:<id> }.
+		sessionId = Bridge.sessionId(),
 		studioSettings = studioSettings(),
 	}
 end
