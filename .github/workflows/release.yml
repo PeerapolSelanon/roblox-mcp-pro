@@ -16,7 +16,7 @@ jobs:
     name: Build plugin & publish GitHub Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rojo
         uses: ok-nick/setup-aftman@v0.4.2
@@ -36,7 +36,7 @@ jobs:
     name: Publish to npm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rojo
         uses: ok-nick/setup-aftman@v0.4.2
@@ -47,9 +47,9 @@ jobs:
           rojo build default.project.json --output RobloxMcpPro.rbxmx
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
 
       - name: Install deps
