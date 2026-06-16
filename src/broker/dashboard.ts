@@ -248,6 +248,15 @@ export const DASHBOARD_HTML = `<!doctype html>
   .modal .mfoot .newf input { flex: 1; }
   .modal .merr { color: var(--red); font-family: var(--mono); font-size: 11.5px; padding: 0 18px 10px; min-height: 0; }
   .mempty { color: var(--faint); padding: 24px; text-align: center; font-size: 13px; }
+
+  /* Per-Place session cards */
+  .session-card { display: flex; flex-direction: column; gap: 5px; }
+  .session-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dot-green { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .dot-red { background: var(--red); box-shadow: 0 0 7px var(--red); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid color-mix(in oklch, var(--amber) 45%, var(--border)); border-radius: 999px; padding: 2px 9px; font-size: 11px; font-family: var(--mono); }
+  .faint { color: var(--faint); }
+  #sessionsSection { display: none; }
 </style>
 </head>
 <body>
@@ -291,6 +300,11 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="card"><div class="clabel">Commands</div><div class="cvalue" id="totalCmds">0</div></div>
     <div class="card"><div class="clabel">Sync</div><div class="cvalue" id="syncState">off</div></div>
     <div class="card"><div class="clabel">Uptime</div><div class="cvalue" id="uptime">—</div></div>
+  </div>
+
+  <div id="sessionsSection">
+    <div class="phead" style="margin-bottom:11px;"><h3>Connected Places</h3></div>
+    <div class="cards" id="sessionsCards"></div>
   </div>
 
   <div class="details">
@@ -416,8 +430,8 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section>
     <h2>Activity</h2>
     <table>
-      <thead><tr><th>Time</th><th>Agent</th><th>Tool</th><th>Result</th><th>ms</th></tr></thead>
-      <tbody id="activity"><tr><td class="empty" colspan="5">No activity yet.</td></tr></tbody>
+      <thead><tr><th>Time</th><th>Agent</th><th>Tool</th><th>Place</th><th>Result</th><th>ms</th></tr></thead>
+      <tbody id="activity"><tr><td class="empty" colspan="6">No activity yet.</td></tr></tbody>
     </table>
     <div class="pager" id="activityPager"></div>
   </section>
@@ -662,9 +676,35 @@ function render(state) {
   const recent = state.recent || [];
   const activityRow = (c) =>
     "<tr><td class=muted>" + fmtTime(c.ts) + "</td><td>" + esc(c.agent) +
-    "</td><td class=tool>" + esc(c.tool) + "</td><td class=" + (c.ok ? "ok>ok" : "err>" + esc(c.error || "error")) +
+    "</td><td class=tool>" + esc(c.tool) +
+    "</td><td class=muted>" + esc(c.placeName || c.sessionId || "—") +
+    "</td><td class=" + (c.ok ? "ok>ok" : "err>" + esc(c.error || "error")) +
     "</td><td class=muted>" + c.durationMs + "</td></tr>";
-  activityPage = renderPaged("activity", recent, activityRow, activityPage, 5, "No activity yet.");
+  activityPage = renderPaged("activity", recent, activityRow, activityPage, 6, "No activity yet.");
+
+  // Connected Places section (multi-session cards)
+  var sessions = state.sessions || [];
+  var ssEl = $("sessionsSection");
+  var ssCards = $("sessionsCards");
+  if (ssEl && ssCards) {
+    if (sessions.length >= 2) {
+      ssEl.style.display = "block";
+      ssCards.innerHTML = sessions.map(function(s) {
+        var dot = s.connected ? "dot-green" : "dot-red";
+        var warn = (s.boundAgents && s.boundAgents.length > 1)
+          ? "<span class='badge-amber'>&#9888; " + s.boundAgents.length + " agents bound — expected 1</span>" : "";
+        var who = (s.boundAgents || []).map(function(a) { return esc(a.name); }).join(", ") || "<span class='faint'>unbound</span>";
+        return "<div class='card session-card'>"
+          + "<div class='session-head'><span class='dot " + dot + "'></span>"
+          + "<b>" + esc(s.placeName || "(unnamed Place)") + "</b> " + warn + "</div>"
+          + "<div class='faint'>placeId " + esc(s.placeId != null ? String(s.placeId) : "—") + " · queued " + (s.queued || 0) + "</div>"
+          + "<div>agents: " + who + "</div>"
+          + "</div>";
+      }).join("");
+    } else {
+      ssEl.style.display = "none";
+    }
+  }
 
   $("hdrsub").textContent = "broker monitor · :" + (state.port ?? "3690");
   $("clock").textContent = "updated " + new Date().toLocaleTimeString();

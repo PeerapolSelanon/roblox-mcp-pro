@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local Bridge = require(script.Bridge)
 local Dispatcher = require(script.Dispatcher)
 local UI = require(script.UI)
+local resolvePlaceName = require(script.PlaceName)
 
 local DEFAULT_URL = "http://127.0.0.1:3690"
 local SETTING_URL = "roblox_mcp_pro_url"
@@ -53,6 +54,17 @@ local connected = false
 
 local function log(message: string)
 	print("[roblox-mcp-pro] " .. message)
+end
+
+local function sessionMeta(): { [string]: any }
+	local meta: { [string]: any } = {}
+	meta.placeId = game.PlaceId
+	meta.placeName = resolvePlaceName()
+	local jobId = game.JobId
+	if jobId and jobId ~= "" then
+		meta.jobId = jobId
+	end
+	return meta
 end
 
 local RETRY_WAIT = 5 -- seconds to back off while the server is unreachable
@@ -120,7 +132,7 @@ local function setConnected(value: boolean)
 	connected = value
 	-- Tell the broker right away so the dashboard reflects it within ~1s.
 	task.spawn(function()
-		Bridge.notifyPresence(value)
+		Bridge.notifyPresence(value, if value then sessionMeta() else nil)
 	end)
 	if value then
 		log("connecting to " .. url)

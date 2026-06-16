@@ -122,6 +122,58 @@ MCP is request/response, so a recipient only sees a message when it calls `inbox
 nothing pushes a task to an agent automatically. The roles are a coordination
 convention the broker tracks and routes by; each agent still acts per its own prompt.
 
+## Working with multiple Places at once
+
+When more than one Roblox Studio Place is open and connected to the broker, each
+connection is a **session** with its own `sessionId` and Place name.
+
+### Safety rule — fail-closed when unbound
+
+If an agent is **not bound to a Place** and **more than one Place is connected**, every
+Studio command is refused with an error that lists the connected Places. Attach first:
+
+```
+manage_agents { action: "attach", place: "<Place name>" }
+```
+
+After attaching, **all** of that agent's tool calls go exclusively to that Place until
+it detaches or the session ends. With exactly **one** Place connected, commands
+auto-route and auto-bind — single-Place workflows are completely unchanged.
+
+### Session discovery and binding
+
+- `manage_agents { action: "sessions" }` — list connected Places (name, placeId, bound agents).
+- `manage_agents { action: "attach", place: "<Place name>" }` — bind to a named Place; name must match what `sessions` reports.
+- `manage_agents { action: "detach" }` — release the binding (useful when switching Places or handing off).
+
+### Lead / Worker dispatch across Places
+
+The standard Lead/Worker role pattern extends naturally to multi-Place editing:
+
+1. **Lead** plans the work and delivers a task to the Worker via
+   `manage_agents { action: "send", to: "<worker>", body: "edit Place X: ..." }`,
+   naming the target Place in the body.
+2. **Worker** calls `manage_agents { action: "inbox" }`, reads the task, then
+   immediately attaches: `manage_agents { action: "attach", place: "X" }`.
+3. **Worker** executes all edits — every tool call is provably scoped to Place X.
+4. **Worker** reports back: `manage_agents { action: "send", to: "lead", body: "<result>" }`,
+   then `manage_agents { action: "done", messageId: "<id>" }`.
+
+The **Lead** can also call `attach` to inspect or verify a Place (read-only intent)
+while the Worker is attached to a different one — each agent holds its own binding.
+
+### Sync with multiple Places
+
+`manage_sync { action: "start" }` must be pinned to one Place when more than one is
+connected. Pass the Place name explicitly:
+
+```
+manage_sync { action: "start", place: "<Place name>" }
+```
+
+If you omit `place` when multiple sessions are active, `start` is refused. Once
+started, sync operates on that Place's session for its lifetime.
+
 ## Patterns that work well
 
 - **Batch related edits.** Building several parts or a whole structure? Wrap the operations in

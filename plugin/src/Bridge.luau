@@ -9,13 +9,21 @@ local Bridge = {}
 local baseUrl = "http://127.0.0.1:3690"
 local authToken: string? = nil
 
+-- A stable id for this Studio session, minted once per plugin load. Sent on
+-- every request so the broker routes commands to this Place only.
+local sessionId: string = HttpService:GenerateGUID(false)
+
+function Bridge.sessionId(): string
+	return sessionId
+end
+
 function Bridge.configure(url: string, token: string?)
 	baseUrl = url
 	authToken = token
 end
 
 local function headers(): { [string]: string }
-	local h = { ["Content-Type"] = "application/json" }
+	local h = { ["Content-Type"] = "application/json", ["x-session-id"] = sessionId }
 	if authToken and authToken ~= "" then
 		h["x-auth-token"] = authToken
 	end
@@ -127,15 +135,21 @@ function Bridge.syncStatus(): (any, string?)
 	return nil, ("HTTP %d"):format(response.StatusCode)
 end
 
--- Tell the broker we just connected/disconnected so the dashboard updates
--- immediately instead of waiting out the long-poll liveness window.
-function Bridge.notifyPresence(connected: boolean)
+-- Tell the broker we just connected/disconnected, with this session's identity,
+-- so the dashboard updates immediately and routing knows which Place this is.
+function Bridge.notifyPresence(connected: boolean, meta: { [string]: any }?)
+	local body: { [string]: any } = { connected = connected, sessionId = sessionId }
+	if meta then
+		for k, v in meta do
+			body[k] = v
+		end
+	end
 	pcall(function()
 		HttpService:RequestAsync({
 			Url = baseUrl .. "/plugin/status",
 			Method = "POST",
 			Headers = headers(),
-			Body = HttpService:JSONEncode({ connected = connected }),
+			Body = HttpService:JSONEncode(body),
 		})
 	end)
 end

@@ -12,6 +12,8 @@ export interface Command {
   args: unknown;
   /** Epoch ms the command was created. */
   createdAt: number;
+  /** Target Studio session this command is routed to. */
+  sessionId: string;
   /**
    * True for broker-internal probes (e.g. the dashboard's periodic system_info).
    * The plugin still runs them but omits them from its activity log so the log
@@ -47,4 +49,20 @@ export interface StudioEvent {
   path: string;
   /** Optional payload (serialized instance, changed property, etc.). */
   data?: unknown;
+}
+
+/** Identifying details a plugin reports for its Studio session. */
+export interface SessionMeta {
+  sessionId: string;
+  placeId?: number;
+  placeName?: string;
+  jobId?: string;
+  studioPid?: number;
+}
+
+/** Per-session liveness + queue stats, surfaced to the dashboard and routing. */
+export interface SessionStatus extends SessionMeta {
+  connected: boolean;
+  queued: number;
+  lastPollAt: number | null;
 }
