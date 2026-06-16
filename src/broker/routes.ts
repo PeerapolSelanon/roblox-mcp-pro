@@ -30,6 +30,8 @@ import {
   loadRecentProjects,
   rememberProject,
 } from "./fsbrowse.js";
+import { resolveTargetSession } from "./resolve.js";
+import type { SessionMeta, SessionStatus } from "../types.js";
 
 /** Studio session details, polled from the plugin for the dashboard. */
 interface StudioInfo {
@@ -62,7 +64,10 @@ export interface BrokerRoutes {
 }
 
 /** Run a `manage_sync` action against the shared engine; throws on failure. */
-async function runSync(args: unknown): Promise<Record<string, unknown>> {
+async function runSync(
+  args: unknown,
+  liveSessions: () => SessionStatus[],
+): Promise<Record<string, unknown>> {
   const a = (args ?? {}) as {
     action?: string;
     roots?: string[];
@@ -72,15 +77,37 @@ async function runSync(args: unknown): Promise<Record<string, unknown>> {
     file?: string;
     content?: string;
     limit?: number;
+    session?: string;
+    place?: string;
   };
   switch (a.action) {
-    case "start":
+    case "start": {
+      const sessions = liveSessions();
+      if (sessions.length === 0) throw new StudioError("No Studio session is connected to sync.");
+      let pinned = sessions[0]!.sessionId;
+      if (sessions.length > 1) {
+        const want = a.session ?? a.place;
+        const lower = (want ?? "").trim().toLowerCase();
+        const match = sessions.find(
+          (s) => s.sessionId === want || (s.placeName ?? "").toLowerCase() === lower,
+        );
+        if (!match) {
+          const names = sessions.map((s) => s.placeName ?? s.sessionId).join(", ");
+          throw new StudioError(
+            `${sessions.length} Places are connected — sync needs one. ` +
+              `Pass place:"<name>" to manage_sync start. Connected: ${names}.`,
+          );
+        }
+        pinned = match.sessionId;
+      }
       return (await syncEngine.start(
         a.roots,
         a.mode,
         a.initialDirection,
         a.syncDir,
+        pinned,
       )) as unknown as Record<string, unknown>;
+    }
     case "stop":
       await syncEngine.stop();
       return syncEngine.status() as unknown as Record<string, unknown>;
@@ -120,7 +147,12 @@ async function runSync(args: unknown): Promise<Record<string, unknown>> {
  * Handled here (never sent to Studio) because the broker is the only process
  * that sees every connected agent. `fromClientId` is the calling agent.
  */
-function runAgents(state: BrokerState, fromClientId: string, args: unknown): Record<string, unknown> {
+function runAgents(
+  state: BrokerState,
+  fromClientId: string,
+  args: unknown,
+  liveSessions: () => SessionStatus[],
+): Record<string, unknown> {
   const a = (args ?? {}) as {
     action?: string;
     to?: string;
@@ -130,6 +162,8 @@ function runAgents(state: BrokerState, fromClientId: string, args: unknown): Rec
     unreadOnly?: boolean;
     messageId?: string;
     messageIds?: string[];
+    place?: string;
+    session?: string;
   };
   switch (a.action) {
     case "list": {
@@ -139,6 +173,7 @@ function runAgents(state: BrokerState, fromClientId: string, args: unknown): Rec
         version: ag.version,
         cwd: ag.cwd,
         role: ag.role,
+        boundSession: ag.boundSession,
         lastSeenAt: ag.lastSeenAt,
         self: ag.clientId === fromClientId,
       }));
@@ -212,6 +247,54 @@ function runAgents(state: BrokerState, fromClientId: string, args: unknown): Rec
       }
       return { ok: true, done: a.messageId };
     }
+    case "sessions": {
+      const sessions = liveSessions().map((s) => ({
+        sessionId: s.sessionId,
+        placeName: s.placeName ?? null,
+        placeId: s.placeId ?? null,
+        jobId: s.jobId ?? null,
+        boundAgents: state.agentsBoundTo(s.sessionId).map((ag) => ag.name),
+      }));
+      return { ok: true, count: sessions.length, sessions };
+    }
+    case "attach": {
+      const sessions = liveSessions();
+      const want = (a.session ?? a.place ?? "").trim();
+      if (!want) {
+        throw new StudioError(
+          "attach requires 'place' (a Place name) or 'session' (a sessionId).",
+        );
+      }
+      const lower = want.toLowerCase();
+      let matches = sessions.filter((s) => s.sessionId === want);
+      if (matches.length === 0) {
+        matches = sessions.filter((s) => (s.placeName ?? "").toLowerCase() === lower);
+      }
+      if (matches.length === 0) {
+        const names = sessions.map((s) => s.placeName ?? s.sessionId).join(", ");
+        throw new StudioError(
+          `No connected Place matches '${want}'. Connected: ${names || "(none)"}.`,
+        );
+      }
+      if (matches.length > 1) {
+        const opts = matches.map((s) => `${s.placeName ?? "?"} (session ${s.sessionId})`).join("; ");
+        throw new StudioError(
+          `'${want}' is ambiguous — ${matches.length} sessions match. Attach by sessionId: ${opts}.`,
+        );
+      }
+      const matched = matches[0]!;
+      if (!state.attach(fromClientId, matched.sessionId)) {
+        throw new StudioError("you are not registered with the broker.");
+      }
+      return {
+        ok: true,
+        attached: { sessionId: matched.sessionId, placeName: matched.placeName ?? null },
+      };
+    }
+    case "detach": {
+      state.detach(fromClientId);
+      return { ok: true, detached: true };
+    }
     default:
       throw new StudioError(`unknown agents action: ${String(a.action)}`);
   }
@@ -232,12 +315,17 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
   // response (it carries `duration`), so remember the window and, while the
   // plugin is silent inside it, answer playtest_status ourselves and give
   // other tools an accurate "wait for the playtest" error instead.
-  let playtest: { kind: string; startedAtSec: number; untilMs: number } | null = null;
+  // Per-session so two open Places don't interfere.
+  const playtests = new Map<string, { kind: string; startedAtSec: number; untilMs: number }>();
   const PLAYTEST_RECONNECT_GRACE_MS = 30_000;
 
-  function playtestWindow(): { kind: string; startedAtSec: number; untilMs: number } | null {
-    if (playtest && Date.now() > playtest.untilMs) playtest = null;
-    return playtest;
+  function playtestWindow(sessionId: string): { kind: string; startedAtSec: number; untilMs: number } | null {
+    const pt = playtests.get(sessionId);
+    if (pt && Date.now() > pt.untilMs) {
+      playtests.delete(sessionId);
+      return null;
+    }
+    return pt ?? null;
   }
 
   // Studio session details for the dashboard, refreshed from the plugin on a
@@ -262,7 +350,13 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     studioInflight = true;
     try {
       // internal: keep this probe out of the plugin's activity log.
-      studio = (await bridge.enqueue("system_info", {}, { internal: true })) as StudioInfo;
+      const connected = bridge.connectedSessions();
+      if (connected.length === 0) {
+        // nothing live to probe
+        studioInflight = false;
+        return;
+      }
+      studio = (await bridge.enqueue(connected[0]!.sessionId, "system_info", {}, { internal: true })) as StudioInfo;
       studioAt = Date.now();
       broadcast();
     } catch {
@@ -424,6 +518,19 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       );
       return true;
     }
+    if (method === "POST" && path === "/api/agents/attach") {
+      const body = await readJson(req);
+      const clientId = String(body.clientId ?? "");
+      const sessionId = String(body.sessionId ?? "");
+      if (!sessionId) {
+        const updated = state.detach(clientId);
+        sendJson(res, 200, updated ? { ok: true, detached: true } : { ok: false, error: "no such agent" });
+        return true;
+      }
+      const updated = state.attach(clientId, sessionId);
+      sendJson(res, 200, updated ? { ok: true, sessionId } : { ok: false, error: "no such agent" });
+      return true;
+    }
     if (method === "GET" && path === "/api/stream") {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -528,7 +635,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
             }
           }
         }
-        const result = await runSync(body);
+        const result = await runSync(body, () => bridge.connectedSessions());
         if (body.action === "start" && body.syncDir) {
           void rememberProject(String(body.syncDir));
         }
@@ -541,7 +648,14 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     // Explicit connect/disconnect signal so the dashboard updates instantly.
     if (method === "POST" && path === "/plugin/status") {
       const body = await readJson(req);
-      bridge.setPluginPresence(body.connected === true);
+      const sessionId = String(body.sessionId ?? "default");
+      const meta: Partial<SessionMeta> = {
+        placeId: typeof body.placeId === "number" ? body.placeId : undefined,
+        placeName: body.placeName ? String(body.placeName) : undefined,
+        jobId: body.jobId ? String(body.jobId) : undefined,
+        studioPid: typeof body.studioPid === "number" ? body.studioPid : undefined,
+      };
+      bridge.setPresence(sessionId, body.connected === true, meta);
       void refreshStudio();
       broadcast();
       sendJson(res, 200, { ok: true });
@@ -605,51 +719,70 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       let ok = true;
       let result: unknown = null;
       let error: string | undefined;
+      let sessionForLog: string | undefined;
+      let placeForLog: string | undefined;
       const studioAction =
         tool === "manage_studio" ? String((args as { action?: unknown } | undefined)?.action ?? "") : "";
       try {
-        const suspended = playtestWindow() !== null && !bridge.status().pluginConnected;
+        // Resolve the target session for playtest tracking (best-effort, no throw here).
+        const targetSession =
+          tool === "manage_sync" || tool === "manage_agents"
+            ? null
+            : state.boundSessionOf(clientId) ??
+              (bridge.connectedSessions().length === 1
+                ? bridge.connectedSessions()[0]!.sessionId
+                : null);
+        const pt = targetSession ? playtestWindow(targetSession) : null;
+        const suspended = pt !== null && targetSession !== null && !bridge.isConnected(targetSession);
         if (suspended && tool !== "manage_sync" && tool !== "manage_agents") {
-          const pt = playtestWindow()!;
           if (studioAction === "playtest_status") {
             result = {
               ok: true,
               running: true,
-              kind: pt.kind,
-              started_at: pt.startedAtSec,
+              kind: pt!.kind,
+              started_at: pt!.startedAtSec,
               suspended: true,
               note:
                 "the Studio plugin is suspended while the playtest runs; " +
                 "status is broker-inferred — poll again for the final report.",
             };
           } else {
-            const leftSec = Math.max(0, Math.ceil((pt.untilMs - PLAYTEST_RECONNECT_GRACE_MS - Date.now()) / 1000));
+            const leftSec = Math.max(0, Math.ceil((pt!.untilMs - PLAYTEST_RECONNECT_GRACE_MS - Date.now()) / 1000));
             throw new StudioError(
-              `A '${pt.kind}' playtest is running and the Studio plugin is suspended until it ends ` +
+              `A '${pt!.kind}' playtest is running and the Studio plugin is suspended until it ends ` +
                 `(~${leftSec}s left at most). Poll manage_studio {action:'playtest_status'} for the report, then retry.`,
             );
           }
         } else {
-          result =
-            tool === "manage_sync"
-              ? await runSync(args)
-              : tool === "manage_agents"
-                ? runAgents(state, clientId, args)
-                : await bridge.enqueue(tool, args);
+          if (tool === "manage_sync") {
+            result = await runSync(args, () => bridge.connectedSessions());
+          } else if (tool === "manage_agents") {
+            result = runAgents(state, clientId, args, () => bridge.connectedSessions());
+          } else {
+            const target = resolveTargetSession({
+              bound: state.boundSessionOf(clientId),
+              connected: bridge.connectedSessions(),
+            });
+            if (target.autoBind) state.attach(clientId, target.sessionId);
+            sessionForLog = target.sessionId;
+            placeForLog =
+              bridge.connectedSessions().find((s) => s.sessionId === target.sessionId)?.placeName;
+            result = await bridge.enqueue(target.sessionId, tool, args);
+          }
           if (studioAction === "play" || studioAction === "multiplayer") {
             const r = result as { ok?: boolean; duration?: number; started_at?: number } | null;
-            if (r?.ok === true) {
-              playtest = {
+            if (r?.ok === true && targetSession) {
+              playtests.set(targetSession, {
                 kind: studioAction,
                 startedAtSec: typeof r.started_at === "number" ? r.started_at : Math.floor(Date.now() / 1000),
                 untilMs: Date.now() + (typeof r.duration === "number" ? r.duration : 30) * 1000 + PLAYTEST_RECONNECT_GRACE_MS,
-              };
+              });
             }
           } else if (studioAction === "playtest_status") {
             // A real (plugin-answered) status that says the test ended closes
             // the window immediately — no need to wait it out.
             const r = result as { running?: boolean } | null;
-            if (r && r.running === false) playtest = null;
+            if (r && r.running === false && targetSession) playtests.delete(targetSession);
           }
         }
       } catch (e) {
@@ -665,6 +798,8 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
         ok,
         durationMs: Date.now() - start,
         error,
+        sessionId: sessionForLog,
+        placeName: placeForLog,
       });
       sendJson(res, 200, { ok, result: result ?? null, error });
       return true;
