@@ -34,6 +34,9 @@ jobs:
       - name: Routing test (fail-closed multi-place)
         run: node scripts/routing-smoke.mjs
 
+      - name: Sync mirror test (disk materialization)
+        run: node scripts/sync-smoke.mjs
+
       - name: Tool docs up to date
         run: |
           npm run docs
