@@ -70,6 +70,20 @@ local function runnerSource(testScript: string?, duration: number): string
 		"\tif ended then return end",
 		"\tended = true",
 		"\treport.logCount = #logs",
+		-- Surface runtime errors the game itself raised during the playtest, not
+		-- just test_script failures: an observe-only run must not report ok=true
+		-- while game scripts were erroring. errorCount/hadErrors/errors come from
+		-- the captured log; report.error stays the test_script pcall failure.
+		"\tlocal errs = {}",
+		"\tfor _, l in ipairs(logs) do",
+		"\t\tif l.type == \"MessageError\" then errs[#errs + 1] = l.message end",
+		"\tend",
+		"\treport.errorCount = #errs",
+		"\treport.hadErrors = #errs > 0",
+		"\tlocal capped = {}",
+		"\tfor i = 1, math.min(#errs, 10) do capped[i] = errs[i] end",
+		"\treport.errors = capped",
+		"\tif report.hadErrors then report.ok = false end",
 		"\tSTS:EndTest(report)",
 		"end",
 		("task.delay(%d, function() report.timedOut = true finish() end)"):format(duration),
