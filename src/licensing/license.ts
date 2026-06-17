@@ -24,9 +24,7 @@ import {
   PRODUCT_NAME,
 } from "./config.js";
 import { readStore, writeStore, type LicenseStore } from "./store.js";
-import { provider } from "./provider.js";
-
-const { activate, validate } = provider;
+import { activate, validate } from "./polar.js";
 
 export type LicenseStatus = "licensed" | "trial" | "locked";
 
