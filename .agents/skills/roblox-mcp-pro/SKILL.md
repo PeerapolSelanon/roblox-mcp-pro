@@ -292,10 +292,27 @@ When designing complex multi-layer borders (e.g. inner/center/outer strokes) on 
 When building list menus or scroll views:
 - Set `AutomaticCanvasSize = Enum.AutomaticSize.Y` and `ScrollingDirection = Enum.ScrollingDirection.Y` to allow the vertical scrolling canvas to automatically scale to its contents without manually calculating canvas heights.
 - Make sure `ScrollBarThickness` is non-zero (e.g. `6`) so scrollbars are visible and functional when the contents exceed the container size.
+- **UIStroke Padding Requirement**: If any child elements inside a `ScrollingFrame` have a `UIStroke` applied (regardless of element type), you must add a `UIPadding` inside the `ScrollingFrame` and configure padding on all sides (`PaddingTop`, `PaddingBottom`, `PaddingLeft`, `PaddingRight`) to ensure the stroke is not cut off or clipped at the ScrollingFrame's borders.
 
 ### 3. Responsive Scaling using UIScale
 To make a GUI larger/smaller proportionally on different viewport sizes:
 - Place a `UIScale` instance (named e.g. `MainScale`) inside the main frame.
 - Animate the `UIScale.Scale` property on window open/close rather than tweening the `Size` of the frame, which preserves all layout constraints and child ratios (fonts, strokes, paddings) perfectly.
+- **Two-Script Architecture Best Practice**: Decouple layout scaling from animations and interactions by using two separate client scripts:
+  1. **Scale Controller Script**: A global or frame-specific script dedicated to listening to viewport size changes (via `CurrentCamera.ViewportSize`) and updating the `UIScale.Scale` dynamically to fit any screen ratio (PC, Tablet, Mobile) without stretching or clipping.
+  2. **Animation/Interaction Controller Script**: A local script dedicated to handling UI opening/closing transitions (e.g. tweening `UIScale.Scale` to pop open or close), hover effects, clicks, and page data loading.
+
+
+### 4. Rotated Elements & Overflow Prevention
+When rotating square GUI elements (such as rotating a frame by `45` degrees to build diamond badge frames):
+- Rotating increases the visual bounding box width and height to $S \times \sqrt{2} \approx 1.414 \times S$ (where $S$ is the side length).
+- Because Roblox engine's layout calculations and boundaries are based on the non-rotated size, you must offset the element's position away from parent boundaries (by at least half of the visual width, i.e., $0.707 \times S$) to prevent corners and tips from being clipped or overflowing.
+
+### 5. TextBounds & Sizing Race Conditions
+When writing scripts to dynamically scale a container based on the size of a child `TextLabel`:
+- **The TextBounds Bug**: Writing `repeat task.wait() until label.TextBounds` is buggy because `TextBounds` returns a `Vector2` struct. In Lua, all structs/objects (even `Vector2.new(0, 0)`) are truthy, which causes the loop to exit immediately on the very first frame before the engine has computed the text sizes.
+- **Correct Script Wait**: If you must write a script to check `TextBounds`, explicitly loop until the Y dimension is non-zero: `while label.TextBounds.Y == 0 do task.wait() end`.
+- **Better Native Alternative**: Instead of writing sizing scripts, set `AutomaticSize = Enum.AutomaticSize.Y` on both the `TextLabel` and its parent container `Frame` (with initial `Size.Y = 0`) to let the engine handle text wrapping and layout growth natively.
+
 
 
