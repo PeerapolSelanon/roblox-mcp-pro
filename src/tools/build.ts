@@ -8,6 +8,7 @@ import { InstancePath } from "../schemas/common.js";
 import { forwardTool } from "./_forward.js";
 import { callStudio, describeError } from "../services/studio.js";
 import { ok, fail } from "../services/format.js";
+import { analyzeSource } from "../services/analyze.js";
 
 const Physics = z
   .object({
@@ -217,11 +218,13 @@ const Scripts = z
         "search",
         "replace",
         "get_dependencies",
+        "analyze",
       ])
       .describe(
         "get_source/set_source/create/delete a script, surgical line edits " +
           "(edit_replace/edit_insert/edit_delete), search scripts, find/replace in one script, " +
-          "or get_dependencies (static require() scan).",
+          "get_dependencies (static require() scan), or analyze (static Luau check for syntax/type " +
+          "errors before a playtest).",
       ),
     path: InstancePath.optional().describe(
       "Target script. For 'search': optional root to search under (default 'game').",
@@ -340,22 +343,57 @@ export function registerBuildTools(server: McpServer): void {
     },
   );
 
-  forwardTool(server, "manage_scripts", {
-    title: "Manage Scripts",
-    description:
-      "Read, write, create, delete, surgically edit, and search script source. Prefer the edit_* " +
-      "actions over rewriting whole files with set_source — fewer tokens, fewer mistakes.\n" +
-      "Args: action ('get_source'|'set_source'|'create'|'delete'|'edit_replace'|'edit_insert'|" +
-      "'edit_delete'|'search'|'replace'), plus per-action fields:\n" +
-      "  get_source: path (+ start_line/end_line to read a slice; result includes lineCount)\n" +
-      "  edit_replace: path, start_line, end_line, new_content · edit_insert: path, after_line (0=top), content\n" +
-      "  edit_delete: path, start_line, end_line · search: pattern (+ path root default 'game', " +
-      "case_sensitive?, lua_pattern?, max_results?) · replace: path, pattern, replacement (+ lua_pattern?, dry_run?) · " +
-      "get_dependencies: path (static require() scan -> what this script depends on)\n" +
-      "Returns: { ok, path?, source?, lineCount?, matches?, replacements?, dependencies?, error? }.\n" +
-      "Example: action: 'search', pattern: 'OnServerEvent' -> matches with {path, line, text}; then\n" +
-      "  action: 'edit_replace', path: <hit>, start_line: 12, end_line: 14, new_content: '...'.",
-    inputSchema: Scripts.shape,
-    annotations: mut,
-  });
+  server.registerTool(
+    "manage_scripts",
+    {
+      title: "Manage Scripts",
+      description:
+        "Read, write, create, delete, surgically edit, search, and statically analyze script source. " +
+        "Prefer the edit_* actions over rewriting whole files with set_source — fewer tokens, fewer mistakes.\n" +
+        "Args: action ('get_source'|'set_source'|'create'|'delete'|'edit_replace'|'edit_insert'|" +
+        "'edit_delete'|'search'|'replace'|'analyze'), plus per-action fields:\n" +
+        "  get_source: path (+ start_line/end_line to read a slice; result includes lineCount)\n" +
+        "  edit_replace: path, start_line, end_line, new_content · edit_insert: path, after_line (0=top), content\n" +
+        "  edit_delete: path, start_line, end_line · search: pattern (+ path root default 'game', " +
+        "case_sensitive?, lua_pattern?, max_results?) · replace: path, pattern, replacement (+ lua_pattern?, dry_run?) · " +
+        "get_dependencies: path (static require() scan -> what this script depends on) · " +
+        "analyze: path (static Luau check -> { ok, analyzer, errorCount, diagnostics:[{line,column,severity,message}] }; " +
+        "run after editing to catch syntax/type errors before a playtest. Needs a Luau analyzer on PATH " +
+        "(luau-lsp or luau-analyze); analyzer:'none' if none is installed.)\n" +
+        "Returns: { ok, path?, source?, lineCount?, matches?, replacements?, dependencies?, diagnostics?, error? }.\n" +
+        "Example: edit a script, then action: 'analyze', path: <it> -> fix any diagnostics before play.",
+      inputSchema: Scripts.shape,
+      annotations: mut,
+    },
+    async (input) => {
+      try {
+        const args = Scripts.parse(input);
+        if (args.action === "analyze") {
+          if (!args.path) return fail("'analyze' requires path.");
+          const src = await callStudio<{ source?: string }>("manage_scripts", {
+            action: "get_source",
+            path: args.path,
+          });
+          if (typeof src.source !== "string") return fail(`No source at '${args.path}'.`);
+          const { analyzer, diagnostics } = analyzeSource(src.source);
+          const errorCount = diagnostics.filter((d) => d.severity === "error").length;
+          const structured = {
+            ok: errorCount === 0,
+            path: args.path,
+            analyzer,
+            errorCount,
+            diagnostics,
+            ...(analyzer === "none"
+              ? { hint: "No Luau analyzer found. Install luau-lsp or luau-analyze to enable static checks." }
+              : {}),
+          };
+          return ok(structured, JSON.stringify(structured));
+        }
+        const result = await callStudio<Record<string, unknown>>("manage_scripts", args);
+        return ok(result, JSON.stringify(result));
+      } catch (error) {
+        return fail(describeError(error));
+      }
+    },
+  );
 }

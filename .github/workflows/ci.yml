@@ -37,6 +37,9 @@ jobs:
       - name: Sync mirror test (disk materialization)
         run: node scripts/sync-smoke.mjs
 
+      - name: Analyze parser test (Luau diagnostics)
+        run: node scripts/analyze-smoke.mjs
+
       - name: Tool docs up to date
         run: |
           npm run docs

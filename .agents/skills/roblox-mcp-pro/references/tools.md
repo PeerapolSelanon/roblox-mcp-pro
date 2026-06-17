@@ -536,18 +536,17 @@ Parameters:
 
 ## `manage_scripts` — Manage Scripts (mutating)
 
-Read, write, create, delete, surgically edit, and search script source. Prefer the edit_* actions over rewriting whole files with set_source — fewer tokens, fewer mistakes.
-Args: action ('get_source'|'set_source'|'create'|'delete'|'edit_replace'|'edit_insert'|'edit_delete'|'search'|'replace'), plus per-action fields:
+Read, write, create, delete, surgically edit, search, and statically analyze script source. Prefer the edit_* actions over rewriting whole files with set_source — fewer tokens, fewer mistakes.
+Args: action ('get_source'|'set_source'|'create'|'delete'|'edit_replace'|'edit_insert'|'edit_delete'|'search'|'replace'|'analyze'), plus per-action fields:
   get_source: path (+ start_line/end_line to read a slice; result includes lineCount)
   edit_replace: path, start_line, end_line, new_content · edit_insert: path, after_line (0=top), content
-  edit_delete: path, start_line, end_line · search: pattern (+ path root default 'game', case_sensitive?, lua_pattern?, max_results?) · replace: path, pattern, replacement (+ lua_pattern?, dry_run?) · get_dependencies: path (static require() scan -> what this script depends on)
-Returns: { ok, path?, source?, lineCount?, matches?, replacements?, dependencies?, error? }.
-Example: action: 'search', pattern: 'OnServerEvent' -> matches with {path, line, text}; then
-  action: 'edit_replace', path: <hit>, start_line: 12, end_line: 14, new_content: '...'.
+  edit_delete: path, start_line, end_line · search: pattern (+ path root default 'game', case_sensitive?, lua_pattern?, max_results?) · replace: path, pattern, replacement (+ lua_pattern?, dry_run?) · get_dependencies: path (static require() scan -> what this script depends on) · analyze: path (static Luau check -> { ok, analyzer, errorCount, diagnostics:[{line,column,severity,message}] }; run after editing to catch syntax/type errors before a playtest. Needs a Luau analyzer on PATH (luau-lsp or luau-analyze); analyzer:'none' if none is installed.)
+Returns: { ok, path?, source?, lineCount?, matches?, replacements?, dependencies?, diagnostics?, error? }.
+Example: edit a script, then action: 'analyze', path: <it> -> fix any diagnostics before play.
 
 Parameters:
 
-- `action` ('get_source' | 'set_source' | 'create' | 'delete' | 'edit_replace' | 'edit_insert' | 'edit_delete' | 'search' | 'replace' | 'get_dependencies', required) — get_source/set_source/create/delete a script, surgical line edits (edit_replace/edit_insert/edit_delete), search scripts, find/replace in one script, or get_dependencies (static require() scan).
+- `action` ('get_source' | 'set_source' | 'create' | 'delete' | 'edit_replace' | 'edit_insert' | 'edit_delete' | 'search' | 'replace' | 'get_dependencies' | 'analyze', required) — get_source/set_source/create/delete a script, surgical line edits (edit_replace/edit_insert/edit_delete), search scripts, find/replace in one script, get_dependencies (static require() scan), or analyze (static Luau check for syntax/type errors before a playtest).
 - `path` (string, optional) — Target script. For 'search': optional root to search under (default 'game').
 - `source` (string, optional) — Luau source for set_source/create.
 - `class_name` ('Script' | 'LocalScript' | 'ModuleScript', optional) — For 'create' (default ModuleScript).
@@ -564,14 +563,6 @@ Parameters:
 - `lua_pattern` (boolean, optional) — Treat pattern as a Lua pattern (default false).
 - `max_results` (number, optional) — For 'search': cap matches (default 100).
 - `dry_run` (boolean, optional) — For 'replace': count matches without writing.
-- `instance` (any, optional) — Alias for 'path'.
-- `target` (any, optional) — Alias for 'path'.
-- `instancePath` (any, optional) — Alias for 'path'.
-- `instance_path` (any, optional) — Alias for 'path'.
-- `parentPath` (any, optional) — Alias for 'parent'.
-- `parent_path` (any, optional) — Alias for 'parent'.
-- `className` (any, optional) — Alias for 'class_name'.
-- `class` (any, optional) — Alias for 'class_name'.
 
 ## `manage_selection` — Manage Explorer Selection (mutating)
 

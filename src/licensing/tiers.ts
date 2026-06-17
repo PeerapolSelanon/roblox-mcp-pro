@@ -45,6 +45,7 @@ const PRO_ACTIONS: Record<string, ReadonlySet<string>> = {
     "search",
     "replace",
     "get_dependencies",
+    "analyze",
   ]),
   manage_selection: new Set(["watch"]),
   workspace_state: new Set(["changes", "viewport"]),
