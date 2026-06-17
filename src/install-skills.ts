@@ -96,7 +96,7 @@ export async function ensureSkillsInstalled(): Promise<SkillSyncResult> {
 
           const dest = path.join(target.skillsDir, skill, rel);
           const existing = await readIfPresent(dest);
-          if (existing && existing.equals(source)) continue;
+          if (existing?.equals(source)) continue;
 
           await fs.mkdir(path.dirname(dest), { recursive: true });
           await fs.writeFile(dest, source);

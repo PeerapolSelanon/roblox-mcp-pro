@@ -604,7 +604,7 @@ class SyncEngine {
     const rel = path.relative(this.explorerDir, dir);
     if (rel.startsWith("..")) return null;
     const segments = rel.split(path.sep).filter((s) => s.length > 0).map(deEscape);
-    return `game${segments.length ? "." + segments.join(".") : ""}`;
+    return `game${segments.length ? `.${segments.join(".")}` : ""}`;
   }
 
   private async onStudioEvent(event: StudioEvent): Promise<void> {

@@ -72,10 +72,10 @@ export function registerExecuteTools(server: McpServer): void {
 
 function renderSuccess(result: ExecuteResult): string {
   const parts: string[] = [];
-  if (result.output) parts.push("Output:\n" + result.output);
+  if (result.output) parts.push(`Output:\n${result.output}`);
   if (result.returns.length > 0) {
     // Compact JSON — pretty-printing return values just burns tokens.
-    parts.push("Returned: " + JSON.stringify(result.returns));
+    parts.push(`Returned: ${JSON.stringify(result.returns)}`);
   }
   if (parts.length === 0) parts.push("Script ran successfully (no output or return value).");
   return parts.join("\n\n");

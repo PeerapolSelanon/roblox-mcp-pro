@@ -217,7 +217,7 @@ export async function saveLicenseKey(key: string): Promise<LicenseState> {
     return { status: "locked", message: "No license key provided." };
   }
   await fs.mkdir(STATE_DIR, { recursive: true });
-  await fs.writeFile(LICENSE_FILE, trimmed + "\n", "utf8");
+  await fs.writeFile(LICENSE_FILE, `${trimmed}\n`, "utf8");
   // Validate/activate immediately so the caller can confirm the key works. The
   // env var, if set, would override the file on the next resolve — flag that.
   if (process.env.ROBLOX_MCP_LICENSE?.trim()) {

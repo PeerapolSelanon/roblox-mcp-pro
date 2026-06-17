@@ -19,6 +19,9 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Lint TypeScript (biome)
+        run: npm run lint
+
       - name: Build server (tsc, strict)
         run: npm run build
 

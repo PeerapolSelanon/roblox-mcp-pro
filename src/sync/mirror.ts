@@ -48,6 +48,7 @@ export function scriptSuffix(className: string): string | null {
 
 /** Escape a name so it is filesystem-safe and reversible. */
 export function escapeName(name: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional — strip control chars from filesystem names.
   return name.replace(/~/g, "~~").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
 }
 

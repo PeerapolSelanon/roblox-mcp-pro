@@ -44,6 +44,7 @@
     "inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
     "obfuscate": "node scripts/obfuscate.mjs",
     "docs": "node scripts/gen-docs.mjs",
+    "lint": "biome lint",
     "test": "npm run build && node scripts/smoke.mjs",
     "prepublishOnly": "npm run clean && npm run build && npm run docs && npm run obfuscate"
   },
@@ -56,6 +57,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
     "@types/node": "^22.10.0",
     "javascript-obfuscator": "^5.4.3",
     "tsx": "^4.19.2",

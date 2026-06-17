@@ -62,7 +62,7 @@ export async function ensurePluginInstalled(): Promise<PluginSyncResult> {
     } catch {
       existing = null;
     }
-    if (existing && existing.equals(source)) return { status: "current", dest };
+    if (existing?.equals(source)) return { status: "current", dest };
 
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(dest, source);
@@ -87,7 +87,7 @@ export async function installPlugin(): Promise<void> {
 
   const result = await ensurePluginInstalled();
   if (result.status === "error") {
-    console.error("Failed to install the plugin. Try again or copy it manually from:\n  " + bundledPluginPath());
+    console.error(`Failed to install the plugin. Try again or copy it manually from:\n  ${bundledPluginPath()}`);
     process.exitCode = 1;
     return;
   }

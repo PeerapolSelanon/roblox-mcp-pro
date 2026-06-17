@@ -42,7 +42,7 @@ export async function writeStore(patch: Partial<LicenseStore>): Promise<void> {
   const next: LicenseStore = { ...current, ...patch };
   try {
     await fs.mkdir(STATE_DIR, { recursive: true });
-    await fs.writeFile(STATE_FILE, JSON.stringify(next, null, 2) + "\n", "utf8");
+    await fs.writeFile(STATE_FILE, `${JSON.stringify(next, null, 2)}\n`, "utf8");
   } catch {
     // Best-effort: if we can't persist, licensing still works for this run.
   }

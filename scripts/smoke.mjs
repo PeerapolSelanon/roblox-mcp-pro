@@ -38,8 +38,12 @@ for (const c of CORE) {
 // 3) No duplicate registrations.
 if (names.size !== tools.length) {
   const seen = new Set();
-  const dupes = tools.map((t) => t.name).filter((n) => (seen.has(n) ? true : (seen.add(n), false)));
-  fail(`duplicate tool names: ${[...new Set(dupes)].join(", ")}`);
+  const dupes = new Set();
+  for (const t of tools) {
+    if (seen.has(t.name)) dupes.add(t.name);
+    seen.add(t.name);
+  }
+  fail(`duplicate tool names: ${[...dupes].join(", ")}`);
 }
 
 // 4) Every tool is well-formed: title, handler, and a zod inputSchema shape.

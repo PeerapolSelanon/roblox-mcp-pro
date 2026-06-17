@@ -261,7 +261,7 @@ export class Bridge {
   private sessionIdOf(req: http.IncomingMessage): string {
     const raw = req.headers[SESSION_HEADER];
     const id = Array.isArray(raw) ? raw[0] : raw;
-    return id && id.trim() ? id.trim() : DEFAULT_SESSION;
+    return id?.trim() ? id.trim() : DEFAULT_SESSION;
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {

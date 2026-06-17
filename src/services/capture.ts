@@ -21,6 +21,7 @@ export interface CaptureResult {
 }
 
 /** PowerShell that captures the Studio window (or the primary screen) to a PNG. */
+// biome-ignore lint/complexity/noUselessStringRaw: raw keeps embedded PowerShell (Windows `\` paths) escape-safe.
 const PS_SCRIPT = String.raw`
 param([string]$OutPath, [int]$Fullscreen = 0)
 $ErrorActionPreference = "Stop"
