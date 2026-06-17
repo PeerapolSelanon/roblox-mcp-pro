@@ -394,7 +394,12 @@ export function registerBuildTools(server: McpServer): void {
             errorCount,
             diagnostics,
             ...(analyzer === "none"
-              ? { hint: "No Luau analyzer found. Install luau-lsp or luau-analyze to enable static checks." }
+              ? {
+                  hint:
+                    "No Luau analyzer found. Install one (e.g. `rokit add JohnnyMorganz/luau-lsp` " +
+                    "or `aftman add JohnnyMorganz/luau-lsp`), or put luau-lsp/luau-analyze on PATH — " +
+                    "then analyze returns real syntax/type diagnostics.",
+                }
               : {}),
           };
           return ok(structured, JSON.stringify(structured));

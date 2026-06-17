@@ -1,13 +1,14 @@
 /**
  * Static Luau analysis. Shells out to a Luau analyzer (luau-lsp / luau-analyze)
- * if the user has one on PATH, so an agent can catch syntax/type errors BEFORE a
- * full playtest — tightening the write→verify loop. Degrades gracefully to
- * `analyzer: "none"` when no analyzer is installed, so it never hard-fails.
+ * found on PATH or in a Roblox toolchain bin dir (rokit/aftman/foreman), so an
+ * agent can catch syntax/type errors BEFORE a full playtest — tightening the
+ * write→verify loop. Degrades gracefully to `analyzer: "none"` when no analyzer
+ * is installed anywhere we look, so it never hard-fails.
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 
 export interface Diagnostic {
@@ -79,8 +80,23 @@ export function parseDiagnostics(
   return diagnostics;
 }
 
-function hasBinary(bin: string): boolean {
-  return !spawnSync(bin, ["--version"], { stdio: "ignore" }).error;
+// Roblox devs usually install luau-lsp via a toolchain manager (rokit/aftman/
+// foreman), whose bin dir is on the *shell* PATH but not on a GUI-launched
+// process's PATH — so a PATH-only probe misses it. Also check these dirs.
+const TOOLCHAIN_BINS = [".rokit/bin", ".aftman/bin", ".foreman/bin"].map((d) =>
+  join(homedir(), d),
+);
+const EXE = process.platform === "win32" ? ".exe" : "";
+
+/** Resolve an analyzer to a runnable command (bare name if on PATH, else a full
+ *  toolchain path), or null if it isn't installed anywhere we look. */
+function resolveBinary(bin: string): string | null {
+  if (!spawnSync(bin, ["--version"], { stdio: "ignore" }).error) return bin;
+  for (const dir of TOOLCHAIN_BINS) {
+    const full = join(dir, bin + EXE);
+    if (existsSync(full)) return full;
+  }
+  return null;
 }
 
 /** Run the first available analyzer over `source`. */
@@ -88,17 +104,23 @@ export function analyzeSource(
   source: string,
   filterNoise = true,
 ): { analyzer: string; diagnostics: Diagnostic[] } {
-  const found = ANALYZERS.find(([bin]) => hasBinary(bin));
-  if (!found) return { analyzer: "none", diagnostics: [] };
+  let resolved: { cmd: string; preArgs: string[] } | undefined;
+  for (const [bin, preArgs] of ANALYZERS) {
+    const cmd = resolveBinary(bin);
+    if (cmd) {
+      resolved = { cmd, preArgs };
+      break;
+    }
+  }
+  if (!resolved) return { analyzer: "none", diagnostics: [] };
 
-  const [bin, preArgs] = found;
   const dir = mkdtempSync(join(tmpdir(), "rmp-analyze-"));
   const file = join(dir, "source.luau");
   try {
     writeFileSync(file, source, "utf8");
-    const run = spawnSync(bin, [...preArgs, file], { encoding: "utf8" });
+    const run = spawnSync(resolved.cmd, [...resolved.preArgs, file], { encoding: "utf8" });
     const text = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
-    return { analyzer: bin, diagnostics: parseDiagnostics(text, run.status, filterNoise) };
+    return { analyzer: resolved.cmd, diagnostics: parseDiagnostics(text, run.status, filterNoise) };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
