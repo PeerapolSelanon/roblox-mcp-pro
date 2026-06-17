@@ -1,0 +1,3 @@
+# Generated tool reference is written with LF by scripts/gen-docs.mjs.
+# Pin LF so the CI "docs up to date" gate never trips on line-ending churn.
+.agents/skills/roblox-mcp-pro/references/tools.md text eol=lf

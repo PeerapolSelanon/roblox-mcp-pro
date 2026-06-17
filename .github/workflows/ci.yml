@@ -22,6 +22,15 @@ jobs:
       - name: Build server (tsc, strict)
         run: npm run build
 
+      - name: Smoke test (tool registry)
+        run: node scripts/smoke.mjs
+
+      - name: Tool docs up to date
+        run: |
+          npm run docs
+          git diff --exit-code -- .agents/skills/roblox-mcp-pro/references/tools.md \
+            || { echo "::error::tools.md is stale — run 'npm run docs' and commit the result."; exit 1; }
+
       - name: Setup Rojo
         uses: ok-nick/setup-aftman@v0.4.2
 

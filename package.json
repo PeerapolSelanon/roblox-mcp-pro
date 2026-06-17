@@ -44,6 +44,7 @@
     "inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
     "obfuscate": "node scripts/obfuscate.mjs",
     "docs": "node scripts/gen-docs.mjs",
+    "test": "npm run build && node scripts/smoke.mjs",
     "prepublishOnly": "npm run clean && npm run build && npm run docs && npm run obfuscate"
   },
   "engines": {
