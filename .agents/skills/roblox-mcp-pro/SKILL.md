@@ -129,8 +129,18 @@ started, sync operates on that Place's session for its lifetime.
 - **Batch related edits.** Building several parts or a whole structure? Wrap the operations in
   `batch_execute` so it's one undo step and one round-trip, not N. Each step reports its own
   ok/error, so a single bad op doesn't lose the rest.
-- **Verify after you change.** After a `mutate_instances`/`manage_ui` create, a quick
-  `query_instances` (with `include_properties: true`) confirms it landed as intended.
+- **Verify what you built — don't assume it worked.** "No error thrown" is not "correct".
+  Pick the check that matches what you changed:
+  - *Structure*: `query_instances` (`include_properties: true`) confirms a create landed. On a
+    `batch_execute`/`mutate_instances` read the **top-level `ok`/`failedCount`** — `ok:false`
+    means some op failed (see `firstError`); don't assume success because the call returned.
+  - *Spatial (3D)*: after placing parts, `spatial_query` `check_placement`/`box` catches
+    overlaps and `bounds` confirms a model's extents/position — surer than eyeballing coordinates.
+  - *Visual (UI/scene)*: `capture_studio` (or `ui_preview` for a clean GUI shot) and compare the
+    real render to what you intended before calling it done.
+  - *Runtime (gameplay)*: `manage_studio` `play`, then poll `playtest_status` — `report.ok` is
+    false and `report.errors[]` lists the messages whenever the game raised a runtime error, so a
+    clean run is provable, not assumed.
 - **Property value shapes.** Vectors are `[x,y,z]`; Color3 is `[r,g,b]` (0–1); UDim2 is
   `[[xScale,xOffset],[yScale,yOffset]]`; CFrame is a 12-number array; enums and BrickColor are
   their string names. Values are coerced to the property's current type, so match the existing type.
