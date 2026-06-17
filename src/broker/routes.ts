@@ -760,6 +760,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
 
   function tick(): void {
     state.prune();
+    bridge.prune(); // forget Studio sessions that closed (esp. abrupt closes)
     void refreshStudio();
     void refreshPlaces();
     broadcast();

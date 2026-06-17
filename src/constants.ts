@@ -23,6 +23,18 @@ export const COMMAND_TIMEOUT_MS = 30_000;
 /** Plugin is considered "connected" if it polled within this window (ms). */
 export const PLUGIN_LIVENESS_MS = LONG_POLL_TIMEOUT_MS + 10_000;
 
+/**
+ * When a plugin's long-poll socket closes unexpectedly (Studio quit/crashed
+ * mid-poll), wait this long for it to re-poll before declaring the session gone.
+ * Short, so a hard Studio close clears in seconds instead of waiting out
+ * PLUGIN_LIVENESS_MS (which left dead sessions blocking routing for ~35s).
+ */
+export const PLUGIN_DISCONNECT_GRACE_MS = 3_000;
+
+/** Remove a disconnected session from the registry this long after it drops (ms),
+ *  after a brief "recently dropped" window on the dashboard. */
+export const SESSION_PRUNE_GRACE_MS = 8_000;
+
 /** Maximum characters returned in a single tool response before truncation. */
 export const CHARACTER_LIMIT = 25_000;
 

@@ -36,3 +36,24 @@ test("status() aggregates: pluginConnected true if any session is live", () => {
   b.setPresence("s1", true, { sessionId: "s1" });
   assert.equal(b.status().pluginConnected, true);
 });
+
+test("prune keeps a live session", () => {
+  const b = new Bridge();
+  b.setPresence("s1", true, { sessionId: "s1" });
+  assert.equal(b.prune(), false);
+  assert.equal(b.allSessions().length, 1);
+});
+
+test("prune drops a disconnected session after the grace window", () => {
+  const b = new Bridge();
+  b.setPresence("s1", true, { sessionId: "s1", placeName: "Lobby" });
+  b.setPresence("s1", false); // Studio closed
+  const t = 1_000_000;
+  // First tick just stamps the offline time — still shown as "recently dropped".
+  assert.equal(b.prune(t), false);
+  assert.equal(b.allSessions().length, 1);
+  // Well past the grace: the phantom Place is forgotten entirely.
+  assert.equal(b.prune(t + 60_000), true);
+  assert.deepEqual(b.allSessions(), []);
+  assert.deepEqual(b.connectedSessions(), []);
+});

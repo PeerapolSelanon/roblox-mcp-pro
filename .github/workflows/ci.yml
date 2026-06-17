@@ -40,6 +40,9 @@ jobs:
       - name: Analyze parser test (Luau diagnostics)
         run: node scripts/analyze-smoke.mjs
 
+      - name: Unit tests (bridge session lifecycle)
+        run: npx tsx --test test/*.test.ts
+
       - name: Tool docs up to date
         run: |
           npm run docs

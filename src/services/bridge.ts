@@ -25,6 +25,8 @@ import {
   COMMAND_TIMEOUT_MS,
   LONG_POLL_TIMEOUT_MS,
   PLUGIN_LIVENESS_MS,
+  PLUGIN_DISCONNECT_GRACE_MS,
+  SESSION_PRUNE_GRACE_MS,
 } from "../constants.js";
 import type {
   BridgeStatus,
@@ -47,6 +49,8 @@ interface InflightEntry {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
   timer: NodeJS.Timeout;
+  /** Session this command was routed to, so a disconnect can fail it fast. */
+  sessionId: string;
 }
 
 interface Waiter {
@@ -59,6 +63,10 @@ interface Session {
   waiters: Waiter[];
   lastPollAt: number | null;
   forcedOffline: boolean;
+  /** Grace timer armed when a long-poll drops unexpectedly (abrupt Studio close). */
+  disconnectTimer: NodeJS.Timeout | null;
+  /** When prune first saw this session offline, used to age it out of the map. */
+  offlineSince: number | null;
   meta: SessionMeta;
 }
 
@@ -89,11 +97,92 @@ export class Bridge {
         waiters: [],
         lastPollAt: null,
         forcedOffline: false,
+        disconnectTimer: null,
+        offlineSince: null,
         meta: { sessionId },
       };
       this.sessions.set(sessionId, s);
     }
     return s;
+  }
+
+  /** Record fresh plugin activity on a session and cancel any pending teardown. */
+  private markAlive(s: Session): void {
+    s.lastPollAt = Date.now();
+    s.forcedOffline = false;
+    s.offlineSince = null;
+    if (s.disconnectTimer) {
+      clearTimeout(s.disconnectTimer);
+      s.disconnectTimer = null;
+    }
+  }
+
+  /**
+   * A long-poll for `sessionId` closed without us ending it (the plugin's
+   * timeout and command dispatch both remove the waiter first), so Studio went
+   * away mid-poll. Give it a short grace to re-poll; if it doesn't, mark the
+   * session offline and fail its queued commands so callers don't hang.
+   */
+  private scheduleDisconnect(sessionId: string): void {
+    const s = this.sessions.get(sessionId);
+    if (!s || s.forcedOffline || s.disconnectTimer) return;
+    s.disconnectTimer = setTimeout(() => {
+      s.disconnectTimer = null;
+      if (s.waiters.length === 0) {
+        s.forcedOffline = true;
+        this.failSession(sessionId, "Studio disconnected (the Place was closed).");
+      }
+    }, PLUGIN_DISCONNECT_GRACE_MS);
+    s.disconnectTimer.unref?.();
+  }
+
+  /** Reject every queued/inflight command for a session (it's gone — don't wait). */
+  private failSession(sessionId: string, reason: string): void {
+    const s = this.sessions.get(sessionId);
+    if (s) s.pending.length = 0;
+    for (const [id, entry] of this.inflight) {
+      if (entry.sessionId === sessionId) {
+        clearTimeout(entry.timer);
+        this.inflight.delete(id);
+        entry.reject(new StudioError(reason));
+      }
+    }
+  }
+
+  /**
+   * Drop sessions that have stayed disconnected past the prune grace, after a
+   * brief "recently dropped" window. Without this a closed Studio — especially
+   * an abrupt close — lingers in the registry, cluttering the dashboard and
+   * (until liveness expired) blocking routing as a phantom Place. Returns true
+   * if anything was removed. `now` is injectable for tests.
+   */
+  prune(now: number = Date.now()): boolean {
+    let removed = false;
+    for (const [id, s] of this.sessions) {
+      if (this.isConnected(id)) {
+        s.offlineSince = null;
+        continue;
+      }
+      if (s.offlineSince === null) {
+        s.offlineSince = now;
+        continue;
+      }
+      if (now - s.offlineSince <= SESSION_PRUNE_GRACE_MS) continue;
+      // Truly gone: release any held poll, fail queued commands, forget it.
+      if (s.disconnectTimer) clearTimeout(s.disconnectTimer);
+      for (const w of s.waiters) {
+        clearTimeout(w.timer);
+        if (!w.res.writableEnded) {
+          w.res.statusCode = 204;
+          w.res.end();
+        }
+      }
+      s.waiters.length = 0;
+      this.failSession(id, "Studio disconnected (the Place was closed).");
+      this.sessions.delete(id);
+      removed = true;
+    }
+    return removed;
   }
 
   /** True if a given session polled recently enough to be considered live. */
@@ -135,8 +224,15 @@ export class Bridge {
    */
   setPresence(sessionId: string, connected: boolean, meta?: Partial<SessionMeta>): void {
     const s = this.ensure(sessionId);
-    s.forcedOffline = !connected;
-    if (connected) s.lastPollAt = Date.now();
+    if (connected) {
+      this.markAlive(s);
+    } else {
+      s.forcedOffline = true;
+      if (s.disconnectTimer) {
+        clearTimeout(s.disconnectTimer);
+        s.disconnectTimer = null;
+      }
+    }
     if (meta) s.meta = { ...s.meta, ...meta, sessionId };
   }
 
@@ -188,6 +284,10 @@ export class Bridge {
     this.inflight.clear();
     for (const s of this.sessions.values()) {
       s.pending.length = 0;
+      if (s.disconnectTimer) {
+        clearTimeout(s.disconnectTimer);
+        s.disconnectTimer = null;
+      }
       for (const waiter of s.waiters) {
         clearTimeout(waiter.timer);
         waiter.res.statusCode = 204;
@@ -241,7 +341,7 @@ export class Bridge {
           ),
         );
       }, COMMAND_TIMEOUT_MS);
-      this.inflight.set(command.id, { resolve, reject, timer });
+      this.inflight.set(command.id, { resolve, reject, timer, sessionId });
       s.pending.push(command);
       this.flush(s);
     });
@@ -282,8 +382,7 @@ export class Bridge {
     if (req.method === "GET" && path === "/dequeue") {
       const sessionId = this.sessionIdOf(req);
       const s = this.ensure(sessionId);
-      s.lastPollAt = Date.now();
-      s.forcedOffline = false;
+      this.markAlive(s);
       if (s.pending.length > 0) {
         this.sendJson(res, 200, s.pending.shift()!);
         return;
@@ -299,7 +398,12 @@ export class Bridge {
       res.on("close", () => {
         clearTimeout(timer);
         const idx = s.waiters.indexOf(waiter);
-        if (idx !== -1) s.waiters.splice(idx, 1);
+        // Still queued = the plugin closed the poll itself (timeout and dispatch
+        // both remove the waiter before ending it), i.e. Studio went away.
+        if (idx !== -1) {
+          s.waiters.splice(idx, 1);
+          this.scheduleDisconnect(sessionId);
+        }
       });
       return;
     }
@@ -307,8 +411,7 @@ export class Bridge {
     if (req.method === "POST" && path === "/respond") {
       const sessionId = this.sessionIdOf(req);
       const s = this.ensure(sessionId);
-      s.lastPollAt = Date.now();
-      s.forcedOffline = false;
+      this.markAlive(s);
       const body = await this.readBody(req);
       const reply = JSON.parse(body) as CommandResponse;
       const entry = this.inflight.get(reply.id);
@@ -325,8 +428,7 @@ export class Bridge {
     if (req.method === "POST" && path === "/event") {
       const sessionId = this.sessionIdOf(req);
       const s = this.ensure(sessionId);
-      s.lastPollAt = Date.now();
-      s.forcedOffline = false;
+      this.markAlive(s);
       const body = await this.readBody(req);
       const event = JSON.parse(body) as StudioEvent;
       for (const listener of this.eventListeners) listener(event);
