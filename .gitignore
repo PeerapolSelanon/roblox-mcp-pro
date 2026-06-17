@@ -26,12 +26,18 @@ roblox-mcp-sync/
 !.agents/skills/roblox-ui-animation/
 .claude/
 
+# CLI-installed agent tooling (caveman etc.) — keep out of the product package
+.qwen/
+.codex/
+.gemini/
+
 skills-lock.json
 
 .github/skills/*
 
 # Obsidian vault
 obsidian_vault/
+roblox-mcp-obsidian/
 
 .impeccable/
 .playwright-mcp/
