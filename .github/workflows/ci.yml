@@ -31,6 +31,9 @@ jobs:
       - name: License gate test (trial + offline grace)
         run: node scripts/license-smoke.mjs
 
+      - name: Routing test (fail-closed multi-place)
+        run: node scripts/routing-smoke.mjs
+
       - name: Tool docs up to date
         run: |
           npm run docs

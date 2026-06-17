@@ -19,7 +19,7 @@ npm run inspector    # exercise tools via MCP Inspector (needs dist/ built)
 .\build.ps1 -NoInstall  # plugin build only
 ```
 
-**CI** (`.github/workflows/ci.yml`, on push/PR) gates merges with, in order: biome lint (TS) → `tsc` build → `scripts/smoke.mjs` (tool registry) → `scripts/license-smoke.mjs` (trial + offline-grace) → tool-docs freshness (`npm run docs` must produce no diff) → selene (plugin Luau) → rojo plugin build. Keep them green:
+**CI** (`.github/workflows/ci.yml`, on push/PR) gates merges with, in order: biome lint (TS) → `tsc` build → `scripts/smoke.mjs` (tool registry) → `scripts/license-smoke.mjs` (trial + offline-grace) → `scripts/routing-smoke.mjs` (fail-closed multi-place routing via a fake Bridge) → tool-docs freshness (`npm run docs` must produce no diff) → selene (plugin Luau) → rojo plugin build. Keep them green:
 - After changing a tool's zod schema/description, run `npm run docs` and commit `tools.md` (the freshness gate fails otherwise).
 - The smokes are hermetic — no Studio, license, network, or real `~/.roblox-mcp-pro` (license-smoke redirects `HOME` to a temp dir and points the proxy at a dead port). Add cases there when you change tool registration or licensing logic.
 - selene config: `selene.toml` + `plugin.yml` (std extension for the `plugin`/`version` globals); `roblox.yml` is generated in CI and gitignored. Run `selene plugin/src` locally (needs the std: `selene generate-roblox-std`).

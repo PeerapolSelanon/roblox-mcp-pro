@@ -45,7 +45,7 @@
     "obfuscate": "node scripts/obfuscate.mjs",
     "docs": "node scripts/gen-docs.mjs",
     "lint": "biome lint",
-    "test": "npm run build && node scripts/smoke.mjs && node scripts/license-smoke.mjs",
+    "test": "npm run build && node scripts/smoke.mjs && node scripts/license-smoke.mjs && node scripts/routing-smoke.mjs",
     "prepublishOnly": "npm run clean && npm run build && npm run docs && npm run obfuscate"
   },
   "engines": {
