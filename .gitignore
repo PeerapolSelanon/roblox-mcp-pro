@@ -11,6 +11,9 @@ dist/
 plugin/*.rbxmx
 plugin/*.rbxm
 
+# Generated selene Roblox std (regenerated in CI via selene generate-roblox-std)
+roblox.yml
+
 # Local sync mirror (generated)
 roblox-mcp-sync/
 

@@ -1,0 +1,10 @@
+# Static analysis for the Studio plugin Luau (plugin/src).
+# Roblox std is generated via `selene generate-roblox-std` (roblox.yml, gitignored).
+# `plugin` is the PluginManager global injected into plugin scripts — defined in
+# plugin.yml and merged on top of the roblox std.
+std = "roblox+plugin"
+
+[lints]
+# CreateDockWidgetPluginGui is the standard dock-widget API for plugins; the
+# generated std flags it deprecated, which is noise for a Studio plugin.
+deprecated = "allow"

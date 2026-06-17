@@ -31,8 +31,13 @@ jobs:
           git diff --exit-code -- .agents/skills/roblox-mcp-pro/references/tools.md \
             || { echo "::error::tools.md is stale — run 'npm run docs' and commit the result."; exit 1; }
 
-      - name: Setup Rojo
+      - name: Setup Roblox toolchain (rojo, selene)
         uses: ok-nick/setup-aftman@v0.4.2
+
+      - name: Lint plugin Luau (selene)
+        run: |
+          selene generate-roblox-std
+          selene plugin/src
 
       - name: Build Studio plugin
         run: |

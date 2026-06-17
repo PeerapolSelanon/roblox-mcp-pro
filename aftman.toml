@@ -1,3 +1,4 @@
 # Toolchain for roblox-mcp-pro (managed by Aftman).
 [tools]
 rojo = "rojo-rbx/rojo@7.7.0-rc.1"
+selene = "Kampfkarren/selene@0.28.0"

@@ -169,10 +169,10 @@ function Serialize.coerce(inst: Instance, prop: string, raw: any): (boolean, any
 		local z = raw.z or raw[3] or 0
 		return true, Vector3.new(x, y, z)
 	elseif t == "Color3" and type(raw) == "table" then
-		local r = raw.r or raw[1] or 0
-		local g = raw.g or raw[2] or 0
-		local b = raw.b or raw[3] or 0
-		return true, Color3.new(r, g, b)
+		local red = raw.r or raw[1] or 0
+		local green = raw.g or raw[2] or 0
+		local blue = raw.b or raw[3] or 0
+		return true, Color3.new(red, green, blue)
 	elseif t == "BrickColor" and type(raw) == "string" then
 		return true, BrickColor.new(raw)
 	elseif t == "EnumItem" and type(raw) == "string" then

@@ -1,0 +1,10 @@
+---
+# selene std extension: globals injected into Roblox Studio plugin scripts that
+# the generated roblox std does not include. Merged via `std = "roblox+plugin"`.
+globals:
+  plugin:
+    property: read-only
+  # `version()` returns the Studio version string; a real Roblox global the
+  # generated std omits.
+  version:
+    args: []
