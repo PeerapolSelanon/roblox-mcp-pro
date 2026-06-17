@@ -31,6 +31,23 @@ export function fail(text: string): ToolResult {
   return { content: [{ type: "text", text }], isError: true };
 }
 
+/**
+ * Aggregate a positional op-results array (batch_execute / mutate_instances)
+ * into a top-level signal so an agent sees a partial failure without scanning
+ * every entry: `ok` is true only if every op succeeded.
+ */
+export function summarizeOps(
+  results: { ok: boolean; error?: string }[],
+): { ok: boolean; failedCount: number; firstError?: string } {
+  const failed = results.filter((r) => !r.ok);
+  const firstError = failed.find((r) => r.error)?.error;
+  return {
+    ok: failed.length === 0,
+    failedCount: failed.length,
+    ...(firstError ? { firstError } : {}),
+  };
+}
+
 /** Truncate text to CHARACTER_LIMIT with an explanatory suffix. */
 export function truncate(text: string): string {
   if (text.length <= CHARACTER_LIMIT) return text;

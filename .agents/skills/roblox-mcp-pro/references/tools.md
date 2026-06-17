@@ -57,7 +57,7 @@ Parameters:
 
 Create/edit/move/clone/delete instances; ops run in order, each reports its own result.
 Args: operations:[{action:create|set_properties|rename|reparent|delete|clone|duplicate, path?, class_name?, name?, parent?, properties?, count?, offset?}]. create=class_name+parent; set_properties=path+properties; rename=path+name; reparent=path+parent; delete=path; clone=path(+parent,name); duplicate=path+count+offset (N spaced copies, e.g. a fence row). Property values accept primitives, [x,y,z] arrays, and color names. Paths accept a sibling index for duplicate names: 'Workspace.Part[2]' = second child named Part.
-Returns: { results:[{ok,action,path?,resultPath?,resultPaths?,error?}] }. Refuses to mutate protected services.
+Returns: { ok, failedCount, firstError?, results:[{ok,action,path?,resultPath?,resultPaths?,error?}] } — top-level ok is true only if every op succeeded, so a partial failure is visible without scanning results. Refuses to mutate protected services.
 
 Parameters:
 
@@ -148,8 +148,10 @@ Args:
   - stop_on_error (boolean): halt at first failure (default false).
 
 Returns (structured):
-  { "results": [ { "ok": boolean, "result"?: any, "error"?: string } ] }
-  (results are positional, matching the operations array)
+  { "ok": boolean, "failedCount": number, "firstError"?: string,
+    "results": [ { "ok": boolean, "result"?: any, "error"?: string } ] }
+  Top-level ok is true only if every step succeeded — a partial failure is
+  visible without scanning results. Results are positional, matching operations.
 
 Examples:
   - Build a row of parts:

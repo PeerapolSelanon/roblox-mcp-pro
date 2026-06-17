@@ -5,7 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { callStudio, describeError } from "../services/studio.js";
-import { ok, fail } from "../services/format.js";
+import { ok, fail, summarizeOps } from "../services/format.js";
 import { InstancePath, pagination } from "../schemas/common.js";
 import { PROTECTED_SERVICES } from "../constants.js";
 
@@ -201,7 +201,7 @@ export function registerInstanceTools(server: McpServer): void {
         "clone=path(+parent,name); duplicate=path+count+offset (N spaced copies, e.g. a fence row). " +
         "Property values accept primitives, [x,y,z] arrays, and color names. Paths accept a sibling " +
         "index for duplicate names: 'Workspace.Part[2]' = second child named Part.\n" +
-        "Returns: { results:[{ok,action,path?,resultPath?,resultPaths?,error?}] }. Refuses to mutate protected services.",
+        "Returns: { ok, failedCount, firstError?, results:[{ok,action,path?,resultPath?,resultPaths?,error?}] } — top-level ok is true only if every op succeeded, so a partial failure is visible without scanning results. Refuses to mutate protected services.",
       inputSchema: MutateInputSchema.shape,
       annotations: {
         readOnlyHint: false,
@@ -215,7 +215,8 @@ export function registerInstanceTools(server: McpServer): void {
       if (guard) return fail(`Error: ${guard}`);
       try {
         const result = await callStudio<MutateResult>("mutate_instances", input);
-        const okCount = result.results.filter((r) => r.ok).length;
+        const summary = summarizeOps(result.results);
+        const okCount = result.results.length - summary.failedCount;
         const lines = [
           `# Mutation results (${okCount}/${result.results.length} succeeded)`,
           "",
@@ -226,7 +227,7 @@ export function registerInstanceTools(server: McpServer): void {
               (r.error ? ` — ${r.error}` : ""),
           ),
         ];
-        return ok(result as unknown as Record<string, unknown>, lines.join("\n"));
+        return ok({ ...summary, results: result.results }, lines.join("\n"));
       } catch (error) {
         return fail(describeError(error));
       }

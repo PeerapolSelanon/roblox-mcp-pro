@@ -5,7 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { callStudio, describeError } from "../services/studio.js";
-import { ok, fail } from "../services/format.js";
+import { ok, fail, summarizeOps } from "../services/format.js";
 
 const SubOperation = z
   .object({
@@ -51,8 +51,10 @@ Args:
   - stop_on_error (boolean): halt at first failure (default false).
 
 Returns (structured):
-  { "results": [ { "ok": boolean, "result"?: any, "error"?: string } ] }
-  (results are positional, matching the operations array)
+  { "ok": boolean, "failedCount": number, "firstError"?: string,
+    "results": [ { "ok": boolean, "result"?: any, "error"?: string } ] }
+  Top-level ok is true only if every step succeeded — a partial failure is
+  visible without scanning results. Results are positional, matching operations.
 
 Examples:
   - Build a row of parts:
@@ -77,13 +79,14 @@ Error Handling:
     async (input: Input) => {
       try {
         const result = await callStudio<BatchResult>("batch_execute", input);
-        const okCount = result.results.filter((r) => r.ok).length;
+        const summary = summarizeOps(result.results);
+        const okCount = result.results.length - summary.failedCount;
         const text =
           `# Batch: ${okCount}/${result.results.length} steps succeeded\n` +
           result.results
             .map((r, i) => `${r.ok ? "✅" : "❌"} step ${i + 1}${r.error ? ` — ${r.error}` : ""}`)
             .join("\n");
-        return ok(result as unknown as Record<string, unknown>, text);
+        return ok({ ...summary, results: result.results }, text);
       } catch (error) {
         return fail(describeError(error));
       }
