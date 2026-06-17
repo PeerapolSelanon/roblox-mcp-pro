@@ -23,8 +23,13 @@ local function r(n: number): number
 	return math.floor(n * 10000 + 0.5) / 10000
 end
 
--- Convert a Roblox value into something JSON-encodable.
-function Serialize.value(v: any): any
+-- Bound recursion into plain Luau tables so a `return { ... }` from execute_luau
+-- comes back as real structured data, not a "table: 0x…" pointer.
+-- ponytail: fixed depth/breadth caps, raise them if real return values nest deeper.
+local MAX_DEPTH = 6
+local MAX_KEYS = 200
+
+local function serialize(v: any, depth: number, seen: { [any]: boolean }): any
 	local t = typeof(v)
 	if t == "number" then
 		return r(v)
@@ -52,9 +57,48 @@ function Serialize.value(v: any): any
 		return v.Name
 	elseif t == "Instance" then
 		return Serialize.path(v)
+	elseif t == "table" then
+		if depth >= MAX_DEPTH then
+			return "<table: max depth>"
+		end
+		if seen[v] then
+			return "<cycle>"
+		end
+		seen[v] = true
+		local n = #v
+		local count = 0
+		for _ in pairs(v) do
+			count += 1
+		end
+		local out: any
+		if n > 0 and count == n then
+			-- Pure array part (keys 1..n): emit a JSON array.
+			out = {}
+			for i = 1, math.min(n, MAX_KEYS) do
+				out[i] = serialize(v[i], depth + 1, seen)
+			end
+		else
+			-- Map (or mixed): emit a JSON object with stringified keys.
+			out = {}
+			local k = 0
+			for key, val in pairs(v) do
+				k += 1
+				if k > MAX_KEYS then
+					break
+				end
+				out[tostring(key)] = serialize(val, depth + 1, seen)
+			end
+		end
+		seen[v] = nil -- path-scoped: siblings sharing a ref aren't false cycles
+		return out
 	else
 		return tostring(v)
 	end
+end
+
+-- Convert a Roblox value into something JSON-encodable.
+function Serialize.value(v: any): any
+	return serialize(v, 0, {})
 end
 
 -- Shallow structural equality for comparing a serialized value to an expected
