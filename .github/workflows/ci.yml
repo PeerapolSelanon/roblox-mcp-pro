@@ -28,6 +28,9 @@ jobs:
       - name: Smoke test (tool registry)
         run: node scripts/smoke.mjs
 
+      - name: License gate test (trial + offline grace)
+        run: node scripts/license-smoke.mjs
+
       - name: Tool docs up to date
         run: |
           npm run docs
