@@ -622,23 +622,15 @@ Parameters:
 
 - `action` ('snapshot' | 'changes' | 'viewport', optional, default "snapshot") — 'snapshot': high-level session summary. 'changes': diff the instance tree against the previous 'changes' call — what was added/removed since (first call only sets the baseline). 'viewport': what the Studio camera is looking at (pose, focus part, parts in view).
 
-## `manage_agents` — Coordinate AI Agents (mailbox) (mutating)
+## `manage_agents` — List Agents & Bind to a Place (mutating)
 
-Coordinate with the other AI agents driving this same Studio session: claim a role (lead plans/dispatches, worker executes), see who's connected, and hand tasks directly to a specific agent or a whole group. Runs in the shared broker.
-Args: action (list|set_role|send|inbox|read|done), role? (for set_role), to? (name, clientId, or 'workers'/'lead'/'all', for send), subject?/body? (for send), unreadOnly? (for inbox), messageId? (for done), messageIds? (for read).
-Returns: list → { lead, agents:[{clientId,name,role,self}] } · send → { sent:[{id,to}] } · inbox → { count, messages:[{id,fromName,subject,body,status}] }.
-Recipients only see a message when they call 'inbox' — poll it when collaborating.
+See the other AI agents driving this same Studio session and bind yourself to a Place. Runs in the shared broker.
+Args: action (list|sessions|attach|detach), place? (Place name, for attach), session? (exact sessionId, for attach).
+Returns: list → { agents:[{clientId,name,self}] } · sessions → { sessions:[{sessionId,placeName,placeId,boundAgents}] }.
 Multi-Place: when several Studio Places are connected, run action:'sessions' to see them, then action:'attach' with place:'<name>' to bind yourself before editing — commands refuse to run while you're unbound and more than one Place is connected.
 
 Parameters:
 
-- `action` ('list' | 'set_role' | 'send' | 'inbox' | 'read' | 'done' | 'sessions' | 'attach' | 'detach', required) — list: connected agents (roles + bound Place) · set_role: claim lead/worker/idle · send: deliver a task/message · inbox: messages addressed to you · read: mark unread read · done: mark a message complete · sessions: list connected Studio Places · attach: bind yourself to a Place (by name) · detach: unbind.
-- `role` ('lead' | 'worker' | 'idle', optional) — For 'set_role': lead = you plan & dispatch tasks · worker = you execute tasks others send · idle = unassigned. Only one lead at a time (claiming lead demotes the previous lead).
-- `to` (string, optional) — For 'send': the recipient — a display name (e.g. 'claude-code'), an exact clientId, or a group keyword: 'workers' (all worker agents), 'lead' (the current lead), 'all'.
-- `subject` (string, optional) — For 'send': a short subject line.
-- `body` (string, optional) — For 'send': the task/message body.
-- `unreadOnly` (boolean, optional) — For 'inbox': only return unread messages.
-- `messageId` (string, optional) — For 'done': the inbox message id to complete.
-- `messageIds` (string[], optional) — For 'read': specific message ids to mark read (default: all your unread).
+- `action` ('list' | 'sessions' | 'attach' | 'detach', required) — list: connected agents (+ bound Place) · sessions: connected Studio Places · attach: bind yourself to a Place (by name) · detach: unbind.
 - `place` (string, optional) — For 'attach': the Place name to bind to (e.g. 'Lobby'). Case-insensitive; if the name is ambiguous, attach by 'session' instead.
 - `session` (string, optional) — For 'attach': an exact sessionId (use when Place names collide).

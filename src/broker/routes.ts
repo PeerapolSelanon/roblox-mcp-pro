@@ -23,7 +23,7 @@ import { BRIDGE_PORT } from "../constants.js";
 import { syncEngine, type SyncMode } from "../sync/engine.js";
 import { resolveLicense, saveLicenseKey } from "../licensing/license.js";
 import { VERSION } from "../version.js";
-import { BrokerState, type Agent, type AgentRole } from "./registry.js";
+import { BrokerState } from "./registry.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
 import {
   browseDir,
@@ -144,7 +144,7 @@ async function runSync(
 }
 
 /**
- * Run a `manage_agents` action against the broker's agent registry + mailbox.
+ * Run a `manage_agents` action against the broker's agent registry.
  * Handled here (never sent to Studio) because the broker is the only process
  * that sees every connected agent. `fromClientId` is the calling agent.
  */
@@ -156,13 +156,6 @@ function runAgents(
 ): Record<string, unknown> {
   const a = (args ?? {}) as {
     action?: string;
-    to?: string;
-    role?: string;
-    subject?: string;
-    body?: string;
-    unreadOnly?: boolean;
-    messageId?: string;
-    messageIds?: string[];
     place?: string;
     session?: string;
   };
@@ -173,80 +166,11 @@ function runAgents(
         name: ag.name,
         version: ag.version,
         cwd: ag.cwd,
-        role: ag.role,
         boundSession: ag.boundSession,
         lastSeenAt: ag.lastSeenAt,
         self: ag.clientId === fromClientId,
       }));
-      return { ok: true, you: fromClientId, lead: state.lead()?.name ?? null, agents };
-    }
-    case "set_role": {
-      const role = String(a.role ?? "").toLowerCase();
-      if (role !== "lead" && role !== "worker" && role !== "idle") {
-        throw new StudioError("set_role requires role: 'lead' | 'worker' | 'idle'.");
-      }
-      if (!state.setRole(fromClientId, role as AgentRole)) {
-        throw new StudioError("you are not registered with the broker.");
-      }
-      return {
-        ok: true,
-        role,
-        lead: state.lead()?.name ?? null,
-        workers: state.workers().map((w) => w.name),
-      };
-    }
-    case "send": {
-      if (!a.to) throw new StudioError("send requires 'to' (a name, clientId, or 'workers'/'lead'/'all').");
-      if (!a.body) throw new StudioError("send requires 'body' (the task/message).");
-      const key = a.to.trim().toLowerCase();
-      let targets: Agent[];
-      if (key === "workers") {
-        targets = state.workers().filter((w) => w.clientId !== fromClientId);
-        if (targets.length === 0) throw new StudioError("No worker agents are connected to receive this.");
-      } else if (key === "lead") {
-        const l = state.lead();
-        if (!l) throw new StudioError("No agent has claimed the 'lead' role.");
-        targets = [l];
-      } else if (key === "all") {
-        targets = state.snapshot().agents.filter((x) => x.clientId !== fromClientId);
-        if (targets.length === 0) throw new StudioError("No other agents are connected.");
-      } else {
-        const matches = state.matchAgents(a.to);
-        if (matches.length === 0) {
-          const names = state.snapshot().agents.map((x) => x.name);
-          throw new StudioError(
-            `No connected agent matches '${a.to}'. Connected: ${names.join(", ") || "(none)"}.`,
-          );
-        }
-        if (matches.length > 1) {
-          const opts = matches.map((m) => `${m.name} (clientId ${m.clientId})`).join("; ");
-          throw new StudioError(
-            `'${a.to}' is ambiguous — ${matches.length} agents share that name. ` +
-              `Send to a specific clientId instead: ${opts}.`,
-          );
-        }
-        targets = matches;
-      }
-      const sent = targets.map((t) => {
-        const msg = state.sendMessage(fromClientId, t, a.subject ?? "", a.body!);
-        return { id: msg.id, to: msg.toName, toClientId: msg.toClientId };
-      });
-      return { ok: true, sent };
-    }
-    case "inbox": {
-      const messages = state.inbox(fromClientId, a.unreadOnly === true);
-      return { ok: true, count: messages.length, messages };
-    }
-    case "read": {
-      const marked = state.markRead(fromClientId, a.messageIds);
-      return { ok: true, marked };
-    }
-    case "done": {
-      if (!a.messageId) throw new StudioError("done requires 'messageId'.");
-      if (!state.markDone(fromClientId, a.messageId)) {
-        throw new StudioError(`No inbox message ${a.messageId} addressed to you to mark done.`);
-      }
-      return { ok: true, done: a.messageId };
+      return { ok: true, you: fromClientId, agents };
     }
     case "sessions": {
       const sessions = liveSessions().map((s) => ({
@@ -448,7 +372,6 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
       totalCommands,
       agents: snap.agents,
       recent: snap.recent,
-      mailbox: snap.mailbox,
     };
   }
 
@@ -501,26 +424,6 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     }
     if (method === "GET" && path === "/api/state") {
       sendJson(res, 200, buildSnapshot());
-      return true;
-    }
-    // Dashboard role control: a human assigns lead/worker/idle to an agent.
-    // Uses the same single-lead logic as the agent-driven set_role action.
-    if (method === "POST" && path === "/api/agents/role") {
-      const body = await readJson(req);
-      const clientId = String(body.clientId ?? "");
-      const role = String(body.role ?? "").toLowerCase();
-      if (role !== "lead" && role !== "worker" && role !== "idle") {
-        sendJson(res, 200, { ok: false, error: "role must be lead, worker, or idle" });
-        return true;
-      }
-      const updated = state.setRole(clientId, role as AgentRole);
-      sendJson(
-        res,
-        200,
-        updated
-          ? { ok: true, role, lead: state.lead()?.name ?? null }
-          : { ok: false, error: "no such agent (it may have disconnected)" },
-      );
       return true;
     }
     if (method === "POST" && path === "/api/agents/attach") {
