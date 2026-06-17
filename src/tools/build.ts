@@ -98,6 +98,8 @@ interface ToolboxSearchItem {
   id: number;
   name: string;
   creator: string;
+  /** Model carries scripts — inserting it runs that code in the place. */
+  hasScripts?: boolean;
 }
 
 /**
@@ -128,13 +130,18 @@ async function searchToolbox(keyword: string, category: string, limit: number): 
     return ids.map((id) => ({ id, name: `asset ${id}`, creator: "" }));
   }
   const detailsBody = (await detailsRes.json()) as {
-    data?: { asset?: { id?: number; name?: string }; creator?: { name?: string } }[];
+    data?: { asset?: { id?: number; name?: string; hasScripts?: boolean }; creator?: { name?: string } }[];
   };
   const byId = new Map<number, ToolboxSearchItem>();
   for (const entry of detailsBody.data ?? []) {
     const id = entry.asset?.id;
     if (typeof id === "number") {
-      byId.set(id, { id, name: entry.asset?.name ?? `asset ${id}`, creator: entry.creator?.name ?? "" });
+      byId.set(id, {
+        id,
+        name: entry.asset?.name ?? `asset ${id}`,
+        creator: entry.creator?.name ?? "",
+        hasScripts: entry.asset?.hasScripts,
+      });
     }
   }
   return ids.map((id) => byId.get(id) ?? { id, name: `asset ${id}`, creator: "" });
@@ -301,8 +308,11 @@ export function registerBuildTools(server: McpServer): void {
         "Search the marketplace by keyword, insert assets by id (InsertService), or read product info.\n" +
         "Args: action ('search'|'insert'|'info'|'search_insert'), keyword?+category?+limit? (search/search_insert), " +
         "asset_id?+parent? (insert/info).\n" +
-        "Returns: search -> { ok, results: [{ id, name, creator }] }; insert -> { ok, inserted?: string[] }; " +
+        "Returns: search -> { ok, results: [{ id, name, creator, hasScripts }] }; insert -> { ok, inserted?: string[] }; " +
         "info -> { ok, info }; search_insert -> insert result + { chosen, alternatives }.\n" +
+        "hasScripts:true means the model carries Luau that RUNS when inserted — prefer script-free models " +
+        "(or inspect what you inserted) unless you trust the source. search_insert picks the top result blindly, " +
+        "so for untrusted categories prefer search -> review -> insert by id.\n" +
         "Example: action: 'search_insert', keyword: 'low poly tree' inserts the top match in one call.",
       inputSchema: Assets.shape,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },

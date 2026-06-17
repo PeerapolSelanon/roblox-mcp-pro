@@ -522,7 +522,8 @@ Parameters:
 
 Search the marketplace by keyword, insert assets by id (InsertService), or read product info.
 Args: action ('search'|'insert'|'info'|'search_insert'), keyword?+category?+limit? (search/search_insert), asset_id?+parent? (insert/info).
-Returns: search -> { ok, results: [{ id, name, creator }] }; insert -> { ok, inserted?: string[] }; info -> { ok, info }; search_insert -> insert result + { chosen, alternatives }.
+Returns: search -> { ok, results: [{ id, name, creator, hasScripts }] }; insert -> { ok, inserted?: string[] }; info -> { ok, info }; search_insert -> insert result + { chosen, alternatives }.
+hasScripts:true means the model carries Luau that RUNS when inserted — prefer script-free models (or inspect what you inserted) unless you trust the source. search_insert picks the top result blindly, so for untrusted categories prefer search -> review -> insert by id.
 Example: action: 'search_insert', keyword: 'low poly tree' inserts the top match in one call.
 
 Parameters:
