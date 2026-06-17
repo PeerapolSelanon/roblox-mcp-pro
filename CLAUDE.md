@@ -11,13 +11,20 @@ roblox-mcp-pro is a **proprietary, paid** MCP server (npm package) that lets AI 
 ```powershell
 npm run build        # compile TypeScript server to dist/
 npm run docs         # regenerate .agents/skills/roblox-mcp-pro/references/tools.md from compiled schemas
+npm test             # build + hermetic smokes: scripts/smoke.mjs (tool registry) + scripts/license-smoke.mjs
+npm run lint         # biome lint (TypeScript; lint-only, no formatting)
 npm run dev          # server with auto-reload (tsx watch src/index.ts)
 npm run inspector    # exercise tools via MCP Inspector (needs dist/ built)
 .\build.ps1          # build the Studio plugin (.rbxmx via rojo) and install to %LOCALAPPDATA%\Roblox\Plugins
 .\build.ps1 -NoInstall  # plugin build only
 ```
 
-There is no automated test suite or linter. `scripts/test-*.mjs` are manual e2e helpers (e.g. `node scripts/test-search.mjs` spawns `dist/index.js` over stdio and calls a tool; `test-dashboard.mjs` registers a fake agent against a broker for dashboard inspection). End-to-end verification means running against a live Studio session — this repo includes `.mcp.json`, so the roblox-mcp-pro MCP tools are available in-session.
+**CI** (`.github/workflows/ci.yml`, on push/PR) gates merges with, in order: biome lint (TS) → `tsc` build → `scripts/smoke.mjs` (tool registry) → `scripts/license-smoke.mjs` (trial + offline-grace) → tool-docs freshness (`npm run docs` must produce no diff) → selene (plugin Luau) → rojo plugin build. Keep them green:
+- After changing a tool's zod schema/description, run `npm run docs` and commit `tools.md` (the freshness gate fails otherwise).
+- The smokes are hermetic — no Studio, license, network, or real `~/.roblox-mcp-pro` (license-smoke redirects `HOME` to a temp dir and points the proxy at a dead port). Add cases there when you change tool registration or licensing logic.
+- selene config: `selene.toml` + `plugin.yml` (std extension for the `plugin`/`version` globals); `roblox.yml` is generated in CI and gitignored. Run `selene plugin/src` locally (needs the std: `selene generate-roblox-std`).
+
+`scripts/test-*.mjs` are manual e2e helpers that need a live Studio session (e.g. `node scripts/test-search.mjs` spawns `dist/index.js` over stdio and calls a tool); they are excluded from biome and not run in CI. This repo includes `.mcp.json`, so the roblox-mcp-pro MCP tools are available in-session.
 
 **Releasing:** `npm version patch` then `git push --follow-tags`. The `v*` tag triggers `.github/workflows/release.yml` (builds plugin, GitHub Release, npm publish). `prepublishOnly` runs `scripts/obfuscate.mjs`, which obfuscates `dist/` in place and strips source maps/.d.ts — published code is intentionally unreadable; local builds stay readable.
 
