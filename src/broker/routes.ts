@@ -241,16 +241,30 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
   // plugin is silent inside it, answer playtest_status ourselves and give
   // other tools an accurate "wait for the playtest" error instead.
   // Per-session so two open Places don't interfere.
-  const playtests = new Map<string, { kind: string; startedAtSec: number; untilMs: number }>();
+  type Playtest = { kind: string; startedAtSec: number; untilMs: number; placeName?: string };
+  const playtests = new Map<string, Playtest>();
   const PLAYTEST_RECONNECT_GRACE_MS = 30_000;
 
-  function playtestWindow(sessionId: string): { kind: string; startedAtSec: number; untilMs: number } | null {
+  function playtestWindow(sessionId: string): Playtest | null {
     const pt = playtests.get(sessionId);
     if (pt && Date.now() > pt.untilMs) {
       playtests.delete(sessionId);
       return null;
     }
     return pt ?? null;
+  }
+
+  // Best-effort live frame of the running game, attached to playtest_status when
+  // the agent asks (capture:true). The plugin is suspended mid-playtest, but the
+  // window grab is host-side so it still works. Never throws — a failed capture
+  // just omits the image so polling keeps working.
+  async function captureFrame(placeName?: string): Promise<Record<string, unknown>> {
+    try {
+      const shot = await captureStudioWindow({ placeName });
+      return { screenshot: shot.base64, screenshotWidth: shot.width, screenshotHeight: shot.height };
+    } catch (e) {
+      return { screenshotError: e instanceof Error ? e.message : String(e) };
+    }
   }
 
   // Studio session details for the dashboard, refreshed from the plugin on a
@@ -654,6 +668,9 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
                 "the Studio plugin is suspended while the playtest runs; " +
                 "status is broker-inferred — poll again for the final report.",
             };
+            if ((args as { capture?: unknown } | undefined)?.capture) {
+              Object.assign(result as Record<string, unknown>, await captureFrame(pt!.placeName));
+            }
           } else {
             const leftSec = Math.max(0, Math.ceil((pt!.untilMs - PLAYTEST_RECONNECT_GRACE_MS - Date.now()) / 1000));
             throw new StudioError(
@@ -705,6 +722,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
                 kind: studioAction,
                 startedAtSec: typeof r.started_at === "number" ? r.started_at : Math.floor(Date.now() / 1000),
                 untilMs: Date.now() + (typeof r.duration === "number" ? r.duration : 30) * 1000 + PLAYTEST_RECONNECT_GRACE_MS,
+                placeName: placeForLog,
               });
             }
           } else if (studioAction === "playtest_status") {
@@ -712,6 +730,9 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
             // the window immediately — no need to wait it out.
             const r = result as { running?: boolean } | null;
             if (r && r.running === false && targetSession) playtests.delete(targetSession);
+            else if (r?.running === true && (args as { capture?: unknown } | undefined)?.capture) {
+              Object.assign(result as Record<string, unknown>, await captureFrame(placeForLog));
+            }
           }
         }
       } catch (e) {

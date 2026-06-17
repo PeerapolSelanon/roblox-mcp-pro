@@ -140,7 +140,10 @@ started, sync operates on that Place's session for its lifetime.
     real render to what you intended before calling it done.
   - *Runtime (gameplay)*: `manage_studio` `play`, then poll `playtest_status` — `report.ok` is
     false and `report.errors[]` lists the messages whenever the game raised a runtime error, so a
-    clean run is provable, not assumed.
+    clean run is provable, not assumed. Pass `capture: true` on one poll to get a live screenshot of
+    the running game — visual proof it actually looks right, not just error-free.
+  - *Static (scripts)*: after editing Luau, `manage_scripts` `analyze` flags syntax/type errors
+    before you spend a playtest on them (needs a Luau analyzer on PATH; `analyzer:'none'` if absent).
 - **Property value shapes.** Vectors are `[x,y,z]`; Color3 is `[r,g,b]` (0–1); UDim2 is
   `[[xScale,xOffset],[yScale,yOffset]]`; CFrame is a 12-number array; enums and BrickColor are
   their string names. Values are coerced to the property's current type, so match the existing type.

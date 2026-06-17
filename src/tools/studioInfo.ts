@@ -6,6 +6,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { InstancePath } from "../schemas/common.js";
 import { forwardTool } from "./_forward.js";
+import { callStudio, describeError } from "../services/studio.js";
+import { ok, fail } from "../services/format.js";
 
 const Selection = z
   .object({
@@ -63,6 +65,13 @@ const Studio = z
       .max(8)
       .optional()
       .describe("For 'multiplayer': simulated clients (default 1, max 8)."),
+    capture: z
+      .boolean()
+      .optional()
+      .describe(
+        "For 'playtest_status': also attach a live screenshot of the running game (one rendered " +
+          "frame) as visual proof. Adds capture latency — request it on a single poll, not every poll.",
+      ),
   })
   .strict();
 
@@ -109,16 +118,40 @@ export function registerStudioInfoTools(server: McpServer): void {
     annotations: mut,
   });
 
-  forwardTool(server, "manage_studio", {
-    title: "Studio Info & Playtest",
-    description:
-      "Report Studio environment details, or run a playtest.\n" +
-      "Args: action ('info'|'run'|'pause'|'stop'|'play'|'multiplayer'|'playtest_status'), duration?, test_script?, num_players?.\n" +
-      "Run mode loop: run -> manage_logs {since: started_at} -> stop ('stop' does NOT revert changes).\n" +
-      "Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value (client report under report.client). report.ok is false if the test_script threw OR the game raised any runtime error during the playtest; report.hadErrors/errorCount/errors[] (first 10 messages) surface those runtime errors, while report.error is the test_script failure. So an observe-only run (no test_script) still reports ok:false when game scripts errored. The plugin suspends during the playtest; playtest_status still answers ({running:true, suspended:true}) — keep polling until running:false. For 'play', test_script runs on the client with a `Test` helper to walk the character, enter text, fire the events controls are wired to, and assert state (see test_script). 'multiplayer' is the same with num_players clients (server-side script, no Test helper).",
-    inputSchema: Studio.shape,
-    annotations: mut,
-  });
+  server.registerTool(
+    "manage_studio",
+    {
+      title: "Studio Info & Playtest",
+      description:
+        "Report Studio environment details, or run a playtest.\n" +
+        "Args: action ('info'|'run'|'pause'|'stop'|'play'|'multiplayer'|'playtest_status'), duration?, test_script?, num_players?, capture?.\n" +
+        "Run mode loop: run -> manage_logs {since: started_at} -> stop ('stop' does NOT revert changes).\n" +
+        "Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value (client report under report.client). report.ok is false if the test_script threw OR the game raised any runtime error during the playtest; report.hadErrors/errorCount/errors[] (first 10 messages) surface those runtime errors, while report.error is the test_script failure. So an observe-only run (no test_script) still reports ok:false when game scripts errored. The plugin suspends during the playtest; playtest_status still answers ({running:true, suspended:true}) — keep polling until running:false. Pass capture:true on a playtest_status poll to also get a live screenshot of the running game (visual proof, not just logs). For 'play', test_script runs on the client with a `Test` helper to walk the character, enter text, fire the events controls are wired to, and assert state (see test_script). 'multiplayer' is the same with num_players clients (server-side script, no Test helper).",
+      inputSchema: Studio.shape,
+      annotations: mut,
+    },
+    async (input) => {
+      try {
+        const args = Studio.parse(input);
+        const result = await callStudio<Record<string, unknown>>("manage_studio", args);
+        // A playtest_status frame rides back as base64; surface it as an image
+        // block (and strip it from the text/structured payload — it's huge).
+        if (typeof result.screenshot === "string") {
+          const { screenshot, ...rest } = result;
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify(rest) },
+              { type: "image" as const, data: screenshot, mimeType: "image/png" },
+            ],
+            structuredContent: rest,
+          };
+        }
+        return ok(result, JSON.stringify(result));
+      } catch (error) {
+        return fail(describeError(error));
+      }
+    },
+  );
 
   forwardTool(server, "manage_logs", {
     title: "Get Output Logs",

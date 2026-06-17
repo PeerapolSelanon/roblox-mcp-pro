@@ -580,9 +580,9 @@ Parameters:
 ## `manage_studio` — Studio Info & Playtest (mutating)
 
 Report Studio environment details, or run a playtest.
-Args: action ('info'|'run'|'pause'|'stop'|'play'|'multiplayer'|'playtest_status'), duration?, test_script?, num_players?.
+Args: action ('info'|'run'|'pause'|'stop'|'play'|'multiplayer'|'playtest_status'), duration?, test_script?, num_players?, capture?.
 Run mode loop: run -> manage_logs {since: started_at} -> stop ('stop' does NOT revert changes).
-Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value (client report under report.client). report.ok is false if the test_script threw OR the game raised any runtime error during the playtest; report.hadErrors/errorCount/errors[] (first 10 messages) surface those runtime errors, while report.error is the test_script failure. So an observe-only run (no test_script) still reports ok:false when game scripts errored. The plugin suspends during the playtest; playtest_status still answers ({running:true, suspended:true}) — keep polling until running:false. For 'play', test_script runs on the client with a `Test` helper to walk the character, enter text, fire the events controls are wired to, and assert state (see test_script). 'multiplayer' is the same with num_players clients (server-side script, no Test helper).
+Play Solo loop: play {test_script?, duration?} -> poll playtest_status until finished -> report has the test session's logs/errors/EndTest value (client report under report.client). report.ok is false if the test_script threw OR the game raised any runtime error during the playtest; report.hadErrors/errorCount/errors[] (first 10 messages) surface those runtime errors, while report.error is the test_script failure. So an observe-only run (no test_script) still reports ok:false when game scripts errored. The plugin suspends during the playtest; playtest_status still answers ({running:true, suspended:true}) — keep polling until running:false. Pass capture:true on a playtest_status poll to also get a live screenshot of the running game (visual proof, not just logs). For 'play', test_script runs on the client with a `Test` helper to walk the character, enter text, fire the events controls are wired to, and assert state (see test_script). 'multiplayer' is the same with num_players clients (server-side script, no Test helper).
 
 Parameters:
 
@@ -590,6 +590,7 @@ Parameters:
 - `duration` (number, optional) — For 'play'/'multiplayer': max seconds before the test auto-ends (default 30).
 - `test_script` (string, optional) — For 'play': Luau run on the test session's CLIENT with a preloaded `Test` helper. Movement (drives real gameplay): Test.walkTo(Vector3|path), pathTo(...), moveDir('w'|'a'|'s'|'d', seconds), jump(). Text entry: typeText(path, text, pressEnter?). Trigger control logic (Studio sandboxes synthetic mouse/key input in playtests, so fire the event a button/key is wired to): fireRemote(path, ...), fireBindable(path, ...), invokeModule(path, fnName, ...). Assertions: assertExists/assertVisible/assertText/assertNear/expect (a failed assert ends the test with that error). (Test.click/pressKey/etc. exist but throw a pointer to the above — hardware input can't be synthesized.) For 'multiplayer': Luau run on the server (no Test helper). Prints/errors land in the report; the test ends when the script returns or 'duration' elapses.
 - `num_players` (number, optional) — For 'multiplayer': simulated clients (default 1, max 8).
+- `capture` (boolean, optional) — For 'playtest_status': also attach a live screenshot of the running game (one rendered frame) as visual proof. Adds capture latency — request it on a single poll, not every poll.
 
 ## `manage_logs` — Get Output Logs (read-only)
 
