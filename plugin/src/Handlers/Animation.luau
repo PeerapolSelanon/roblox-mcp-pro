@@ -4,6 +4,32 @@
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local Serialize = require(script.Parent.Parent.Serialize)
 
+-- The instance an Animator must live under (Humanoid or AnimationController),
+-- whether that's the target itself or a descendant.
+local function findAnimatorHost(target: Instance): Instance?
+	if target:IsA("Humanoid") or target:IsA("AnimationController") then
+		return target
+	end
+	return target:FindFirstChildWhichIsA("Humanoid", true)
+		or target:FindFirstChildWhichIsA("AnimationController", true)
+end
+
+-- Find a rig's Animator, creating one under its Humanoid/AnimationController if
+-- missing — in edit mode rigs often have the controller but no Animator yet.
+local function findOrCreateAnimator(target: Instance): Animator?
+	local existing = target:FindFirstChildWhichIsA("Animator", true)
+	if existing then
+		return existing :: Animator
+	end
+	local host = findAnimatorHost(target)
+	if not host then
+		return nil
+	end
+	local animator = Instance.new("Animator")
+	animator.Parent = host
+	return animator
+end
+
 return function(args: any): any
 	local action = args.action or "create"
 
@@ -39,15 +65,9 @@ return function(args: any): any
 		if not target then
 			return { ok = false, error = "target_path (a Humanoid or model) not found" }
 		end
-		local animator = target:FindFirstChildWhichIsA("Animator", true)
+		local animator = findOrCreateAnimator(target)
 		if not animator then
-			local humanoid = target:FindFirstChildWhichIsA("Humanoid")
-			if humanoid then
-				animator = humanoid:FindFirstChildWhichIsA("Animator")
-			end
-		end
-		if not animator then
-			return { ok = false, error = "no Animator found under target; play requires a rig with a Humanoid/Animator" }
+			return { ok = false, error = "no Humanoid or AnimationController under target to host an Animator; play requires a rig" }
 		end
 		local anim = Instance.new("Animation")
 		anim.AnimationId = tostring(args.animation_id or "")
@@ -86,7 +106,13 @@ return function(args: any): any
 		end
 		local animator = target:FindFirstChildWhichIsA("Animator", true)
 		if not animator then
-			return { ok = false, error = "no Animator found under target" }
+			return {
+				ok = true,
+				count = 0,
+				tracks = {},
+				note = "no Animator under target — playing tracks exist only during a playtest, "
+					.. "and the Animator is usually created at runtime. Use manage_studio 'play' to inspect live animation.",
+			}
 		end
 		local tracks = {}
 		for _, track in (animator :: Animator):GetPlayingAnimationTracks() do
