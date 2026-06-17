@@ -23,7 +23,7 @@ export interface CaptureResult {
 /** PowerShell that captures the Studio window (or the primary screen) to a PNG. */
 // biome-ignore lint/complexity/noUselessStringRaw: raw keeps embedded PowerShell (Windows `\` paths) escape-safe.
 const PS_SCRIPT = String.raw`
-param([string]$OutPath, [int]$Fullscreen = 0)
+param([string]$OutPath, [int]$Fullscreen = 0, [string]$PlaceName = "")
 $ErrorActionPreference = "Stop"
 Add-Type @"
 using System;
@@ -45,11 +45,31 @@ Add-Type -AssemblyName System.Windows.Forms
 
 $procs = @(Get-Process -Name RobloxStudioBeta -ErrorAction SilentlyContinue |
   Where-Object { $_.MainWindowHandle -ne 0 })
-# Prefer the place-editor window (title "<Place> - Roblox Studio") over the
-# Start/Home page (title exactly "Roblox Studio"), which has no viewport/UI.
-$proc = $procs | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne "Roblox Studio" } | Select-Object -First 1
-if (-not $proc) { $proc = $procs | Select-Object -First 1 }
-if (-not $proc) { Write-Error "Roblox Studio window not found (is Studio open with a place loaded?)"; exit 3 }
+if ($PlaceName) {
+  # Multi-place: target the window for THIS session's Place. Editor title is
+  # "<Place> - Roblox Studio". The Place name (published → marketplace name) can
+  # differ from the window title (often the local file name), so: match by title;
+  # if none matches but exactly one editor window exists, use it (unambiguous);
+  # otherwise refuse and list the open windows rather than grab the wrong Place.
+  $want = ("$PlaceName - Roblox Studio").ToLower()
+  $proc = $procs | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle.ToLower().StartsWith($want) } | Select-Object -First 1
+  if (-not $proc) {
+    $editors = @($procs | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne "Roblox Studio" })
+    if ($editors.Count -eq 1) { $proc = $editors[0] }
+    elseif ($editors.Count -eq 0) { Write-Error "Roblox Studio window not found (is Studio open with a place loaded?)"; exit 3 }
+    else {
+      $titles = ($editors | ForEach-Object { $_.MainWindowTitle }) -join "; "
+      Write-Error "No Studio window matches Place '$PlaceName'. Open windows: $titles"
+      exit 5
+    }
+  }
+} else {
+  # Prefer the place-editor window (title "<Place> - Roblox Studio") over the
+  # Start/Home page (title exactly "Roblox Studio"), which has no viewport/UI.
+  $proc = $procs | Where-Object { $_.MainWindowTitle -and $_.MainWindowTitle -ne "Roblox Studio" } | Select-Object -First 1
+  if (-not $proc) { $proc = $procs | Select-Object -First 1 }
+  if (-not $proc) { Write-Error "Roblox Studio window not found (is Studio open with a place loaded?)"; exit 3 }
+}
 $h = $proc.MainWindowHandle
 $title = $proc.MainWindowTitle
 if ([W]::IsIconic($h)) { [void][W]::ShowWindow($h, 9); Start-Sleep -Milliseconds 250 }  # SW_RESTORE
@@ -91,7 +111,7 @@ $g.Dispose(); $bmp.Dispose()
  * @throws Error with an actionable message if Studio isn't found or capture fails.
  */
 export function captureStudioWindow(
-  opts: { fullscreen?: boolean } = {},
+  opts: { fullscreen?: boolean; placeName?: string } = {},
 ): Promise<CaptureResult> {
   const dir = mkdtempSync(join(tmpdir(), "rmp-cap-"));
   const scriptPath = join(dir, "capture.ps1");
@@ -112,6 +132,8 @@ export function captureStudioWindow(
         pngPath,
         "-Fullscreen",
         opts.fullscreen ? "1" : "0",
+        "-PlaceName",
+        opts.placeName ?? "",
       ],
       { windowsHide: true },
     );

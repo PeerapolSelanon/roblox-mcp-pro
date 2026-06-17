@@ -16,7 +16,7 @@ Parameters: none.
 
 ## `capture_studio` — Capture Roblox Studio Window (read-only)
 
-Screenshot the live Studio window (OS-level, Windows only; needs Studio open, NOT the plugin). Use to visually inspect the real render — lighting, materials, meshes, layout — after building. Briefly foregrounds the Studio window.
+Screenshot the live Studio window (OS-level, Windows only; needs Studio open). With the plugin connected it captures your bound Place's window, so it's safe when multiple Places are open. Use to visually inspect the real render — lighting, materials, meshes, layout — after building. Briefly foregrounds the Studio window.
 Args: fullscreen (default false = just the Studio window, true = whole primary screen).
 Returns: a PNG image block + { ok, width, height, windowTitle }. Errors if Studio isn't open.
 

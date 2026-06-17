@@ -17,6 +17,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import nodePath from "node:path";
 import type { Bridge } from "../services/bridge.js";
+import { captureStudioWindow } from "../services/capture.js";
 import { StudioError } from "../services/errors.js";
 import { BRIDGE_PORT } from "../constants.js";
 import { syncEngine, type SyncMode } from "../sync/engine.js";
@@ -762,6 +763,27 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
             result = await runSync(args, () => bridge.connectedSessions());
           } else if (tool === "manage_agents") {
             result = runAgents(state, clientId, args, () => bridge.connectedSessions());
+          } else if (tool === "capture_studio") {
+            // Host-side window grab (the plugin sandbox can't read pixels). When a
+            // plugin session is connected, resolve the bound Place — fail-closed on
+            // >1 unbound, same as every other tool — so multi-place captures hit the
+            // right window. With no session connected, fall back to best-effort.
+            const connected = bridge.connectedSessions();
+            let placeName: string | undefined;
+            if (connected.length > 0) {
+              const target = resolveTargetSession({
+                bound: state.boundSessionOf(clientId),
+                connected,
+              });
+              if (target.autoBind) state.attach(clientId, target.sessionId);
+              sessionForLog = target.sessionId;
+              placeName = connected.find((s) => s.sessionId === target.sessionId)?.placeName;
+              placeForLog = placeName;
+            }
+            result = await captureStudioWindow({
+              fullscreen: Boolean((args as { fullscreen?: boolean } | undefined)?.fullscreen),
+              placeName,
+            });
           } else {
             const target = resolveTargetSession({
               bound: state.boundSessionOf(clientId),

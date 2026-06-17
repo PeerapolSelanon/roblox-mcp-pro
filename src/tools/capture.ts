@@ -8,7 +8,8 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { captureStudioWindow } from "../services/capture.js";
+import type { CaptureResult } from "../services/capture.js";
+import { callStudio } from "../services/studio.js";
 
 const InputSchema = z
   .object({
@@ -27,9 +28,10 @@ export function registerCaptureTools(server: McpServer): void {
     {
       title: "Capture Roblox Studio Window",
       description:
-        "Screenshot the live Studio window (OS-level, Windows only; needs Studio open, NOT the plugin). " +
-        "Use to visually inspect the real render — lighting, materials, meshes, layout — after building. " +
-        "Briefly foregrounds the Studio window.\n" +
+        "Screenshot the live Studio window (OS-level, Windows only; needs Studio open). " +
+        "With the plugin connected it captures your bound Place's window, so it's safe when " +
+        "multiple Places are open. Use to visually inspect the real render — lighting, materials, " +
+        "meshes, layout — after building. Briefly foregrounds the Studio window.\n" +
         "Args: fullscreen (default false = just the Studio window, true = whole primary screen).\n" +
         "Returns: a PNG image block + { ok, width, height, windowTitle }. Errors if Studio isn't open.",
       inputSchema: InputSchema.shape,
@@ -42,7 +44,11 @@ export function registerCaptureTools(server: McpServer): void {
     },
     async (args: { fullscreen?: boolean }) => {
       try {
-        const shot = await captureStudioWindow({ fullscreen: args.fullscreen });
+        // Runs in the broker (the Studio host), which resolves the bound Place so
+        // multi-place sessions capture the right window.
+        const shot = await callStudio<CaptureResult>("capture_studio", {
+          fullscreen: args.fullscreen,
+        });
         return {
           content: [
             {
