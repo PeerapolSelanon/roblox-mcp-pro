@@ -353,6 +353,12 @@ export const DASHBOARD_HTML = `<!doctype html>
         <button class="btn" onclick="changeProjectDir()">Browse…</button>
       </div>
 
+      <!-- ponytail: select which place/session to sync if multiple are open -->
+      <div id="syncPlaceRow" style="display:none;">
+        <label class="flabel" for="syncPlaceSelect">Roblox Place / Session</label>
+        <select id="syncPlaceSelect" class="control-input"></select>
+      </div>
+
       <label class="flabel">Direction</label>
       <div class="seg-group cols3" id="segDir" role="group" aria-label="Sync direction">
         <button type="button" class="seg active" data-dir="studio-to-disk">Studio &#8594; Disk<span class="segsub">snapshot to files</span></button>
@@ -675,6 +681,31 @@ function render(state) {
     set('rDirPath', sync.syncDir || '\\u2014');
   } else {
     setPill("syncPill", "syncPillText", "", "off");
+
+    // ponytail: populate and toggle the place/session selector dropdown
+    const placeSelect = $("syncPlaceSelect");
+    const placeRow = $("syncPlaceRow");
+    if (placeSelect && placeRow) {
+      if (sessions.length >= 2) {
+        placeRow.style.display = "block";
+        const oldVal = placeSelect.value;
+        placeSelect.innerHTML = "";
+        sessions.forEach(function(s) {
+          const opt = document.createElement("option");
+          opt.value = s.sessionId;
+          const name = s.placeName || "(unnamed Place)";
+          const pid = s.placeId != null ? " (Id: " + s.placeId + ")" : "";
+          opt.textContent = name + pid + " [" + s.sessionId.slice(0, 8) + "]";
+          placeSelect.appendChild(opt);
+        });
+        if (oldVal && Array.from(placeSelect.options).some(o => o.value === oldVal)) {
+          placeSelect.value = oldVal;
+        }
+      } else {
+        placeRow.style.display = "none";
+        placeSelect.innerHTML = "";
+      }
+    }
   }
   $('dotSync').className = 'tabdot' + (sync.running && sync.playtestActive ? ' warn' : '');
 }
@@ -708,6 +739,13 @@ async function doSyncAction(action) {
     const rootsText = $('inputRoots').value.trim();
     if (rootsText) {
       payload.roots = rootsText.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    // ponytail: pass the selected session if a place dropdown is shown
+    const placeSelect = $('syncPlaceSelect');
+    const placeRow = $('syncPlaceRow');
+    if (placeSelect && placeRow && placeRow.style.display !== 'none' && placeSelect.value) {
+      payload.session = placeSelect.value;
     }
   }
 
