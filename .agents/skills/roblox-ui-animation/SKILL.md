@@ -252,9 +252,33 @@ The hover that feels *premium* is never one property — it's a **stack of layer
 state**, driven by **springs, not fixed-duration tweens**. Why springs: a hover that re-fires while
 still mid-animation must continue from its current velocity, not restart from zero — that
 interruptibility is what makes a HUD feel physical. A `TweenService` tween (fixed time) visibly
-restarts on rapid re-hover; a spring picks up where it is. If the project has **Fusion**, use
-`Scope:Spring(target, speed, damping)`; otherwise approximate with short `Back`/`Out` tweens (fine
-for most buttons, slightly less fluid on fast re-hover).
+restarts on rapid re-hover; a spring picks up where it is.
+
+**Prefer Fusion springs when the project already uses Fusion** (most reactive Roblox UIs do — check
+`ReplicatedStorage.Shared.Packages.Fusion`). Then `Scope:Spring(target, speed, damping)` is the
+canonical driver, and you get motion **identical** to the rest of the game's UI for free — same code
+path, impossible to drift. Don't add Fusion *just* for a hover, but if it's already a dependency,
+matching it beats reinventing a spring. **You can layer Fusion onto a GUI built imperatively in
+StarterGui** (not Fusion-authored): `FindFirstChild` the elements and `Scope:Hydrate(inst) { Prop =
+spring }` — exactly how to retrofit premium motion onto an old TweenService screen. Only if the
+project has **no** Fusion, hand-roll a damped spring stepped in `RenderStepped` (~15 lines), or
+approximate with short `Back`/`Out` tweens (fine for most buttons, less fluid on fast re-hover).
+(Want Fusion where it's absent? It's the open-source `elttob/fusion` package — add it via Wally or
+drop the module into `ReplicatedStorage` **only if you'll build reactive UI broadly**; for one-off
+motion, hand-roll instead.)
+
+**Guard the dependency so a missing Fusion never crashes the script.** When you retrofit Fusion onto
+a shipped UI, `pcall` the require and branch — Fusion path for the premium feel, TweenService path as
+a fallback. A hard `require` that throws takes the *whole* controller down with it (the same cascade a
+missing `WaitForChild` causes):
+```lua
+local fusionOk, Fusion = pcall(function() return require(ReplicatedStorage.Shared.Packages.Fusion) end)
+local Scope = fusionOk and Fusion.scoped(Fusion) or nil
+-- in the hover wiring:
+if Scope then  -- Fusion springs (1:1 with the rest of the game)
+else           -- TweenService Back/Out approximation; nothing breaks
+end
+```
 
 **Spring params** (Fusion `Spring(value, speed, damping)`):
 - **speed** — higher = snappier settle (HUDs here use 30–40).
@@ -302,6 +326,45 @@ stroke→white, icon Rotation→16), reverse on `MouseLeave`; keep the continuou
 **Make it reusable, once.** Wrap this whole stack in a single component/helper that takes a button,
 wires the hover/press state + spring layers + sounds, and returns it — so every button gets identical
 feel from one definition. Don't copy the hover block per button (a HUD has dozens).
+
+**Shine sweep — the exact recipe.** A light streak that crosses the button on hover. An overlay
+`Frame` (white, full size, its own `UICorner` matching the button) with a `UIGradient` whose
+**Transparency** is a wide soft band, fully opaque only at the core, invisible elsewhere:
+```lua
+sg.Rotation = 45                                  -- diagonal
+sg.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.18, 1),
+    NumberSequenceKeypoint.new(0.5, 0),           -- core: fully white. A narrow band here reads as a thin streak; keep it WIDE (0.18→0.82) for the soft HUD glow
+    NumberSequenceKeypoint.new(0.82, 1), NumberSequenceKeypoint.new(1, 1),
+})
+sg.Offset = Vector2.new(-1.5, 0)                  -- parked off the left edge; Spring the Offset.X to 1.5 on hover, back to -1.5 on leave
+```
+- **Render the shine UNDER the text, or it washes out labels.** How depends on the ScreenGui's
+  `ZIndexBehavior`: with **Sibling**, place the overlay before the content in child order (or give
+  content higher `ZIndex`); with **Global** (where `ZIndex` is absolute), the overlay at `ZIndex 2`
+  still draws over same-`ZIndex` content — so **lift the button's content** (`for each GuiObject
+  descendant: ZIndex = max(ZIndex, 3)`) and keep the shine at `2`. This Sibling-vs-Global difference
+  is the #1 reason a copied shine "doesn't look like the reference."
+- The gradient's **Color stays white**; the Transparency band is what you see. Drive `Offset` with the
+  same `Spring(35, 1)` the source UI uses for a 1:1 match.
+
+### 5. Ambient UI effects (always-on, no hover)
+
+Decorative motion/look that makes a panel feel built, not flat. None of these need input.
+
+- **Continuous shimmer on a stroke** — give a `UIStroke` a child `UIGradient` with a Transparency band
+  (`1 → 0 → 1`) and rotate it forever (`(v + dt*SPEED) % 360` in one shared `RenderStepped`). A
+  rotating transparent gap sweeps the border = a "powered-on" rim. One loop drives every element's
+  gradient; never one loop each.
+- **Glowing divider** — a thin (2px) **white** `Frame` with a child `UIGradient`: `Color` = your accent
+  (e.g. `Color3.fromRGB(120,40,180)`), `Transparency` = `1 → 0 → 1`, `Rotation = 90`. White base ×
+  colored gradient = a vertical line that's bright in the middle and fades at both ends — a soft neon
+  separator. (White base is required: `UIGradient` multiplies, so a colored base would tint it dark.)
+- **Halftone dot texture** (no asset) — Roblox has no tiling dot texture, so place a small grid of
+  circular `Frame`s (`UICorner CornerRadius (1,0)`), **stagger alternate rows** by half the pitch for a
+  real halftone look, and **set each dot's `BackgroundTransparency` per its x-position** to fade the
+  field out toward one side. A single `UIGradient` on the container can't do the fade — it doesn't
+  cascade into child `Frame` backgrounds, so fade per-dot. ~30–40 dots in a clipped container is enough.
 
 <!-- Append new patterns here as they're decoded: scale-pop, slide-in, fade+blur backdrop, stagger list, etc. -->
 
