@@ -40,7 +40,15 @@ backdrop for accurate comparison.
   accordingly (center = `AnchorPoint [0.5,0.5]`, `Position [[0.5,0],[0.5,0]]`).
 - **Sizing**: fixed px (offset) vs proportional (scale). Cards/buttons are usually offset; full-screen
   dim layers are scale.
-- **Colors**: background, panel, accent, text. Convert to `[r,g,b]` 0–1.
+- **Colors**: background, panel, accent, text. Convert to `[r,g,b]` 0–1. For an **exact** color
+  when the mockup is a PNG **file on disk**, use the eyedropper instead of eyeballing:
+  `manage_ui action:"sample_color", imagePath:"<path.png>", x:<px>, y:<px>` (or `xPct`/`yPct`
+  fractions 0–1) → returns `rgb` (Color3 0–1), `hex`, and alpha. Only works on a real file path
+  (a PNG pasted into chat isn't on disk); 8-bit non-interlaced PNG.
+  - **Grab the whole palette in one call** with `points: [{x,y,label?}, …]` — decodes the image once.
+  - **`w`,`h` averages a box** to kill single-pixel noise (stars, grain, anti-aliased edges). But
+    averaging *dilutes* small bright features: use a **small box / single pixel at the center** for
+    tiny saturated icons/accents, and a **larger box (~10–20px)** for flat panels/backgrounds.
 - **Text**: content, font (GothamBold/Gotham/etc.), size, alignment, color.
 - **Corners/strokes/gradients**: rounded → `UICorner`; outline → `UIStroke`; gradient → `UIGradient`.
 - **Repetition/lists**: rows/grids → `UIListLayout`/`UIGridLayout` instead of hand-placing each item.
