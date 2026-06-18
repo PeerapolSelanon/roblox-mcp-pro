@@ -70,7 +70,7 @@ interface Session {
   meta: SessionMeta;
 }
 
-type EventListener = (event: StudioEvent) => void;
+type EventListener = (event: StudioEvent, sessionId: string) => void;
 
 export type UnhandledRoute = (
   req: http.IncomingMessage,
@@ -431,7 +431,7 @@ export class Bridge {
       this.markAlive(s);
       const body = await this.readBody(req);
       const event = JSON.parse(body) as StudioEvent;
-      for (const listener of this.eventListeners) listener(event);
+      for (const listener of this.eventListeners) listener(event, sessionId);
       this.sendJson(res, 200, { ok: true });
       return;
     }

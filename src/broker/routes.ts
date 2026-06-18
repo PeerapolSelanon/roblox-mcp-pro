@@ -20,7 +20,7 @@ import type { Bridge } from "../services/bridge.js";
 import { captureStudioWindow } from "../services/capture.js";
 import { StudioError } from "../services/errors.js";
 import { BRIDGE_PORT } from "../constants.js";
-import { syncEngine, type SyncMode } from "../sync/engine.js";
+import { syncManager, type SyncMode } from "../sync/engine.js";
 import { resolveLicense, saveLicenseKey } from "../licensing/license.js";
 import { VERSION } from "../version.js";
 import { BrokerState } from "./registry.js";
@@ -64,10 +64,17 @@ export interface BrokerRoutes {
   setShutdownHook: (fn: () => void) => void;
 }
 
-/** Run a `manage_sync` action against the shared engine; throws on failure. */
+/**
+ * Run a `manage_sync` action against the per-session engine; throws on failure.
+ * `bound` is the calling agent's bound sessionId (null for dashboard/plugin-driven
+ * calls). The target Place is picked by: explicit place/session arg → bound →
+ * the only connected Place → fail-closed (refuse, list choices) when ambiguous.
+ * This lets several Places sync at once, each on its own engine.
+ */
 async function runSync(
   args: unknown,
   liveSessions: () => SessionStatus[],
+  bound: string | null = null,
 ): Promise<Record<string, unknown>> {
   const a = (args ?? {}) as {
     action?: string;
@@ -81,62 +88,63 @@ async function runSync(
     session?: string;
     place?: string;
   };
+
+  const sessions = liveSessions();
+  const want = (a.session ?? a.place ?? "").trim();
+  let target: string;
+  if (want) {
+    const lower = want.toLowerCase();
+    const match = sessions.find(
+      (s) => s.sessionId === want || (s.placeName ?? "").toLowerCase() === lower,
+    );
+    if (!match) {
+      const names = sessions.map((s) => s.placeName ?? s.sessionId).join(", ") || "(none)";
+      throw new StudioError(`No connected Place matches "${want}". Connected: ${names}.`);
+    }
+    target = match.sessionId;
+  } else {
+    // bound → it; exactly one connected → it; >1 unbound → fail-closed.
+    target = resolveTargetSession({ bound, connected: sessions }).sessionId;
+  }
+  const engine = syncManager.forSession(target);
+
   switch (a.action) {
-    case "start": {
-      const sessions = liveSessions();
-      if (sessions.length === 0) throw new StudioError("No Studio session is connected to sync.");
-      let pinned = sessions[0]!.sessionId;
-      if (sessions.length > 1) {
-        const want = a.session ?? a.place;
-        const lower = (want ?? "").trim().toLowerCase();
-        const match = sessions.find(
-          (s) => s.sessionId === want || (s.placeName ?? "").toLowerCase() === lower,
-        );
-        if (!match) {
-          const names = sessions.map((s) => s.placeName ?? s.sessionId).join(", ");
-          throw new StudioError(
-            `${sessions.length} Places are connected — sync needs one. ` +
-              `Pass place:"<name>" to manage_sync start. Connected: ${names}.`,
-          );
-        }
-        pinned = match.sessionId;
-      }
-      return (await syncEngine.start(
+    case "start":
+      return (await engine.start(
         a.roots,
         a.mode,
         a.initialDirection,
         a.syncDir,
-        pinned,
+        target,
       )) as unknown as Record<string, unknown>;
-    }
     case "stop":
-      await syncEngine.stop();
-      return syncEngine.status() as unknown as Record<string, unknown>;
+      await engine.stop();
+      return engine.status() as unknown as Record<string, unknown>;
     case "status":
-      return syncEngine.status() as unknown as Record<string, unknown>;
+      return engine.status() as unknown as Record<string, unknown>;
     case "pull":
-      if (!syncEngine.isRunning()) throw new StudioError("start sync before pulling.");
-      await syncEngine.pull();
-      return syncEngine.status() as unknown as Record<string, unknown>;
+      if (!engine.isRunning()) throw new StudioError("start sync before pulling.");
+      await engine.pull();
+      return engine.status() as unknown as Record<string, unknown>;
     case "push": {
-      if (!syncEngine.isRunning()) throw new StudioError("start sync before pushing.");
-      const pushed = await syncEngine.push();
-      return { ...syncEngine.status(), pushed } as unknown as Record<string, unknown>;
+      if (!engine.isRunning()) throw new StudioError("start sync before pushing.");
+      const pushed = await engine.push();
+      return { ...engine.status(), pushed } as unknown as Record<string, unknown>;
     }
     case "progress":
-      return syncEngine.progress();
+      return engine.progress();
     case "history":
-      return { ok: true, history: syncEngine.history(a.limit ?? 30) };
+      return { ok: true, history: engine.history(a.limit ?? 30) };
     case "read_file": {
       if (!a.file) throw new StudioError("read_file requires 'file'.");
-      if (!syncEngine.isRunning()) throw new StudioError("start sync before reading mirror files.");
-      return (await syncEngine.readFile(a.file)) as unknown as Record<string, unknown>;
+      if (!engine.isRunning()) throw new StudioError("start sync before reading mirror files.");
+      return (await engine.readFile(a.file)) as unknown as Record<string, unknown>;
     }
     case "write_file": {
       if (!a.file) throw new StudioError("write_file requires 'file'.");
       if (typeof a.content !== "string") throw new StudioError("write_file requires 'content'.");
-      if (!syncEngine.isRunning()) throw new StudioError("start sync before writing mirror files.");
-      return (await syncEngine.writeFile(a.file, a.content)) as unknown as Record<string, unknown>;
+      if (!engine.isRunning()) throw new StudioError("start sync before writing mirror files.");
+      return (await engine.writeFile(a.file, a.content)) as unknown as Record<string, unknown>;
     }
     default:
       throw new StudioError(`unknown sync action: ${String(a.action)}`);
@@ -315,7 +323,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
 
   /** The universe root: sync's baseDir when started, else the active agent's cwd. */
   function universeDir(): string | null {
-    const syncStatus = syncEngine.status() as unknown as { baseDir?: string };
+    const syncStatus = syncManager.primaryStatus() as unknown as { baseDir?: string };
     if (syncStatus.baseDir) return syncStatus.baseDir;
     const agents = state.snapshot().agents;
     const active = [...agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt).find((a) => a.cwd);
@@ -381,7 +389,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
         ...s,
         boundAgents: state.agentsBoundTo(s.sessionId).map((ag) => ({ clientId: ag.clientId, name: ag.name })),
       })),
-      sync: syncEngine.status(),
+      sync: syncManager.primaryStatus(),
       places: places !== null ? { dir: placesDir, list: places } : null,
       totalCommands,
       agents: snap.agents,
@@ -503,7 +511,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
             seen.add(dir);
             suggestions.push({ path: dir, source });
           };
-          const syncStatus = syncEngine.status() as unknown as { baseDir?: string };
+          const syncStatus = syncManager.primaryStatus() as unknown as { baseDir?: string };
           add(syncStatus.baseDir, "active sync");
           const agents = [...state.snapshot().agents].sort((a, b) => b.lastSeenAt - a.lastSeenAt);
           for (const agent of agents) add(agent.cwd, agent.name);
@@ -540,7 +548,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
     // The plugin uses these to drive the shared sync engine from its own UI
     // (start/stop + direction), independent of any AI agent.
     if (method === "GET" && path === "/plugin/sync") {
-      sendJson(res, 200, { ok: true, result: syncEngine.status() });
+      sendJson(res, 200, { ok: true, result: syncManager.primaryStatus() });
       return true;
     }
     if (method === "POST" && path === "/plugin/sync") {
@@ -680,7 +688,11 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
           }
         } else {
           if (tool === "manage_sync") {
-            result = await runSync(args, () => bridge.connectedSessions());
+            result = await runSync(
+              args,
+              () => bridge.connectedSessions(),
+              state.boundSessionOf(clientId),
+            );
           } else if (tool === "manage_agents") {
             result = runAgents(state, clientId, args, () => bridge.connectedSessions());
           } else if (tool === "capture_studio") {

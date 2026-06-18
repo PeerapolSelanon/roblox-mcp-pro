@@ -65,6 +65,14 @@ const InputSchema = z
       .optional()
       .describe("For 'write_file': the new file content."),
     limit: z.number().int().min(1).max(100).optional().describe("For 'history': max events (default 30)."),
+    place: z
+      .string()
+      .optional()
+      .describe(
+        "Which Place to target when several Studios are connected (multi-Place sync). " +
+          "Match by Place name. Defaults to your bound Place, or the only one connected. " +
+          "Each Place syncs on its own engine, so several can run two-way at once.",
+      ),
   })
   .strict();
 

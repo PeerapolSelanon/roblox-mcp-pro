@@ -313,7 +313,10 @@ class SyncEngine {
 
     // Always listen for bridge events (run_state_changed matters in every mode);
     // sync change events from Studio are only requested when we mirror them.
-    this.unsubscribe = bridge.onEvent((event) => void this.onStudioEvent(event));
+    this.unsubscribe = bridge.onEvent((event, sid) => {
+      if (sid !== this.pinnedSession) return; // another Place's event — not ours
+      void this.onStudioEvent(event);
+    });
     if (this.mode !== "disk-to-studio") {
       await this.callStudio("sync_watch", { action: "watch", roots: this.roots });
     }
@@ -687,4 +690,35 @@ class SyncEngine {
   }
 }
 
-export const syncEngine = new SyncEngine();
+/**
+ * One sync engine per Studio session, so several Places can two-way sync at
+ * once (each mirrors into its own places/<Name>_<id>/ folder). Routing of a
+ * manage_sync action to the right engine happens in the broker (routes.ts),
+ * which picks the session from the agent's binding.
+ */
+class SyncManager {
+  // ponytail: idle (never-started) engines linger in the map; fine for a handful
+  // of Places, add LRU/pruning if someone opens dozens of sessions in one broker.
+  private readonly engines = new Map<string, SyncEngine>();
+
+  /** Engine for a session, created idle on first use. */
+  forSession(sessionId: string): SyncEngine {
+    let e = this.engines.get(sessionId);
+    if (!e) {
+      e = new SyncEngine();
+      this.engines.set(sessionId, e);
+    }
+    return e;
+  }
+
+  /** A single status for the dashboard/back-compat: the first running engine,
+   *  else an idle default (so baseDir lookups still work). */
+  primaryStatus(): SyncStatus {
+    for (const e of this.engines.values()) {
+      if (e.isRunning()) return e.status();
+    }
+    return this.forSession("default").status();
+  }
+}
+
+export const syncManager = new SyncManager();
