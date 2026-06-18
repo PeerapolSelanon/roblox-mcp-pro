@@ -9,8 +9,8 @@ server validates with.
 
 ## `system_info` — Roblox MCP System Info (read-only)
 
-Connection status between the MCP server and Studio. Call first to confirm the plugin is attached. Free.
-Args: none. Returns: { version, license, usage:{studioCalls,uptimeSec}, bridge:{ok,pluginConnected,queued,inflight,lastPollAt}, studio?:{placeId,placeName,studioVersion,isRunning,sessionId,studioSettings} }. Always succeeds; studio omitted when not connected. license.status 'trial'/'licensed' = full Pro; 'locked' = free tier only (Pro calls return an upgrade message).
+Connection status between the MCP server and Studio. Call first to confirm the plugin is attached.
+Args: none. Returns: { version, usage:{studioCalls,uptimeSec}, bridge:{ok,pluginConnected,queued,inflight,lastPollAt}, studio?:{placeId,placeName,studioVersion,isRunning,sessionId,studioSettings} }. Always succeeds; studio omitted when not connected.
 
 Parameters: none.
 

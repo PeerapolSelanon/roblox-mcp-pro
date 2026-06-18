@@ -7,7 +7,6 @@ import { z } from "zod";
 import { callStudio, getUsage } from "../services/studio.js";
 import { status as brokerStatus } from "../client/transport.js";
 import { ok } from "../services/format.js";
-import { currentLicense } from "../licensing/license.js";
 import { VERSION } from "../version.js";
 
 const InputSchema = z.object({}).strict();
@@ -27,12 +26,11 @@ export function registerSystemTools(server: McpServer): void {
     {
       title: "Roblox MCP System Info",
       description:
-        "Connection status between the MCP server and Studio. Call first to confirm the plugin is attached. Free.\n" +
-        "Args: none. Returns: { version, license, usage:{studioCalls,uptimeSec}, " +
+        "Connection status between the MCP server and Studio. Call first to confirm the plugin is attached.\n" +
+        "Args: none. Returns: { version, usage:{studioCalls,uptimeSec}, " +
         "bridge:{ok,pluginConnected,queued,inflight,lastPollAt}, " +
         "studio?:{placeId,placeName,studioVersion,isRunning,sessionId,studioSettings} }. " +
-        "Always succeeds; studio omitted when not connected. license.status 'trial'/'licensed' = full Pro; " +
-        "'locked' = free tier only (Pro calls return an upgrade message).",
+        "Always succeeds; studio omitted when not connected.",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: true,
@@ -43,14 +41,12 @@ export function registerSystemTools(server: McpServer): void {
     },
     async () => {
       const status = await brokerStatus();
-      const license = currentLicense();
       const usage = getUsage();
-      const out: Record<string, unknown> = { version: VERSION, bridge: status, license, usage };
+      const out: Record<string, unknown> = { version: VERSION, bridge: status, usage };
       let text = [
         "# Roblox MCP — System Info",
         "",
         `- Version: ${VERSION}`,
-        `- License: ${license.status} — ${license.message}`,
         `- Plugin connected: ${status.pluginConnected ? "yes ✅" : "no ❌"}`,
         `- Queued commands: ${status.queued}`,
         `- In-flight commands: ${status.inflight}`,

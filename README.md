@@ -5,8 +5,7 @@ Cursor, Antigravity, …) control a live **Roblox Studio** session — run Luau,
 the DataModel, build UI/terrain/lighting, and keep a two-way Studio ↔ local-file mirror.
 
 > Original, independent project. All code is written from scratch by the author.
-> **Proprietary software** — a paid commercial license is required to use it. See
-> [`LICENSE`](LICENSE).
+> **Free and open source** under the [MIT License](LICENSE) — all tools, no key, no tiers.
 
 ---
 
@@ -29,22 +28,13 @@ You **never start the server by hand** — your AI agent launches it automatical
 command you register below. Multiple agents (Claude Code, Codex, Antigravity, …) can drive the
 **same** Studio session at once.
 
-### 💳 License & free tier
+### Free & open source
 
-Roblox MCP Pro has a **permanent free tier** and a paid **Pro** tier. Every new install starts
-with a **14-day trial of full Pro** — no key needed. When the trial ends, the **free tier keeps
-working forever**:
-
-- **Free:** the core tools — query/mutate instances, read/write properties & scripts, run Luau,
-  read logs, manage the Explorer selection, session snapshots, and one-way Studio→disk sync.
-- **Pro:** the visual toolset (UI Studio, terrain, effects, tweens, camera, animation, audio,
-  physics, marketplace assets), spatial analysis, bulk/relative property edits, surgical script
-  search & editing, bidirectional sync, and playtest automation.
-
-Get a key from [pricing/buy](https://buy.polar.sh/polar_cl_ZOs8s5PTV2KAyj0y71A7xtBzIpPbdclQfrQBP3IHCyH)
-and add it as shown in **[Part 1 → Add your license key](#add-your-license-key)**. Check status
-anytime by asking your agent to run `system_info` (it reports `trial`, `licensed`, or `locked`;
-`locked` means the free tier is active and Pro calls show an upgrade message).
+Every tool is included for everyone — no license key, no trial, no Pro/free split: the full
+toolset (query/mutate instances, properties & scripts, raw Luau, logs, selection, snapshots,
+UI Studio, terrain, effects, tweens, camera, animation, audio, physics, marketplace assets,
+spatial analysis, bulk edits, two-way sync, and playtest automation). Licensed under MIT —
+use it, fork it, ship it.
 
 ---
 
@@ -60,7 +50,7 @@ npx roblox-mcp-pro@latest install-plugin
 ```
 
 Then open Roblox Studio, click the **MCP** button, and ask your agent to run `system_info`.
-For other AI clients and license-key setup, see the manual steps below.
+For other AI clients, see the manual steps below.
 
 > _Maintainer note:_ collaborators with repo access can run the all-in-one Windows installer
 > `gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | Out-String | iex`.
@@ -150,50 +140,10 @@ Where each file lives:
 
 After editing, **restart the client** so it picks up the new server.
 
-<a id="add-your-license-key"></a>
-#### Add your license key
-
-During the 14-day trial you can skip this. After buying you get a license key — and the **easiest
-way to apply it needs no config editing at all**:
-
-- **Dashboard (recommended):** open the monitor at **http://127.0.0.1:3690/**, paste your key in the
-  **License** box, click **Save**, then restart your AI client. Done.
-- **One command:** `npx roblox-mcp-pro@latest set-license YOUR-LICENSE-KEY` (writes it for you), then
-  restart your AI client.
-
-Prefer to put it in your client config yourself? Add it in an **`env`** block next to the command
-(works for any client; just put it in that client's config file):
-
-```json
-{
-  "mcpServers": {
-    "roblox-mcp-pro": {
-      "command": "npx",
-      "args": ["-y", "roblox-mcp-pro@latest"],
-      "env": { "ROBLOX_MCP_LICENSE": "YOUR-LICENSE-KEY" }
-    }
-  }
-}
-```
-
-For **Codex** (TOML), add the env under the server block:
-
-```toml
-[mcp_servers.roblox-mcp-pro]
-command = "npx"
-args = ["-y", "roblox-mcp-pro@latest"]
-env = { ROBLOX_MCP_LICENSE = "YOUR-LICENSE-KEY" }
-```
-
-Don't want it in a config file? Save the key to **`%USERPROFILE%\.roblox-mcp-pro\license.key`**
-(one line, just the key). Restart the client, then run `system_info` — it should show
-`license: licensed`.
-
 #### Optional environment variables
 
 | Variable             | Default  | Meaning                                    |
 | -------------------- | -------- | ------------------------------------------ |
-| `ROBLOX_MCP_LICENSE` | _(none)_ | Your license key (after the free trial).   |
 | `ROBLOX_MCP_PORT`    | `3690`   | Bridge port (the plugin must match).       |
 | `ROBLOX_MCP_TOKEN`   | _(none)_ | Shared secret; also set it in the plugin.  |
 
@@ -236,11 +186,7 @@ guidance.
 
 1. In Studio, click the **MCP** toolbar button so it's highlighted (this connects the plugin).
 2. Ask your AI agent to call **`system_info`**.
-3. You should see `pluginConnected: true` and a `license:` line (`trial`, `licensed`, or
-   `locked`). 🎉
-
-If `license` shows `locked`, your trial ended or your key is missing/expired — see
-[Add your license key](#add-your-license-key).
+3. You should see `pluginConnected: true`. 🎉
 
 ---
 
@@ -357,5 +303,5 @@ AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + da
 
 ## License
 
-**Proprietary — All Rights Reserved.** This software requires a paid commercial license to use.
-See [`LICENSE`](LICENSE). To purchase a license, contact **peerapolselanon@gmail.com**.
+**MIT** — free and open source. See [`LICENSE`](LICENSE). Use it, fork it, ship it; contributions
+welcome.

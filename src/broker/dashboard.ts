@@ -268,7 +268,6 @@ export const DASHBOARD_HTML = `<!doctype html>
     <button class="tab active" data-tab="overview" role="tab" id="tabBtn-overview" aria-controls="tab-overview" aria-selected="true">Overview<span class="tabdot" id="dotOverview"></span></button>
     <button class="tab" data-tab="project" role="tab" id="tabBtn-project" aria-controls="tab-project" aria-selected="false">Sync<span class="tabdot" id="dotSync"></span></button>
     <button class="tab" data-tab="agents" role="tab" id="tabBtn-agents" aria-controls="tab-agents" aria-selected="false">Agents</button>
-    <button class="tab" data-tab="license" role="tab" id="tabBtn-license" aria-controls="tab-license" aria-selected="false">License<span class="tabdot" id="dotLicense"></span></button>
   </nav>
 </header>
 <main>
@@ -390,23 +389,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   </div>
 
   </div><!-- /tab-project -->
-
-  <div class="tabpane" id="tab-license" role="tabpanel" aria-labelledby="tabBtn-license">
-    <div class="panel">
-      <div class="phead"><h3>License</h3></div>
-      <div id="licStatus" style="font-size:14px;margin-bottom:10px;">Checking…</div>
-      <label class="flabel">License key</label>
-      <div class="folder-row">
-        <input id="inputLicense" type="text" placeholder="ROBLOXAI-…" class="control-input" />
-        <button class="btn primary" onclick="saveLicense()">Save key</button>
-      </div>
-      <div id="licMsg" class="sync-msg"></div>
-      <div style="color:var(--muted);font-size:11px;margin-top:7px;">
-        No license? <a id="buyLink" href="#" target="_blank" rel="noopener" style="color:var(--green);">Get one</a>.
-        After saving, restart your AI client so it picks up the key.
-      </div>
-    </div>
-  </div><!-- /tab-license -->
 
   <div class="tabpane" id="tab-agents" role="tabpanel" aria-labelledby="tabBtn-agents">
   <section>
@@ -766,63 +748,6 @@ async function doSyncAction(action) {
   }
 }
 
-const BUY_URL = 'https://buy.polar.sh/polar_cl_ZOs8s5PTV2KAyj0y71A7xtBzIpPbdclQfrQBP3IHCyH';
-
-function renderLicense(data) {
-  const el = $('licStatus');
-  if (!el) return;
-  const s = (data && data.status) || 'unknown';
-  const tint = s === 'licensed' ? 'var(--green)' : (s === 'trial' ? '#e0a82e' : 'var(--red)');
-  const label = s === 'licensed' ? 'Licensed ✅' : (s === 'trial' ? 'Free trial (full Pro)' : (s === 'locked' ? 'Free tier (Pro locked)' : s));
-  // The server message may start with the same word as the label — drop the echo.
-  let msg = (data && data.message) || '';
-  if (s === 'licensed') msg = msg.replace(/^Licensed\\s*\\u2705?\\s*/i, '');
-  el.innerHTML = '<b style="color:' + tint + '">' + label + '</b>' + (msg ? ' — ' + esc(msg) : '');
-  const dot = $('dotLicense');
-  if (dot) dot.className = 'tabdot' + (s === 'locked' ? ' bad' : s === 'trial' ? ' warn' : '');
-}
-
-async function loadLicense() {
-  const buy = $('buyLink');
-  if (buy) buy.href = BUY_URL;
-  try {
-    const res = await fetch('/api/license');
-    renderLicense(await res.json());
-  } catch (err) {
-    const el = $('licStatus');
-    if (el) el.textContent = 'Could not read license status.';
-  }
-}
-
-async function saveLicense() {
-  const elMsg = $('licMsg');
-  const showMsg = (msg, isErr = false) => {
-    elMsg.textContent = msg;
-    elMsg.style.color = isErr ? 'var(--red)' : 'var(--green)';
-  };
-  const key = $('inputLicense').value.trim();
-  if (!key) { showMsg('Paste your license key first.', true); return; }
-  showMsg('Validating…');
-  try {
-    const res = await fetch('/api/license', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      showMsg('Saved & validated — restart your AI client to apply.');
-      $('inputLicense').value = '';
-      renderLicense(data);
-    } else {
-      showMsg('Error: ' + (data.error || data.message || 'invalid key'), true);
-      renderLicense(data);
-    }
-  } catch (err) {
-    showMsg('Failed to connect to broker: ' + err, true);
-  }
-}
-
 // ---- Folder picker (Browse… modal backed by /api/fs/browse) ---------------
 let pickerTargetInput = null;
 let pickerTargetHint = null;
@@ -988,7 +913,7 @@ function changeProjectDir() {
 }
 
 // ---- Tabs: hash-based, last tab remembered, Overview by default ------------
-const TAB_NAMES = ['overview', 'project', 'agents', 'license'];
+const TAB_NAMES = ['overview', 'project', 'agents'];
 function switchTab(name) {
   if (name === 'sync') name = 'project'; // old bookmark/hash compatibility
   if (!TAB_NAMES.includes(name)) name = 'overview';
@@ -1057,7 +982,6 @@ document.addEventListener('click', (e) => {
 });
 
 connect();
-loadLicense();
 
 // keep relative timestamps fresh between server pushes
 setInterval(() => { if (last) render(last); }, 2000);

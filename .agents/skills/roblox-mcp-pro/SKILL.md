@@ -175,26 +175,22 @@ updates, or deletes the script in Studio, and the same edits in Studio flow back
 remaining gap is that non-script property changes in Studio mirror on resync (when instances are
 added/removed), not live — use `pull` to resynchronize when in doubt.
 
-## Free vs Pro
+## Tools
 
-New installs get a 14-day trial of full Pro. After it ends the **free tier keeps working
-forever** — core reads and edits (`query_instances`, `find_instances`, `scene_overview`,
-`describe_instance`, `mutate_instances` create/edit/clone, `manage_properties` get/set,
-`manage_scripts` get/set/create, `execute_luau`, `manage_logs`, `manage_selection`,
-`workspace_state` snapshot, `system_info`, and one-way Studio→disk sync). **Pro** adds the
-visual toolset (`manage_ui`, `manage_terrain`, `manage_effects`, `manage_tween`,
-`manage_camera`, `manage_animation`, `manage_audio`, `manage_physics`, `manage_assets`),
-`spatial_query`, bulk/relative property ops, surgical script search/edit, bidirectional sync,
-and playtest automation. A locked Pro call returns a clear upgrade message; check status anytime
-with `system_info` (`license.status`: `trial`/`licensed` = full, `locked` = free only).
+Every tool is free and available — there are no tiers or license gates. Core reads/edits
+(`query_instances`, `find_instances`, `scene_overview`, `describe_instance`, `mutate_instances`,
+`manage_properties`, `manage_scripts`, `execute_luau`, `manage_logs`, `manage_selection`,
+`workspace_state`, `system_info`, sync) plus the visual toolset (`manage_ui`, `manage_terrain`,
+`manage_effects`, `manage_tween`, `manage_camera`, `manage_animation`, `manage_audio`,
+`manage_physics`, `manage_assets`), `spatial_query`, bulk/relative property ops, surgical
+script search/edit, bidirectional sync, and playtest automation — all included.
 
 ## When something fails
 
 Errors are returned as actionable text. Common ones: not connected (fix the plugin/server),
-"protected service" (CoreGui/CorePackages are intentionally off-limits), a Pro-feature lock
-(trial ended — the free tier still works; see above), and per-operation errors inside
-`batch_execute`/`mutate_instances` results (other operations still ran). Read the `error`
-string and adjust rather than retrying the same call.
+"protected service" (CoreGui/CorePackages are intentionally off-limits), and per-operation
+errors inside `batch_execute`/`mutate_instances` results (other operations still ran). Read the
+`error` string and adjust rather than retrying the same call.
 
 ## AI Agent Prompt Handling: Project Initialization
 

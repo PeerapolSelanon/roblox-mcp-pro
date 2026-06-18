@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-roblox-mcp-pro is a **proprietary, paid** MCP server (npm package) that lets AI agents control a live Roblox Studio session, paired with a Roblox Studio plugin written in Luau. Clean-room original code — do not copy from other Roblox MCP projects.
+roblox-mcp-pro is a **free, open-source (MIT)** MCP server (npm package) that lets AI agents control a live Roblox Studio session, paired with a Roblox Studio plugin written in Luau. Clean-room original code — do not copy from other Roblox MCP projects.
 
 ## Commands
 
 ```powershell
 npm run build        # compile TypeScript server to dist/
 npm run docs         # regenerate .agents/skills/roblox-mcp-pro/references/tools.md from compiled schemas
-npm test             # build + hermetic smokes: scripts/smoke.mjs (tool registry) + scripts/license-smoke.mjs
+npm test             # build + hermetic smokes: smoke (tool registry), routing, sync, analyze, png + tsx unit tests
 npm run lint         # biome lint (TypeScript; lint-only, no formatting)
 npm run dev          # server with auto-reload (tsx watch src/index.ts)
 npm run inspector    # exercise tools via MCP Inspector (needs dist/ built)
@@ -19,14 +19,14 @@ npm run inspector    # exercise tools via MCP Inspector (needs dist/ built)
 .\build.ps1 -NoInstall  # plugin build only
 ```
 
-**CI** (`.github/workflows/ci.yml`, on push/PR) gates merges with, in order: biome lint (TS) → `tsc` build → `scripts/smoke.mjs` (tool registry) → `scripts/license-smoke.mjs` (trial + offline-grace) → `scripts/routing-smoke.mjs` (fail-closed multi-place routing via a fake Bridge) → `scripts/sync-smoke.mjs` (disk-mirror materialization in a temp dir) → tool-docs freshness (`npm run docs` must produce no diff) → selene (plugin Luau) → rojo plugin build. Keep them green:
+**CI** (`.github/workflows/ci.yml`, on push/PR) gates merges with, in order: biome lint (TS) → `tsc` build → `scripts/smoke.mjs` (tool registry) → `scripts/routing-smoke.mjs` (fail-closed multi-place routing via a fake Bridge) → `scripts/sync-smoke.mjs` (disk-mirror materialization in a temp dir) → tool-docs freshness (`npm run docs` must produce no diff) → selene (plugin Luau) → rojo plugin build. Keep them green:
 - After changing a tool's zod schema/description, run `npm run docs` and commit `tools.md` (the freshness gate fails otherwise).
-- The smokes are hermetic — no Studio, license, network, or real `~/.roblox-mcp-pro` (license-smoke redirects `HOME` to a temp dir and points the proxy at a dead port). Add cases there when you change tool registration or licensing logic.
+- The smokes are hermetic — no Studio, network, or real `~/.roblox-mcp-pro`. Add cases there when you change tool registration.
 - selene config: `selene.toml` + `plugin.yml` (std extension for the `plugin`/`version` globals); `roblox.yml` is generated in CI and gitignored. Run `selene plugin/src` locally (needs the std: `selene generate-roblox-std`).
 
 `scripts/test-*.mjs` are manual e2e helpers that need a live Studio session (e.g. `node scripts/test-search.mjs` spawns `dist/index.js` over stdio and calls a tool); they are excluded from biome and not run in CI. This repo includes `.mcp.json`, so the roblox-mcp-pro MCP tools are available in-session.
 
-**Releasing:** `npm version patch` then `git push --follow-tags`. The `v*` tag triggers `.github/workflows/release.yml` (builds plugin, GitHub Release, npm publish). `prepublishOnly` runs `scripts/obfuscate.mjs`, which obfuscates `dist/` in place and strips source maps/.d.ts — published code is intentionally unreadable; local builds stay readable.
+**Releasing:** `npm version patch` then `git push --follow-tags`. The `v*` tag triggers `.github/workflows/release.yml` (builds plugin, GitHub Release, npm publish). `prepublishOnly` runs clean → build → docs (no obfuscation — this is open source).
 
 ## Architecture
 

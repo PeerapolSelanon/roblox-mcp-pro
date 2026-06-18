@@ -1,8 +1,8 @@
 {
   "name": "roblox-mcp-pro",
   "version": "1.0.47",
-  "description": "MCP server that lets AI agents control Roblox Studio: live Luau execution, instance query/mutate, UI/terrain/lighting, and bidirectional Studio<->local sync. Paid subscription with a free trial.",
-  "license": "SEE LICENSE IN LICENSE",
+  "description": "Free, open-source MCP server that lets AI agents control Roblox Studio: live Luau execution, instance query/mutate, UI/terrain/lighting, and bidirectional Studio<->local sync.",
+  "license": "MIT",
   "author": "Peerapol",
   "homepage": "https://peerapolselanon.github.io/roblox-mcp-pro-web/",
   "bugs": {
@@ -42,11 +42,10 @@
     "start": "node dist/index.js",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
-    "obfuscate": "node scripts/obfuscate.mjs",
     "docs": "node scripts/gen-docs.mjs",
     "lint": "biome lint",
-    "test": "npm run build && node scripts/smoke.mjs && node scripts/license-smoke.mjs && node scripts/routing-smoke.mjs && node scripts/sync-smoke.mjs && node scripts/analyze-smoke.mjs && node scripts/png-smoke.mjs && npx tsx --test test/*.test.ts",
-    "prepublishOnly": "npm run clean && npm run build && npm run docs && npm run obfuscate"
+    "test": "npm run build && node scripts/smoke.mjs && node scripts/routing-smoke.mjs && node scripts/sync-smoke.mjs && node scripts/analyze-smoke.mjs && node scripts/png-smoke.mjs && npx tsx --test test/*.test.ts",
+    "prepublishOnly": "npm run clean && npm run build && npm run docs"
   },
   "engines": {
     "node": ">=18"
@@ -59,7 +58,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
     "@types/node": "^22.10.0",
-    "javascript-obfuscator": "^5.4.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
