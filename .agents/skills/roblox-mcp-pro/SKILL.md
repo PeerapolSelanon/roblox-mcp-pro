@@ -298,9 +298,15 @@ When building list menus or scroll views:
 To make a GUI larger/smaller proportionally on different viewport sizes:
 - Place a `UIScale` instance (named e.g. `MainScale`) inside the main frame.
 - Animate the `UIScale.Scale` property on window open/close rather than tweening the `Size` of the frame, which preserves all layout constraints and child ratios (fonts, strokes, paddings) perfectly.
-- **Two-Script Architecture Best Practice**: Decouple layout scaling from animations and interactions by using two separate client scripts:
-  1. **Scale Controller Script**: A global or frame-specific script dedicated to listening to viewport size changes (via `CurrentCamera.ViewportSize`) and updating the `UIScale.Scale` dynamically to fit any screen ratio (PC, Tablet, Mobile) without stretching or clipping.
-  2. **Animation/Interaction Controller Script**: A local script dedicated to handling UI opening/closing transitions (e.g. tweening `UIScale.Scale` to pop open or close), hover effects, clicks, and page data loading.
+- **Only for fixed-offset modals, not HUDs**: this fit-scale pattern is for windows authored at a fixed pixel size (popups, panels — `Size` in offset). Edge-docked HUDs use Scale-based `UDim2` + `AnchorPoint` and need no `UIScale`.
+- **Decouple scaling from animation — but share the scale logic, don't duplicate it.** Put the fit math in ONE shared `ModuleScript` (e.g. `ReplicatedStorage/UIScale`) that every modal `require`s; do not copy a Scale Controller into each UI's script (a game has many modals — duplication rots). The module exposes one function:
+  ```lua
+  -- bindFit(uiScale, rootFrame, designSize, {base=1.0, pad=0.92}) -> compute()
+  -- fit = min(vp.X*pad/designW, vp.Y*pad/designH); scale = min(fit, base)
+  -- base 1.0 => 1:1 on PC/large screens; smaller viewports shrink to fit. pad leaves a margin.
+  -- Caches a CurrentCamera.ViewportSize listener so it re-fits on rotate/resize while .Visible.
+  ```
+  Each modal's own LocalScript then handles only its animation/interaction (open/close tween to `compute()`, hovers, clicks, data) and calls `bindFit` in one line.
 
 
 ### 4. Rotated Elements & Overflow Prevention

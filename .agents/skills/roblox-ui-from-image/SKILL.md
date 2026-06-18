@@ -134,9 +134,16 @@ Also: `UIGradient` **multiplies** with the object's own color, so set the fill `
   gradient. A non-white base darkens/tints the whole gradient.
 - **Rotated Elements (e.g. Diamonds) and Clipping/Overflows**: When rotating a square element (like a frame with `Rotation = 45` to make a diamond), its visual bounding box size increases. For a square of side length $S$ rotated by 45 degrees, the actual visual width and height become $S \times \sqrt{2} \approx 1.414 \times S$. Because Roblox layout and bounding calculations use the original non-rotated size, you must offset the element's position away from the container edges (by at least half of the visual width, i.e., $0.707 \times S$) to prevent the corners from clipping or overflowing the parent container.
 - **Avoiding TextBounds Sizing Race Conditions**: When dynamically sizing a text container based on `TextLabel.TextBounds`, do NOT write `repeat task.wait() until label.TextBounds`. In Lua, `Vector2` values (even `Vector2.new(0,0)`) are always truthy, so this loop terminates immediately on the first frame before the engine measures the text. Instead, set `AutomaticSize = Enum.AutomaticSize.Y` on the label and its parent container (with initial `Size.Y = 0`) to natively scale heights without scripts, OR explicitly check the Y value in a loop: `while label.TextBounds.Y == 0 do task.wait() end`.
-- **Two-Script Architecture for Responsive UI (UIScale)**: Decouple layout scaling from animations by using two separate client scripts:
-  1. **Scale Controller Script**: A global or frame-specific script focused on listening to camera/viewport changes (`CurrentCamera.ViewportSize`) and updating the `UIScale.Scale` dynamically to fit PC, tablet, and mobile screens.
-  2. **Animation/Interaction Controller Script**: A local script focused on window transitions (tweening `UIScale.Scale` on open/close), hovers, clicks, and feeding data.
+- **Responsive scale for fixed-offset modals — share the logic, don't duplicate it**: a window
+  authored at a fixed pixel `Size` (offset) overflows small screens at a flat scale. Put the fit
+  math in ONE shared `ModuleScript` (e.g. `ReplicatedStorage/UIScale`) that every modal `require`s —
+  don't copy a Scale Controller into each UI (a game has many modals; copy-paste rots).
+  `bindFit(uiScale, rootFrame, designSize, {base=1.0, pad=0.92})` computes
+  `min(min(vp.X*pad/designW, vp.Y*pad/designH), base)` — `base 1.0` = 1:1 on PC, smaller viewports
+  shrink to fit — and caches a `CurrentCamera.ViewportSize` listener so it re-fits on rotate/resize.
+  Each modal's LocalScript keeps only its own animation/interaction and tweens open/close to the
+  computed scale. This pattern is for **fixed-offset modals only** — edge-docked HUDs use
+  Scale-`UDim2` + `AnchorPoint` and need no `UIScale`.
 - **UIStroke on buttons/text — the two-stroke rule**: a `UIStroke` under a `TextButton`/`TextLabel`
   defaults to `ApplyStrokeMode = "Contextual"`, which outlines the **text glyphs, not the button
   border**. So a single default stroke gives you a text outline when you wanted an edge highlight.

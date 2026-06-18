@@ -246,6 +246,63 @@ local function hookHover(button)
 end
 ```
 
+### 4. Spring-driven hover micro-interactions (the "juicy" HUD hover)
+
+The hover that feels *premium* is never one property — it's a **stack of layers on a single hover
+state**, driven by **springs, not fixed-duration tweens**. Why springs: a hover that re-fires while
+still mid-animation must continue from its current velocity, not restart from zero — that
+interruptibility is what makes a HUD feel physical. A `TweenService` tween (fixed time) visibly
+restarts on rapid re-hover; a spring picks up where it is. If the project has **Fusion**, use
+`Scope:Spring(target, speed, damping)`; otherwise approximate with short `Back`/`Out` tweens (fine
+for most buttons, slightly less fluid on fast re-hover).
+
+**Spring params** (Fusion `Spring(value, speed, damping)`):
+- **speed** — higher = snappier settle (HUDs here use 30–40).
+- **damping** — `<1` overshoots/bounces (`0.45` = lively pop), `1` = critical (clean slide, no
+  overshoot), `>1` = sluggish.
+
+**Layer these on one `isHovered` state** (the magic is the stack, not any single line):
+
+| Layer | Idle → Hover | Driver | Target property |
+| --- | --- | --- | --- |
+| Scale bounce | `1.0 → 1.12` (pressed `0.95`) | Spring `40, 0.45` | child `UIScale.Scale` |
+| Stroke highlight | base color → **white** | Spring `30, 0.8` | `UIStroke.Color` |
+| Gradient flash | default → **white** `ColorSequence` | Computed (no spring) | `UIGradient.Color` |
+| Icon tilt | `0° → 16°` | Spring `35, 0.45` | `Icon.Rotation` |
+| Shine sweep | offset `-1.5 → 1.5` | Spring `35, 1.0` | `ShineGradient.Offset` (a light streak crossing the button) |
+
+Two extras that actually sell it:
+- **Continuous rotation sweep** — a single value incremented in `RunService.RenderStepped`
+  (`(v + dt*SPEED) % 360`, SPEED ~180°/s) bound to the stroke/icon `UIGradient.Rotation`. The border
+  shimmer never stops, so even idle buttons read as "powered-on". **One loop drives every button's
+  gradient** — never a loop per button.
+- **Sound** — `UI_HOVER` at low volume (~0.25) on enter, `UI_CLICK` on activate. Audio is half the
+  "feel"; a silent hover feels dead no matter how good the motion.
+
+Fusion form (attach to a GUI authored in StarterGui via `Hydrate`, with `FindFirstChild` guards so a
+missing layer just no-ops):
+```lua
+local isHovered = Scope:Value(false)
+local scaleTarget = Scope:Computed(function(use) return use(isHovered) and 1.12 or 1.0 end)
+Scope:Hydrate(button:FindFirstChildOfClass("UIScale")) { Scale = Scope:Spring(scaleTarget, 40, 0.45) }
+Scope:Hydrate(button) {
+    [Fusion.OnEvent "MouseEnter"] = function() isHovered:set(true); SoundService.play("UI_HOVER", { volume = 0.25 }) end,
+    [Fusion.OnEvent "MouseLeave"] = function() isHovered:set(false) end,
+    [Fusion.OnEvent "Activated"]  = function() SoundService.play("UI_CLICK") end,
+}
+```
+
+No-Fusion fallback: on `MouseEnter` fire one `Back`/`Out` ~0.15s tween per property (Scale→1.12,
+stroke→white, icon Rotation→16), reverse on `MouseLeave`; keep the continuous sweep in its
+`RenderStepped` loop. Re-hovering mid-tween restarts — acceptable for most buttons.
+
+**Press state**: fold into the scale computed — pressed `0.95` < idle `1.0` < hovered `1.12`. Set on
+`InputBegan` (MouseButton1/Touch), clear on `InputEnded` and `MouseLeave`.
+
+**Make it reusable, once.** Wrap this whole stack in a single component/helper that takes a button,
+wires the hover/press state + spring layers + sounds, and returns it — so every button gets identical
+feel from one definition. Don't copy the hover block per button (a HUD has dozens).
+
 <!-- Append new patterns here as they're decoded: scale-pop, slide-in, fade+blur backdrop, stagger list, etc. -->
 
 ## Gotchas
