@@ -10,6 +10,9 @@
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://peerapolselanon.github.io/roblox-mcp-pro/" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23c46a2e'/><text x='50' y='71' font-size='60' text-anchor='middle' fill='%23231a12' font-family='monospace'>&gt;_</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap" />
 <style>
   /* Palette mirrors the product dashboard: warm dark ground, one earned
      amber accent, status hues reserved for meaning. Identity-consistent. */
@@ -30,34 +33,46 @@
     --green-bg:color-mix(in oklch, var(--green) 13%, transparent);
     --radius:14px; --maxw:1060px;
     --z-sticky:100;
+    /* Type: grotesque sans for voice, mono where it's earned (CLI, tool ids, code) */
+    --font-sans:"Hanken Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    --font-mono:"Spline Sans Mono",ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    /* Modular scale (~1.25): headings fluid, body fixed in rem */
+    --t-hero:clamp(2.1rem,1.35rem + 3.1vw,3.4rem);
+    --t-h2:clamp(1.5rem,1.28rem + 1vw,1.9rem);
+    --t-h3:1.0625rem;
+    --t-lead:clamp(1.05rem,1rem + .35vw,1.2rem);
+    --t-body:1rem;
+    --t-sm:.9375rem;
+    --t-xs:.8125rem;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   body{
     margin:0;background:var(--bg);color:var(--text);
-    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial,sans-serif;
-    line-height:1.65;-webkit-font-smoothing:antialiased;
+    font-family:var(--font-sans);font-size:var(--t-body);
+    line-height:1.65;letter-spacing:.005em;font-kerning:normal;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   }
   a{color:var(--accent);text-decoration:none;transition:color .15s ease}
   a:hover{text-decoration:underline}
-  code,pre,kbd{font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
+  code,pre,kbd{font-family:var(--font-mono);font-variant-ligatures:none}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
   section{padding:clamp(56px,8vw,88px) 0;border-top:1px solid var(--line)}
   section[id]{scroll-margin-top:72px}  /* clear the sticky nav on anchor jumps */
-  h2{font-size:clamp(24px,3.4vw,30px);margin:0 0 10px;letter-spacing:-.02em;text-wrap:balance}
-  h2 + .sub{color:var(--muted);margin:0 0 36px;font-size:16.5px;max-width:62ch;text-wrap:pretty}
+  h2{font-size:var(--t-h2);font-weight:600;margin:0 0 10px;letter-spacing:-.02em;text-wrap:balance}
+  h2 + .sub{color:var(--muted);margin:0 0 36px;font-size:var(--t-body);max-width:62ch;text-wrap:pretty}
 
   /* nav */
   nav{position:sticky;top:0;z-index:var(--z-sticky);backdrop-filter:blur(10px);
       background:color-mix(in oklch,var(--bg) 80%, transparent);border-bottom:1px solid var(--line)}
   nav .wrap{display:flex;align-items:center;gap:22px;height:58px}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:650;color:var(--text)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;color:var(--text);letter-spacing:-.01em}
   .brand:hover{text-decoration:none}
   .logo{width:29px;height:29px;border-radius:8px;background:var(--accent);color:var(--accent-ink);
-        display:grid;place-items:center;font-weight:800;font-size:14px}
+        display:grid;place-items:center;font-family:var(--font-mono);font-weight:700;font-size:.875rem}
   nav .links{margin-left:auto;display:flex;gap:8px;align-items:center}
-  nav .links a{color:var(--muted);font-size:14px;font-weight:500;padding:8px 6px;border-radius:8px;
+  nav .links a{color:var(--muted);font-size:.875rem;font-weight:500;padding:8px 6px;border-radius:8px;
     transition:color .15s ease,border-color .15s ease}
   nav .links a:hover{color:var(--text);text-decoration:none}
   .ghbtn{border:1px solid var(--line2);color:var(--text)!important;padding:8px 14px;border-radius:9px}
@@ -66,9 +81,9 @@
 
   /* hero */
   .hero{text-align:center;padding:clamp(60px,11vw,104px) 0 clamp(48px,8vw,76px);border-top:none}
-  .hero h1{font-size:clamp(34px,6vw,58px);line-height:1.06;margin:0 auto 20px;max-width:15ch;
-    letter-spacing:-.025em;color:var(--text);text-wrap:balance}
-  .hero p.lead{font-size:clamp(16px,2.1vw,19px);color:var(--muted);max-width:60ch;margin:0 auto 26px;text-wrap:pretty}
+  .hero h1{font-size:var(--t-hero);font-weight:700;line-height:1.07;margin:0 auto 20px;max-width:15ch;
+    letter-spacing:-.03em;color:var(--text);text-wrap:balance}
+  .hero p.lead{font-size:var(--t-lead);color:var(--muted);max-width:60ch;margin:0 auto 26px;text-wrap:pretty}
   .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:30px}
   .badges img{height:22px}
   .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:36px}
@@ -84,7 +99,7 @@
   /* code blocks */
   .code{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
     text-align:left;overflow:hidden}
-  .code pre{margin:0;padding:16px 18px;overflow:auto;font-size:13.5px;line-height:1.7}
+  .code pre{margin:0;padding:16px 18px;overflow:auto;font-size:.8125rem;line-height:1.7}
   .code .copy{position:absolute;top:8px;right:8px;background:var(--card2);border:1px solid var(--line2);
     color:var(--muted);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;min-height:36px;
     transition:color .15s ease,border-color .15s ease}
@@ -97,7 +112,7 @@
   /* quotes — staggered, not a uniform card grid */
   .quotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
   .quote{border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;background:var(--bg-soft)}
-  .quote p{margin:0;font-size:15.5px;color:var(--text);text-wrap:pretty}
+  .quote p{margin:0;font-size:var(--t-body);color:var(--text);text-wrap:pretty}
   .quote p::before{content:"";display:inline-block;width:18px;height:2px;background:var(--accent-line);
     vertical-align:middle;margin-right:10px}
 
@@ -107,8 +122,8 @@
   .feat{background:var(--bg-soft);padding:24px 22px}
   .feat .ico{width:24px;height:24px;color:var(--accent);margin-bottom:12px}
   .feat .ico svg{width:24px;height:24px;display:block}
-  .feat h3{margin:0 0 6px;font-size:16.5px;font-weight:600}
-  .feat p{margin:0;color:var(--muted);font-size:14.5px;text-wrap:pretty}
+  .feat h3{margin:0 0 6px;font-size:var(--t-h3);font-weight:600;letter-spacing:-.01em}
+  .feat p{margin:0;color:var(--muted);font-size:var(--t-sm);text-wrap:pretty}
 
   /* steps */
   .steps{display:grid;gap:12px;max-width:760px}
@@ -117,14 +132,14 @@
   .step .n{flex:0 0 auto;width:30px;height:30px;border-radius:9px;background:var(--accent-bg);
     color:var(--accent);border:1px solid var(--accent-line);font-weight:700;
     display:grid;place-items:center;font-size:14px;font-variant-numeric:tabular-nums}
-  .step h3{margin:0 0 3px;font-size:16px;font-weight:600}
-  .step p{margin:0;color:var(--muted);font-size:14.5px;text-wrap:pretty}
-  .step code{background:var(--card2);padding:2px 6px;border-radius:6px;font-size:13px;color:var(--text)}
+  .step h3{margin:0 0 3px;font-size:var(--t-h3);font-weight:600;letter-spacing:-.01em}
+  .step p{margin:0;color:var(--muted);font-size:var(--t-sm);text-wrap:pretty}
+  .step code{background:var(--card2);padding:2px 6px;border-radius:6px;font-size:.8125rem;color:var(--text)}
 
   /* tabs */
   .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
   .tab{background:var(--card);border:1px solid var(--line2);color:var(--muted);border-radius:10px;
-    padding:9px 15px;font-size:13.5px;cursor:pointer;font-weight:500;min-height:40px;
+    padding:9px 15px;font-size:.875rem;cursor:pointer;font-weight:500;min-height:40px;
     transition:color .15s ease,background .15s ease,border-color .15s ease}
   .tab:hover{color:var(--text)}
   .tab[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent-line);color:var(--text)}
@@ -133,34 +148,34 @@
 
   /* tools */
   .toolcat{margin-bottom:30px}
-  .toolcat h3{font-size:13.5px;color:var(--text);margin:0 0 4px;font-weight:650}
-  .toolcat .cn{color:var(--muted);font-size:13px;margin:0 0 14px}
+  .toolcat h3{font-size:var(--t-sm);color:var(--text);margin:0 0 4px;font-weight:600}
+  .toolcat .cn{color:var(--muted);font-size:var(--t-xs);margin:0 0 14px}
   .tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:1px;
     background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
   .tool{background:var(--bg-soft);padding:13px 15px}
-  .tool b{font-family:ui-monospace,monospace;color:var(--accent);font-size:13.5px;font-weight:600}
-  .tool span{display:block;color:var(--muted);font-size:13px;margin-top:3px}
+  .tool b{font-family:var(--font-mono);color:var(--accent);font-size:.8125rem;font-weight:600}
+  .tool span{display:block;color:var(--muted);font-size:var(--t-xs);margin-top:3px}
 
   /* diagram */
   .diagram{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;overflow:auto}
-  .diagram pre{margin:0;color:var(--text);font-size:13px;line-height:1.55}
+  .diagram pre{margin:0;color:var(--text);font-size:.8125rem;line-height:1.55}
 
   /* table */
   .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius)}
-  table{width:100%;border-collapse:collapse;font-size:14px;min-width:520px}
+  table{width:100%;border-collapse:collapse;font-size:var(--t-sm);min-width:520px}
   th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
   td:last-child{white-space:normal}
-  th{color:var(--muted);font-weight:600;font-size:12.5px}
+  th{color:var(--muted);font-weight:600;font-size:var(--t-xs);letter-spacing:.02em}
   tr:last-child td{border-bottom:none}
-  td code{background:var(--card2);padding:2px 6px;border-radius:6px;color:var(--text);font-size:12.5px}
+  td code{background:var(--card2);padding:2px 6px;border-radius:6px;color:var(--text);font-size:.78rem}
 
-  footer{border-top:1px solid var(--line);padding:38px 0 56px;color:var(--muted);font-size:14px}
+  footer{border-top:1px solid var(--line);padding:38px 0 56px;color:var(--muted);font-size:var(--t-sm)}
   footer .wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:space-between}
   footer .links{display:flex;gap:18px;flex-wrap:wrap}
   footer a{color:var(--muted)}
   footer a:hover{color:var(--text)}
   .pill{display:inline-block;background:var(--green-bg);color:var(--green);
-    padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:600}
+    padding:4px 11px;border-radius:999px;font-size:var(--t-xs);font-weight:600;letter-spacing:.01em}
 
   @media (prefers-reduced-motion: reduce){
     html{scroll-behavior:auto}
@@ -295,7 +310,7 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
       <div class="step"><div class="n">3</div><div><h3>Connect &amp; verify</h3><p>In Studio click the <b>Roblox MCP Pro</b> toolbar button (so it's highlighted), then ask your agent to call <code>system_info</code>. You should see <code>pluginConnected: true</code>.</p></div></div>
     </div>
 
-    <h3 style="margin:38px 0 12px;font-size:15px;font-weight:650">Optional environment variables</h3>
+    <h3 style="margin:38px 0 12px;font-size:1rem;font-weight:600">Optional environment variables</h3>
     <div class="tablewrap">
     <table>
       <tr><th>Variable</th><th>Default</th><th>Meaning</th></tr>
