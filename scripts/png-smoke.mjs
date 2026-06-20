@@ -127,4 +127,36 @@ assert.ok(cmp.similarity < 80, "half-different → lower similarity");
 assert.ok(cmp.regions[0].xPct > 0.5, "worst region on the changed (right) half");
 assert.ok(/brighter/.test(cmp.regions[0].note), "note reports the capture is brighter");
 
+// --- local UI renderer (image-to-UI without Studio) ---
+import { renderUiTree } from "../dist/services/uirender.js";
+import { decodePng } from "../dist/services/png.js";
+
+const outDir = mkdtempSync(join(tmpdir(), "uirender-"));
+const uiOut = join(outDir, "ui.png");
+// A centered red 100x60 card on a dark backdrop, in a 200x120 viewport.
+const tree = {
+  className: "ScreenGui",
+  children: [
+    {
+      className: "Frame",
+      properties: {
+        Size: [[0, 100], [0, 60]],
+        AnchorPoint: [0.5, 0.5],
+        Position: [[0.5, 0], [0.5, 0]],
+        BackgroundColor3: [1, 0, 0],
+      },
+    },
+  ],
+};
+const rr = renderUiTree(tree, { outPath: uiOut, width: 200, height: 120, background: [0, 0, 0] });
+assert.equal(rr.width, 200, "render width");
+const img = decodePng(uiOut);
+// Center pixel sits inside the red card; a corner sits on the black backdrop.
+const center = ((60 * 200) + 100) * 4;
+assert.ok(img.rgba[center] > 200 && img.rgba[center + 1] < 60, "center is the red card");
+assert.equal(img.rgba[0], 0, "corner is the black backdrop");
+// Render compared to itself is ~identical.
+const selfCmp = compareImages(uiOut, uiOut, { cols: 4, rows: 4 });
+assert.ok(selfCmp.similarity > 99.5, "render vs itself ~100%");
+
 console.log("png-smoke OK");

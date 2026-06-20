@@ -304,7 +304,7 @@ Error Handling:
 
 Parameters:
 
-- `action` ('create' | 'set' | 'delete' | 'sample_color' | 'compare', required) — create: build a tree · set: apply properties to a path · delete: destroy a path · sample_color: read the exact pixel color from a reference PNG on disk (eyedropper) · compare: score a built-UI capture against a reference mockup (similarity + worst regions).
+- `action` ('create' | 'set' | 'delete' | 'sample_color' | 'compare' | 'render_local', required) — create: build a tree · set: apply properties to a path · delete: destroy a path · sample_color: read the exact pixel color from a reference PNG on disk (eyedropper) · compare: score a built-UI capture against a reference mockup (similarity + worst regions) · render_local: rasterize a 'tree' to a PNG on disk WITHOUT Studio (fast preview; pair with compare).
 - `parent` (string, optional) — Parent for 'create' (default 'StarterGui').
 - `tree` (lazy, optional) — UI tree spec for 'create'.
 - `replace` (boolean, optional, default false) — For 'create': if a child with the same name exists under parent, delete it first (clean rebuild while iterating).
@@ -323,6 +323,10 @@ Parameters:
 - `cols` (number, optional) — For 'compare': region grid columns (default 8).
 - `rows` (number, optional) — For 'compare': region grid rows (default 6).
 - `top` (number, optional) — For 'compare': how many worst regions to return (default 6).
+- `outPath` (string, optional) — For 'render_local': filesystem path to write the rendered PNG.
+- `width` (number, optional) — For 'render_local': viewport width px (default 1280; match the mockup).
+- `height` (number, optional) — For 'render_local': viewport height px (default 720; match the mockup).
+- `background` (number[], optional) — For 'render_local': backdrop color [r,g,b] 0-1 (default dark grey).
 
 ## `ui_preview` — Preview GUI (clean capture) (mutating)
 

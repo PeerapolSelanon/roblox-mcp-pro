@@ -8,6 +8,7 @@ import { callStudio, describeError } from "../services/studio.js";
 import { ok, fail } from "../services/format.js";
 import { InstancePath } from "../schemas/common.js";
 import { samplePngColor, samplePngPoints, compareImages, type Coord } from "../services/png.js";
+import { renderUiTree } from "../services/uirender.js";
 
 interface UINodeShape {
   className: string;
@@ -35,11 +36,12 @@ const UINode: z.ZodType<UINodeShape> = z.lazy(() =>
 const InputSchema = z
   .object({
     action: z
-      .enum(["create", "set", "delete", "sample_color", "compare"])
+      .enum(["create", "set", "delete", "sample_color", "compare", "render_local"])
       .describe(
         "create: build a tree · set: apply properties to a path · delete: destroy a path · " +
           "sample_color: read the exact pixel color from a reference PNG on disk (eyedropper) · " +
-          "compare: score a built-UI capture against a reference mockup (similarity + worst regions).",
+          "compare: score a built-UI capture against a reference mockup (similarity + worst regions) · " +
+          "render_local: rasterize a 'tree' to a PNG on disk WITHOUT Studio (fast preview; pair with compare).",
       ),
     parent: InstancePath.optional().describe("Parent for 'create' (default 'StarterGui')."),
     tree: UINode.optional().describe("UI tree spec for 'create'."),
@@ -89,6 +91,17 @@ const InputSchema = z
     cols: z.number().int().min(2).max(24).optional().describe("For 'compare': region grid columns (default 8)."),
     rows: z.number().int().min(2).max(24).optional().describe("For 'compare': region grid rows (default 6)."),
     top: z.number().int().min(1).max(50).optional().describe("For 'compare': how many worst regions to return (default 6)."),
+    outPath: z
+      .string()
+      .optional()
+      .describe("For 'render_local': filesystem path to write the rendered PNG."),
+    width: z.number().int().min(1).max(8000).optional().describe("For 'render_local': viewport width px (default 1280; match the mockup)."),
+    height: z.number().int().min(1).max(8000).optional().describe("For 'render_local': viewport height px (default 720; match the mockup)."),
+    background: z
+      .array(z.number())
+      .length(3)
+      .optional()
+      .describe("For 'render_local': backdrop color [r,g,b] 0-1 (default dark grey)."),
   })
   .strict();
 
@@ -177,6 +190,39 @@ Error Handling:
               h: input.h ?? input.w,
             });
             return ok({ ok: true, ...c }, fmt(c));
+          } catch (e) {
+            return fail(e instanceof Error ? e.message : String(e));
+          }
+        }
+        // render_local rasterizes the tree to a PNG on disk — no Studio. Optional
+        // mockupPath folds the compare into the same call (the fast design loop).
+        if (input.action === "render_local") {
+          if (!input.tree) return fail("render_local requires 'tree' (the UI spec to rasterize).");
+          if (!input.outPath) return fail("render_local requires 'outPath' (where to write the PNG).");
+          try {
+            const bg = input.background as [number, number, number] | undefined;
+            const r = renderUiTree(input.tree as never, {
+              outPath: input.outPath,
+              width: input.width,
+              height: input.height,
+              background: bg,
+            });
+            if (input.mockupPath) {
+              const cmp = compareImages(input.mockupPath, r.path, {
+                cols: input.cols,
+                rows: input.rows,
+                top: input.top,
+              });
+              const text = [
+                `Rendered ${r.width}x${r.height} → ${r.path}`,
+                `Similarity ${cmp.similarity}% vs mockup (mean diff ${cmp.meanDiff}%). Worst regions:`,
+                ...cmp.regions.map(
+                  (g) => `  @ ${Math.round(g.xPct * 100)}%,${Math.round(g.yPct * 100)}% — ${g.diff}% off, ${g.note}`,
+                ),
+              ].join("\n");
+              return ok({ ok: true, ...r, compare: cmp }, text);
+            }
+            return ok({ ok: true, ...r }, `Rendered ${r.width}x${r.height} → ${r.path}. Compare it to the mockup with action:'compare'.`);
           } catch (e) {
             return fail(e instanceof Error ? e.message : String(e));
           }

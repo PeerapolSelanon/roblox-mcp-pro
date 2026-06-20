@@ -16,7 +16,24 @@ Goal: given a reference image of a UI, produce a Roblox `ScreenGui` that looks l
 comes from a **visual feedback loop** — build, look at the real render, compare to the mockup, fix
 — not from one-shot guessing.
 
-## The loop
+## Two loops — design locally first, then verify in Studio
+
+There are two ways to run the feedback loop. **Prefer the fast local loop** to nail layout, colors,
+and structure without a Studio round-trip, then build the final tree in Studio once and verify.
+
+**Fast local loop (no Studio):** when the mockup is a PNG **on disk**, render your candidate tree
+right on the client and score it:
+- `manage_ui action:"render_local", tree:{…}, outPath:"<tmp>/ui.png", width:W, height:H, mockupPath:"<mockup.png>"`
+  rasterizes the *exact tree Studio would build* (UDim2/AnchorPoint/UIListLayout/UIPadding/UICorner/
+  UIStroke), writes a PNG, and — because you passed `mockupPath` — returns the similarity % and worst
+  regions in the same call. Iterate on the `tree` until similarity plateaus. No Studio needed.
+- Match `width`/`height` to the mockup's pixel size so the comparison lines up.
+- It's an approximation of the *paint* (text is a tinted bar, not glyphs; gradients/images are
+  placeholders), so it's authoritative for **layout, color, sizing, structure** — not font shape.
+- When happy, run the **full loop below once** in Studio (`create` the same tree) to verify the real
+  render (fonts, gradients, images, text wrapping) and do any final touch-ups.
+
+## The loop (in Studio)
 
 1. **Get the image.** The user pastes/drags it into chat (you see it directly — no tool needed) or
    gives a file path you can read. Study it before building.
