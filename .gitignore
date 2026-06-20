@@ -33,6 +33,13 @@ roblox-mcp-sync/
 .qwen/
 .codex/
 .gemini/
+.qoder/
+.kiro/
+.cursorrules
+.windsurfrules
+.opencode.json
+GEMINI.md
+QODER.md
 
 skills-lock.json
 
