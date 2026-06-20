@@ -43,6 +43,7 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "inspector": "npx @modelcontextprotocol/inspector node dist/index.js",
     "docs": "node scripts/gen-docs.mjs",
+    "version": "npm run docs && git add .agents/skills/roblox-mcp-pro/references/tools.md",
     "lint": "biome lint",
     "test": "npm run build && node scripts/smoke.mjs && node scripts/routing-smoke.mjs && node scripts/sync-smoke.mjs && node scripts/analyze-smoke.mjs && node scripts/png-smoke.mjs && npx tsx --test test/*.test.ts",
     "prepublishOnly": "npm run clean && npm run build && npm run docs"
