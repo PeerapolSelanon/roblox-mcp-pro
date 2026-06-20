@@ -210,4 +210,19 @@ Also: `UIGradient` **multiplies** with the object's own color, so set the fill `
   crop the capture down to just the panel before scoring (and `mockupRegion` if the mockup has its own
   margins). Eyeball the fractional rect from the capture once; it's stable for a given Studio layout.
   For a fast, framing-free measured loop, prefer `render_local` (full-bleed by construction).
+- **Emoji and most symbol glyphs DON'T render in Roblox's default fonts** — Gotham/GothamBold/etc.
+  show emoji (🔥💧👑🕷️✨🧬…) and many symbols (✕ ✦ ◎ ❀ ❁…) as **tofu boxes (□) or blank**. Don't
+  assume a glyph works because it looks fine in the mockup or in chat. **Verify, then prefer native
+  shapes:**
+  - **Verify** after building: capture and look, OR scan programmatically —
+    `for _,d in ipairs(gui:GetDescendants()) do if d:IsA("TextLabel") or d:IsA("TextButton") then for _,cp in utf8.codes(d.Text) do if cp>0xFF and cp~=8226 and cp~=8250 then warn(d:GetFullName(),"risky glyph U+"..("%04X"):format(cp)) end end end end`
+    (8226 `•` bullet and 8250 `›` chevron are the safe non-ASCII ones; treat the rest as suspect).
+  - **Replace icons with native shapes** (always render, and it's the native-only way): an **X/close**
+    = two `Frame` bars rotated ±45° with `UICorner` round caps; a **spark/star or section bullet** =
+    a small `Frame` rotated 45° (`UICorner` radius ~2) = a diamond; an **element/gem dot** = a circular
+    `Frame` (`UICorner` 1,0) tinted the element color with a smaller white `Frame` core; a **chevron `›`**
+    actually renders, so it's fine. Color carries meaning the lost emoji used to (e.g. element = dot color).
+  - When a native icon sits in a `TextLabel` that also has `UIPadding`, the padding shifts the child
+    too — place the icon in the gutter with a negative offset (e.g. `Position = UDim2.new(0,-16,0.5,0)`,
+    `AnchorPoint (0.5,0.5)`) so it doesn't overlap the text.
 - After previewing, always `ui_preview hide` so the overlay doesn't linger in CoreGui.
