@@ -1,84 +1,91 @@
 # roblox-mcp-pro
 
-An open-source **Model Context Protocol (MCP) server** that lets AI agents (Claude, Codex,
-Cursor, Antigravity, …) control a live **Roblox Studio** session — run Luau, query and mutate
-the DataModel, build UI/terrain/lighting, and keep a two-way Studio ↔ local-file mirror.
+**Let your AI agent build inside Roblox Studio.** An open-source [Model Context
+Protocol](https://modelcontextprotocol.io) server that gives Claude, Codex, Cursor, Antigravity
+(and any MCP client) hands-on control of a *live* Roblox Studio session — run Luau, query and
+mutate the DataModel, build UI/terrain/lighting, screenshot the viewport, and keep a two-way
+Studio ↔ local-file mirror.
 
-> Original, independent project. All code is written from scratch by the author.
-> **Free and open source** under the [MIT License](LICENSE) — all tools, no key, no tiers.
+[![npm](https://img.shields.io/npm/v/roblox-mcp-pro?color=cb3837&logo=npm)](https://www.npmjs.com/package/roblox-mcp-pro)
+[![downloads](https://img.shields.io/npm/dm/roblox-mcp-pro?color=cb3837)](https://www.npmjs.com/package/roblox-mcp-pro)
+[![license](https://img.shields.io/npm/l/roblox-mcp-pro?color=22c55e)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-server-7c3aed)](https://modelcontextprotocol.io)
 
----
-
-## What you install
-
-There are **three pieces**. Most people only need the first two.
-
-| # | Piece | What it is | Required? |
-|---|-------|-----------|-----------|
-| 1 | **MCP server** | An npm package (`roblox-mcp-pro`) you register with your AI agent. | ✅ Yes |
-| 2 | **Studio plugin** | A file (`RobloxMcpPro.rbxmx`) you drop into Roblox Studio. | ✅ Yes |
-| 3 | **Agent skills** | Guides that teach your AI *how* to drive the server well. | ⭐ Recommended |
-
-```
-Your AI agent ──MCP──▶ roblox-mcp-pro ──HTTP 127.0.0.1:3690──▶ Studio plugin ──▶ Roblox Studio
-   (1)                      (server)                              (2)
-```
-
-You **never start the server by hand** — your AI agent launches it automatically using the
-command you register below. Multiple agents (Claude Code, Codex, Antigravity, …) can drive the
-**same** Studio session at once.
-
-### Free & open source
-
-Every tool is included for everyone — no license key, no trial, no Pro/free split: the full
-toolset (query/mutate instances, properties & scripts, raw Luau, logs, selection, snapshots,
-UI Studio, terrain, effects, tweens, camera, animation, audio, physics, marketplace assets,
-spatial analysis, bulk edits, two-way sync, and playtest automation). Licensed under MIT —
-use it, fork it, ship it.
+> **Free and open source** under the [MIT License](LICENSE) — every tool, no key, no trial, no
+> Pro/free split. Original, independent project; all code written from scratch.
 
 ---
 
-## 🚀 Quick install
+## What it feels like
 
-Two commands get you running:
+Connect the server, click the **MCP** button in Studio, then just talk to your agent:
+
+> *"Build a glassy settings panel with a volume slider and a close button, then animate it sliding in."*
+>
+> *"Scatter 30 trees across the terrain, avoiding the water, and add soft evening lighting with fog."*
+>
+> *"Read this screenshot and rebuild this shop UI pixel-for-pixel."*
+>
+> *"Sync the whole place to disk so I can edit scripts in my editor — two-way, live."*
+
+The agent picks the right tools, runs them in your open Studio session, screenshots the result to
+check its own work, and iterates — while you watch it happen.
+
+## Why this one
+
+- 🧰 **29 focused tools** — instances, properties, scripts, raw Luau, UI, terrain, lighting,
+  effects, tweens, camera, animation, audio, physics, marketplace assets, spatial queries, bulk
+  edits, playtest automation, screenshots. [Full list ↓](#-tools-29)
+- 🔁 **Two-way sync** — mirror the live DataModel to local files and back. Edit scripts in your
+  own editor; changes flow both ways. **Multiple Places sync at once**, each on its own engine.
+- 👥 **Multi-agent** — Claude Code, Codex, and Antigravity can all drive the **same** Studio
+  session concurrently through one shared broker.
+- 👁️ **It sees what it builds** — `capture_studio` screenshots the real viewport so the agent
+  closes the loop instead of building blind.
+- 📊 **Live dashboard** at `127.0.0.1:3690` — connected agents, plugin status, command queue,
+  and sync state in real time.
+- ♻️ **Zero-maintenance** — `npx … @latest` auto-updates the server; the Studio plugin and agent
+  skills self-install on startup.
+
+---
+
+## 🚀 Quick start
+
+Two commands (Claude Code shown — [other clients below](#a-cli-agents-one-command-each--claude-code--codex--antigravity--gemini)):
 
 ```bash
-# 1) Register the server with your AI agent (Claude Code shown; see below for others)
+# 1) Register the server with your AI agent
 claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest
-# 2) Install the Studio plugin
+# 2) Install the Studio plugin (also auto-installs on first run)
 npx roblox-mcp-pro@latest install-plugin
 ```
 
-Then open Roblox Studio, click the **MCP** button, and ask your agent to run `system_info`.
-For other AI clients, see the manual steps below.
+Then: open Roblox Studio → click the **Roblox MCP Pro** toolbar button so it's highlighted → ask
+your agent to call **`system_info`**. You should see `pluginConnected: true`. 🎉
 
-> _Maintainer note:_ collaborators with repo access can run the all-in-one Windows installer
-> `gh api repos/PeerapolSelanon/roblox-mcp-pro/contents/install.ps1 -H "Accept: application/vnd.github.v3.raw" | Out-String | iex`.
+```
+Your AI agent ──MCP──▶ roblox-mcp-pro ──HTTP 127.0.0.1:3690──▶ Studio plugin ──▶ Roblox Studio
+```
+
+You **never start the server by hand** — your agent launches it automatically with the command you
+register. The plugin self-updates on each launch (restart Studio when it tells you a new plugin
+was installed).
 
 ---
 
 ## 🔧 Manual install
 
-The server is a single npm package. **Every AI client uses the exact same launch command** —
-only *where* you write it down changes. The command is always:
+The server is a single npm package. **Every AI client uses the exact same launch command** — only
+*where* you write it down changes:
 
 ```
 command:  npx
 args:     -y  roblox-mcp-pro@latest
 ```
 
-`npx` downloads and runs the published package on demand — no clone, no build. The `@latest` tag
-means you **always get the newest version automatically** — updates need zero effort on your part.
-
-> **Updates are automatic.** Because the command uses `@latest`, each time your AI client starts
-> the server it fetches the newest release. The Studio plugin also self-updates: the server copies
-> the latest bundled plugin into your Plugins folder on startup (just restart Studio when it tells
-> you a new plugin was installed). You never have to reinstall anything by hand.
->
-> If you pin a specific version in your MCP config (e.g. `roblox-mcp-pro@1.0.31` instead of
-> `@latest`) you opt out of auto-update — you'll stay on that version until you change it. The
-> broker also shuts down as soon as your last AI client disconnects, so the next launch always
-> starts a fresh server on the newest version rather than reattaching to an old one.
+`npx` downloads and runs the published package on demand — no clone, no build. `@latest` means you
+always get the newest version automatically. (Pin a version like `roblox-mcp-pro@1.0.48` to opt out
+of auto-update.)
 
 ### Part 1 — Install the MCP server
 
@@ -146,60 +153,41 @@ After editing, **restart the client** so it picks up the new server.
 | -------------------- | -------- | ------------------------------------------ |
 | `ROBLOX_MCP_PORT`    | `3690`   | Bridge port (the plugin must match).       |
 | `ROBLOX_MCP_TOKEN`   | _(none)_ | Shared secret; also set it in the plugin.  |
+| `ROBLOX_MCP_NO_PLUGIN_AUTOINSTALL` | _(unset)_ | `1` disables auto-installing the plugin. |
+| `ROBLOX_MCP_NO_SKILL_AUTOINSTALL`  | _(unset)_ | `1` disables auto-installing agent skills. |
+| `ROBLOX_MCP_NO_OPEN_DASHBOARD`     | _(unset)_ | `1` stops the dashboard opening on startup. |
 
 ### Part 2 — Install the Studio plugin
 
 **Usually automatic** — the first time your AI client starts the server, it copies the plugin into
-your Roblox Plugins folder for you (and keeps it updated on every launch). In most cases you can
-skip straight to Part 3.
-
-Want to install it right now without starting a client? Run:
+your Roblox Plugins folder and keeps it updated on every launch. To install it right now without
+starting a client:
 
 ```bash
 npx roblox-mcp-pro@latest install-plugin
 ```
 
-It works on Windows and macOS and tells you where it put the file. (To disable the automatic
-behavior, set the env var `ROBLOX_MCP_NO_PLUGIN_AUTOINSTALL=1`.)
-
-**Prefer to do it by hand?** The file lives in the installed package at
+**Prefer to do it by hand?** The file ships inside the package at
 `node_modules/roblox-mcp-pro/plugin/RobloxMcpPro.rbxmx` — copy it into:
 
 - **Windows:** `%LOCALAPPDATA%\Roblox\Plugins`
 - **macOS:** `~/Documents/Roblox/Plugins`
 
-Open Roblox Studio — a **Roblox MCP Pro** button appears in the toolbar. (Studio turns on HTTP
+Open Roblox Studio — a **Roblox MCP Pro** button appears in the toolbar. (Studio enables HTTP
 requests automatically when you connect; if needed, set `HttpService.HttpEnabled = true`.)
 
 ### Part 3 — Agent skills (automatic)
 
 Skills are short guides that teach your AI how to use the tools well (building UI from an image,
 animating GUIs, writing Studio plugins, etc.). **You don't need to do anything** — the server
-installs them for you on startup, the same way it installs the plugin. Only **Claude Code**
+installs them on startup, the same way it installs the plugin. Only **Claude Code**
 (`~/.claude/skills`) and **Codex** (`~/.codex/skills`) have a skills mechanism, so skills are
 copied there when those clients are present; other clients still work fine, just without the extra
 guidance.
 
-(To opt out, set `ROBLOX_MCP_NO_SKILL_AUTOINSTALL=1`.)
-
-### Part 4 — Connect & verify
-
-1. In Studio, click the **MCP** toolbar button so it's highlighted (this connects the plugin).
-2. Ask your AI agent to call **`system_info`**.
-3. You should see `pluginConnected: true`. 🎉
-
 ---
 
-## 🖥️ Monitor dashboard
-
-The dashboard opens in your browser automatically the first time the server starts, at
-**http://127.0.0.1:3690/** — watch connected agents, plugin status, the command queue, live
-activity, and sync status in real time. (Don't want it to open on its own? Set
-`ROBLOX_MCP_NO_OPEN_DASHBOARD=1`; you can still open the URL manually anytime.)
-
----
-
-## 🧰 Tools (28)
+## 🧰 Tools (29)
 
 **Core**
 
@@ -238,16 +226,41 @@ activity, and sync status in real time. (Don't want it to open on its own? Set
 | `manage_assets`     | Search the marketplace; insert assets; read product info. |
 | `manage_scripts`    | Read/write/create scripts; line edits, search, find-replace. |
 
-**Sync & Studio**
+**Sync, sessions & Studio**
 
 | Tool               | Description                                            |
 | ------------------ | ----------------------------------------------------- |
-| `manage_sync`      | Bidirectional Studio ↔ local mirror (+ sourcemap).    |
+| `manage_sync`      | Bidirectional Studio ↔ local mirror (+ sourcemap); multiple Places at once. |
+| `manage_agents`    | List connected agents/Places; bind this agent to a specific Place. |
 | `manage_selection` | Read/change the Explorer selection; watch for user clicks. |
 | `manage_studio`    | Studio info + playtests: Run mode (run/pause/stop) and real Play Solo / multiplayer with test scripts + auto reports. |
 | `manage_logs`      | Recent Output log history (filter by type or `since`). |
 | `workspace_state`  | Session snapshot + tree diff since last check.        |
 | `capture_studio`   | Screenshot the Studio window so the agent sees the real render. |
+
+---
+
+## 🖥️ Monitor dashboard
+
+Opens automatically the first time the server starts, at **http://127.0.0.1:3690/** — watch
+connected agents, plugin status, the command queue, live activity, and sync status in real time.
+(Set `ROBLOX_MCP_NO_OPEN_DASHBOARD=1` to stop it auto-opening; the URL still works anytime.)
+
+---
+
+## How it works (under the hood)
+
+```
+AI Agent A ─MCP stdio─▶ MCP client ─┐
+AI Agent B ─MCP stdio─▶ MCP client ─┼─HTTP 127.0.0.1:3690─▶ Broker ◀─long-poll─ Studio Plugin (Luau)
+AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + dashboard    dispatch handlers
+```
+
+1. **MCP client** exposes the tools over stdio. Each AI agent spawns its own.
+2. **Broker** is one shared localhost process that owns port 3690, queues commands, and talks to
+   the plugin. The first client to start auto-spawns it; the rest just connect — so multiple agents
+   can drive one Studio session concurrently.
+3. **Studio plugin** long-polls the broker, runs each command in Studio, and posts the result back.
 
 ---
 
@@ -262,42 +275,24 @@ npm run build      # compile the server to dist/
 When working **in this repo** with Claude Code, a project `.mcp.json` is already included — just
 approve the `roblox-mcp-pro` server when prompted (or run `/mcp`).
 
-### Development
-
 ```powershell
 npm run dev          # server with auto-reload (tsx watch)
+npm test             # build + hermetic smokes + unit tests
+npm run lint         # biome lint
 npm run inspector    # exercise tools with the MCP Inspector
 .\build.ps1 -NoInstall
 ```
 
 ### Releasing
 
-Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the plugin, attaches
-`RobloxMcpPro.rbxmx` to a GitHub Release, then publishes the server to npm.
-
 ```bash
-npm version patch        # bump package.json and create the matching vX.Y.Z tag
+npm version patch        # bump package.json + create the matching vX.Y.Z tag
 git push --follow-tags   # push commit + tag -> Actions cuts the release
 ```
 
-npm publishing needs an `NPM_TOKEN` repository secret (Settings → Secrets → Actions). Until it's
-set, the plugin/GitHub-Release half still succeeds; only the npm job fails.
-
----
-
-## How it works (under the hood)
-
-```
-AI Agent A ─MCP stdio─▶ MCP client ─┐
-AI Agent B ─MCP stdio─▶ MCP client ─┼─HTTP 127.0.0.1:3690─▶ Broker ◀─long-poll─ Studio Plugin (Luau)
-AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + dashboard    dispatch handlers
-```
-
-1. **MCP client** exposes the tools over stdio. Each AI agent spawns its own.
-2. **Broker** is one shared localhost process that owns port 3690, queues commands, and talks to
-   the plugin. The first client to start auto-spawns it; the rest just connect — so multiple
-   agents can drive one Studio session concurrently.
-3. **Studio plugin** long-polls the broker, runs each command in Studio, and posts the result back.
+Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the plugin, attaches
+`RobloxMcpPro.rbxmx` to a GitHub Release, then publishes the server to npm. (npm publishing needs an
+`NPM_TOKEN` repo secret; until it's set, the GitHub-Release half still succeeds.)
 
 ---
 
