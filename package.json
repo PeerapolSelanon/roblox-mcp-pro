@@ -5,8 +5,12 @@
   "license": "MIT",
   "author": "Peerapol",
   "homepage": "https://peerapolselanon.github.io/roblox-mcp-pro-web/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PeerapolSelanon/roblox-mcp-pro.git"
+  },
   "bugs": {
-    "url": "mailto:peerapolselanon@gmail.com"
+    "url": "https://github.com/PeerapolSelanon/roblox-mcp-pro/issues"
   },
   "keywords": [
     "roblox",
