@@ -9,130 +9,156 @@
 <meta property="og:description" content="Let your AI agent build inside Roblox Studio. Open-source MCP server, 29 tools, two-way sync, multi-agent. MIT." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://peerapolselanon.github.io/roblox-mcp-pro/" />
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%237c3aed'/><text x='50' y='70' font-size='62' text-anchor='middle' fill='white' font-family='monospace'>&gt;_</text></svg>" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23c46a2e'/><text x='50' y='71' font-size='60' text-anchor='middle' fill='%23231a12' font-family='monospace'>&gt;_</text></svg>" />
 <style>
+  /* Palette mirrors the product dashboard: warm dark ground, one earned
+     amber accent, status hues reserved for meaning. Identity-consistent. */
   :root{
-    --bg:#0a0a0f; --bg2:#11111a; --card:#15151f; --card2:#1b1b27;
-    --line:#26263340; --line2:#2e2e3d; --text:#e7e7ef; --muted:#9a9ab0;
-    --violet:#8b5cf6; --violet2:#a78bfa; --red:#ef4444; --green:#22c55e;
-    --grad:linear-gradient(135deg,#8b5cf6,#d946ef 60%,#ef4444);
-    --radius:14px; --maxw:1080px;
+    --bg:oklch(0.165 0.012 45);
+    --bg-soft:oklch(0.195 0.013 45);
+    --card:oklch(0.205 0.014 45);
+    --card2:oklch(0.235 0.015 45);
+    --line:oklch(0.26 0.015 45);
+    --line2:oklch(0.305 0.016 45);
+    --text:oklch(0.96 0.008 70);
+    --muted:oklch(0.745 0.014 55);
+    --accent:oklch(0.70 0.19 45);
+    --accent-ink:oklch(0.165 0.012 45);
+    --accent-bg:color-mix(in oklch, var(--accent) 14%, transparent);
+    --accent-line:color-mix(in oklch, var(--accent) 42%, transparent);
+    --green:oklch(0.80 0.15 155);
+    --green-bg:color-mix(in oklch, var(--green) 13%, transparent);
+    --radius:14px; --maxw:1060px;
+    --z-sticky:100;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   body{
     margin:0;background:var(--bg);color:var(--text);
     font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial,sans-serif;
-    line-height:1.6;-webkit-font-smoothing:antialiased;
+    line-height:1.65;-webkit-font-smoothing:antialiased;
   }
-  a{color:var(--violet2);text-decoration:none}
+  a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
   code,pre,kbd{font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
-  section{padding:76px 0;border-top:1px solid var(--line)}
-  h2{font-size:30px;margin:0 0 8px;letter-spacing:-.02em}
-  h2 + .sub{color:var(--muted);margin:0 0 34px;font-size:16px}
-  .eyebrow{color:var(--violet2);font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px}
+  section{padding:clamp(56px,8vw,88px) 0;border-top:1px solid var(--line)}
+  h2{font-size:clamp(24px,3.4vw,30px);margin:0 0 10px;letter-spacing:-.02em;text-wrap:balance}
+  h2 + .sub{color:var(--muted);margin:0 0 36px;font-size:16.5px;max-width:62ch;text-wrap:pretty}
 
   /* nav */
-  nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);
-      background:rgba(10,10,15,.72);border-bottom:1px solid var(--line)}
-  nav .wrap{display:flex;align-items:center;gap:22px;height:60px}
-  .brand{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--text)}
+  nav{position:sticky;top:0;z-index:var(--z-sticky);backdrop-filter:blur(10px);
+      background:color-mix(in oklch,var(--bg) 80%, transparent);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:22px;height:58px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;color:var(--text)}
   .brand:hover{text-decoration:none}
-  .logo{width:30px;height:30px;border-radius:8px;background:var(--grad);
-        display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px}
-  nav .links{margin-left:auto;display:flex;gap:22px;align-items:center}
-  nav .links a{color:var(--muted);font-size:14px;font-weight:500}
+  .logo{width:29px;height:29px;border-radius:8px;background:var(--accent);color:var(--accent-ink);
+        display:grid;place-items:center;font-weight:800;font-size:14px}
+  nav .links{margin-left:auto;display:flex;gap:8px;align-items:center}
+  nav .links a{color:var(--muted);font-size:14px;font-weight:500;padding:8px 6px;border-radius:8px}
   nav .links a:hover{color:var(--text);text-decoration:none}
-  .ghbtn{border:1px solid var(--line2);padding:7px 14px;border-radius:9px;color:var(--text)!important;font-size:14px}
-  .ghbtn:hover{border-color:var(--violet);text-decoration:none}
-  @media(max-width:760px){nav .links a.hideable{display:none}}
+  .ghbtn{border:1px solid var(--line2);color:var(--text)!important}
+  .ghbtn:hover{border-color:var(--accent-line)}
+  @media(max-width:720px){nav .links a.hideable{display:none}}
 
   /* hero */
-  .hero{position:relative;text-align:center;padding:86px 0 70px;overflow:hidden;border-top:none}
-  .hero::before{content:"";position:absolute;inset:-40% 0 auto;height:560px;
-    background:radial-gradient(60% 60% at 50% 0%,rgba(139,92,246,.25),transparent 70%);pointer-events:none}
-  .hero h1{font-size:clamp(36px,6vw,62px);line-height:1.05;margin:0 auto 18px;max-width:14ch;
-    letter-spacing:-.03em;color:#f4f4fb}
-  .hero p.lead{font-size:clamp(16px,2.2vw,20px);color:var(--muted);max-width:60ch;margin:0 auto 26px}
-  .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:28px}
+  .hero{text-align:center;padding:clamp(60px,11vw,104px) 0 clamp(48px,8vw,76px);border-top:none}
+  .hero h1{font-size:clamp(34px,6vw,58px);line-height:1.06;margin:0 auto 20px;max-width:15ch;
+    letter-spacing:-.025em;color:var(--text);text-wrap:balance}
+  .hero p.lead{font-size:clamp(16px,2.1vw,19px);color:var(--muted);max-width:60ch;margin:0 auto 26px;text-wrap:pretty}
+  .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:30px}
   .badges img{height:22px}
-  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:34px}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:11px;font-weight:600;font-size:15px}
-  .btn-primary{background:var(--grad);color:#fff}
-  .btn-primary:hover{text-decoration:none;filter:brightness(1.08)}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:36px}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:11px;
+    font-weight:600;font-size:15px;min-height:46px}
+  .btn-primary{background:var(--accent);color:var(--accent-ink)}
+  .btn-primary:hover{text-decoration:none;filter:brightness(1.06)}
   .btn-ghost{border:1px solid var(--line2);color:var(--text)}
-  .btn-ghost:hover{text-decoration:none;border-color:var(--violet)}
+  .btn-ghost:hover{text-decoration:none;border-color:var(--accent-line)}
 
   /* code blocks */
-  .code{position:relative;background:var(--card);border:1px solid var(--line2);border-radius:var(--radius);
+  .code{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
     text-align:left;overflow:hidden}
   .code pre{margin:0;padding:16px 18px;overflow:auto;font-size:13.5px;line-height:1.7}
   .code .copy{position:absolute;top:8px;right:8px;background:var(--card2);border:1px solid var(--line2);
-    color:var(--muted);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer}
-  .code .copy:hover{color:var(--text);border-color:var(--violet)}
-  .code .tok-c{color:#6b7280}            /* comment */
-  .code .tok-k{color:var(--violet2)}     /* keyword */
-  .code .tok-s{color:#7dd3a8}            /* string  */
-  .hero .code{max-width:640px;margin:0 auto}
+    color:var(--muted);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;min-height:34px}
+  .code .copy:hover{color:var(--text);border-color:var(--accent-line)}
+  .tok-c{color:var(--muted)}
+  .tok-s{color:var(--accent)}
+  .hero .code{max-width:620px;margin:0 auto}
 
-  /* quote cards */
-  .quotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-  .quote{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;position:relative}
-  .quote::before{content:"“";position:absolute;top:2px;left:14px;font-size:48px;color:var(--violet);opacity:.35;font-family:Georgia,serif}
-  .quote p{margin:8px 0 0;font-size:15.5px;color:#dcdce8}
+  /* quotes — staggered, not a uniform card grid */
+  .quotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px}
+  .quote{border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;background:var(--bg-soft)}
+  .quote p{margin:0;font-size:15.5px;color:var(--text);text-wrap:pretty}
+  .quote p::before{content:"";display:inline-block;width:18px;height:2px;background:var(--accent-line);
+    vertical-align:middle;margin-right:10px}
 
-  /* features */
-  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
-  .feat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
-  .feat:hover{border-color:var(--line2)}
-  .feat .ico{font-size:26px;margin-bottom:10px}
-  .feat h3{margin:0 0 6px;font-size:17px}
-  .feat p{margin:0;color:var(--muted);font-size:14.5px}
+  /* features — text-led list, monoline marks, not emoji cards */
+  .feats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:2px;
+    border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--line)}
+  .feat{background:var(--bg-soft);padding:24px 22px}
+  .feat .ico{width:24px;height:24px;color:var(--accent);margin-bottom:12px}
+  .feat .ico svg{width:24px;height:24px;display:block}
+  .feat h3{margin:0 0 6px;font-size:16.5px;font-weight:600}
+  .feat p{margin:0;color:var(--muted);font-size:14.5px;text-wrap:pretty}
 
   /* steps */
-  .steps{counter-reset:s;display:grid;gap:14px;max-width:760px}
-  .step{display:flex;gap:16px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
-  .step .n{counter-increment:s;flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--grad);
-    color:#fff;font-weight:700;display:grid;place-items:center;font-size:14px}
-  .step .n::before{content:counter(s)}
-  .step h3{margin:0 0 2px;font-size:16px}
-  .step p{margin:0;color:var(--muted);font-size:14.5px}
-  .step code{background:var(--card2);padding:2px 6px;border-radius:6px;font-size:13px;color:var(--violet2)}
+  .steps{display:grid;gap:12px;max-width:760px}
+  .step{display:flex;gap:16px;align-items:flex-start;background:var(--bg-soft);
+    border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+  .step .n{flex:0 0 auto;width:30px;height:30px;border-radius:9px;background:var(--accent-bg);
+    color:var(--accent);border:1px solid var(--accent-line);font-weight:700;
+    display:grid;place-items:center;font-size:14px;font-variant-numeric:tabular-nums}
+  .step h3{margin:0 0 3px;font-size:16px;font-weight:600}
+  .step p{margin:0;color:var(--muted);font-size:14.5px;text-wrap:pretty}
+  .step code{background:var(--card2);padding:2px 6px;border-radius:6px;font-size:13px;color:var(--text)}
 
   /* tabs */
-  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-  .tab{background:var(--card);border:1px solid var(--line2);color:var(--muted);border-radius:9px;
-    padding:8px 14px;font-size:13.5px;cursor:pointer;font-weight:500}
-  .tab[aria-selected="true"]{background:var(--violet);border-color:var(--violet);color:#fff}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{background:var(--card);border:1px solid var(--line2);color:var(--muted);border-radius:10px;
+    padding:9px 15px;font-size:13.5px;cursor:pointer;font-weight:500;min-height:40px}
+  .tab:hover{color:var(--text)}
+  .tab[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent-line);color:var(--text)}
   .panel{display:none}
   .panel[data-active="true"]{display:block}
 
   /* tools */
-  .toolcat{margin-bottom:26px}
-  .toolcat h3{font-size:15px;color:var(--violet2);margin:0 0 12px;letter-spacing:.02em}
-  .tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
-  .tool{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-  .tool b{font-family:ui-monospace,monospace;color:var(--text);font-size:13.5px}
-  .tool span{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+  .toolcat{margin-bottom:30px}
+  .toolcat h3{font-size:13.5px;color:var(--text);margin:0 0 4px;font-weight:650}
+  .toolcat .cn{color:var(--muted);font-size:13px;margin:0 0 14px}
+  .tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,290px),1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .tool{background:var(--bg-soft);padding:13px 15px}
+  .tool b{font-family:ui-monospace,monospace;color:var(--accent);font-size:13.5px;font-weight:600}
+  .tool span{display:block;color:var(--muted);font-size:13px;margin-top:3px}
 
   /* diagram */
-  .diagram{background:var(--card);border:1px solid var(--line2);border-radius:var(--radius);padding:20px;overflow:auto}
-  .diagram pre{margin:0;color:#c7c7d8;font-size:13px;line-height:1.5}
+  .diagram{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;overflow:auto}
+  .diagram pre{margin:0;color:var(--text);font-size:13px;line-height:1.55}
 
-  /* env table */
-  table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
-  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
-  th{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em}
+  /* table */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius)}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:520px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td:last-child{white-space:normal}
+  th{color:var(--muted);font-weight:600;font-size:12.5px}
   tr:last-child td{border-bottom:none}
-  td code{background:var(--card2);padding:2px 6px;border-radius:6px;color:var(--violet2);font-size:13px}
+  td code{background:var(--card2);padding:2px 6px;border-radius:6px;color:var(--text);font-size:12.5px}
 
-  footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--muted);font-size:14px}
+  footer{border-top:1px solid var(--line);padding:38px 0 56px;color:var(--muted);font-size:14px}
   footer .wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:space-between}
   footer .links{display:flex;gap:18px;flex-wrap:wrap}
-  .pill{display:inline-block;background:var(--card2);border:1px solid var(--line2);color:var(--green);
-    padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600}
+  footer a{color:var(--muted)}
+  footer a:hover{color:var(--text)}
+  .pill{display:inline-block;background:var(--green-bg);color:var(--green);
+    padding:4px 11px;border-radius:999px;font-size:12.5px;font-weight:600}
+
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    *{transition:none!important}
+  }
 </style>
 </head>
 <body>
@@ -141,11 +167,11 @@
   <div class="wrap">
     <a class="brand" href="#top"><span class="logo">&gt;_</span> roblox-mcp-pro</a>
     <div class="links">
-      <a class="hideable" href="#features">Features</a>
+      <a class="hideable" href="#feel">Overview</a>
       <a class="hideable" href="#install">Install</a>
       <a class="hideable" href="#tools">Tools</a>
       <a class="hideable" href="#how">How it works</a>
-      <a class="ghbtn" href="https://github.com/PeerapolSelanon/roblox-mcp-pro">GitHub ★</a>
+      <a class="ghbtn" href="https://github.com/PeerapolSelanon/roblox-mcp-pro" style="padding:8px 14px;border-radius:9px">GitHub</a>
     </div>
   </div>
 </nav>
@@ -153,19 +179,19 @@
 <header class="hero" id="top">
   <div class="wrap">
     <span class="pill">Free &amp; open source · MIT</span>
-    <h1>Let your AI agent build inside Roblox Studio</h1>
+    <h1 style="margin-top:18px">Let your AI agent build inside Roblox Studio</h1>
     <p class="lead">An open-source <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server
       that gives Claude, Codex, Cursor &amp; Antigravity hands-on control of a <b>live</b> Roblox Studio
       session. It runs Luau, builds UI, terrain and lighting, screenshots the viewport, and keeps a
       two-way Studio ↔ disk mirror.</p>
     <div class="badges">
-      <a href="https://www.npmjs.com/package/roblox-mcp-pro"><img alt="npm" src="https://img.shields.io/npm/v/roblox-mcp-pro?color=cb3837&logo=npm"></a>
-      <a href="https://www.npmjs.com/package/roblox-mcp-pro"><img alt="downloads" src="https://img.shields.io/npm/dm/roblox-mcp-pro?color=cb3837"></a>
-      <a href="https://github.com/PeerapolSelanon/roblox-mcp-pro/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/npm/l/roblox-mcp-pro?color=22c55e"></a>
-      <img alt="MCP" src="https://img.shields.io/badge/MCP-server-7c3aed">
+      <a href="https://www.npmjs.com/package/roblox-mcp-pro"><img alt="npm version" src="https://img.shields.io/npm/v/roblox-mcp-pro?color=c46a2e&logo=npm&logoColor=white"></a>
+      <a href="https://www.npmjs.com/package/roblox-mcp-pro"><img alt="npm downloads per month" src="https://img.shields.io/npm/dm/roblox-mcp-pro?color=c46a2e"></a>
+      <a href="https://github.com/PeerapolSelanon/roblox-mcp-pro/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/roblox-mcp-pro?color=3a8a5a"></a>
+      <img alt="Model Context Protocol server" src="https://img.shields.io/badge/MCP-server-9a7a4a">
     </div>
     <div class="cta">
-      <a class="btn btn-primary" href="#install">Get started →</a>
+      <a class="btn btn-primary" href="#install">Get started</a>
       <a class="btn btn-ghost" href="https://github.com/PeerapolSelanon/roblox-mcp-pro">View on GitHub</a>
     </div>
     <div class="code">
@@ -178,62 +204,71 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
 
 <section id="feel">
   <div class="wrap">
-    <p class="eyebrow">What it feels like</p>
     <h2>Just talk to your agent</h2>
-    <p class="sub">Connect the server, click the <b>MCP</b> button in Studio, then describe what you want.</p>
+    <p class="sub">Connect the server, click the <b>MCP</b> button in Studio, then describe what you want.
+      The agent picks the right tools, runs them in your open session, screenshots the result to check
+      its own work, and iterates while you watch.</p>
     <div class="quotes">
       <div class="quote"><p>Build a glassy settings panel with a volume slider and a close button, then animate it sliding in.</p></div>
       <div class="quote"><p>Scatter 30 trees across the terrain, avoiding the water, and add soft evening lighting with fog.</p></div>
       <div class="quote"><p>Read this screenshot and rebuild this shop UI pixel-for-pixel.</p></div>
       <div class="quote"><p>Sync the whole place to disk so I can edit scripts in my editor, two-way and live.</p></div>
     </div>
-    <p class="sub" style="margin-top:26px">The agent picks the right tools, runs them in your open Studio session,
-      screenshots the result to check its own work, and iterates while you watch it happen.</p>
   </div>
 </section>
 
 <section id="features">
   <div class="wrap">
-    <p class="eyebrow">Why this one</p>
     <h2>Built for real Studio work</h2>
     <p class="sub">29 focused tools, not one giant "run code" hammer.</p>
-    <div class="grid3">
-      <div class="feat"><div class="ico">🧰</div><h3>29 focused tools</h3><p>Instances, properties, scripts, raw Luau, UI, terrain, lighting, effects, tweens, camera, animation, audio, physics, marketplace assets, spatial queries, bulk edits, playtests, screenshots.</p></div>
-      <div class="feat"><div class="ico">🔁</div><h3>Two-way sync</h3><p>Mirror the live DataModel to local files and back. Edit scripts in your own editor; changes flow both ways. Multiple Places sync at once, each on its own engine.</p></div>
-      <div class="feat"><div class="ico">👥</div><h3>Multi-agent</h3><p>Claude Code, Codex and Antigravity can all drive the <b>same</b> Studio session concurrently through one shared broker.</p></div>
-      <div class="feat"><div class="ico">👁️</div><h3>It sees what it builds</h3><p><code>capture_studio</code> screenshots the real viewport so the agent closes the loop instead of building blind.</p></div>
-      <div class="feat"><div class="ico">📊</div><h3>Live dashboard</h3><p>Watch connected agents, plugin status, the command queue and sync state in real time at <code>127.0.0.1:3690</code>.</p></div>
-      <div class="feat"><div class="ico">♻️</div><h3>Zero maintenance</h3><p><code>npx … @latest</code> auto-updates the server; the Studio plugin and agent skills self-install on startup.</p></div>
+    <div class="feats">
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+        <h3>29 focused tools</h3><p>Instances, properties, scripts, raw Luau, UI, terrain, lighting, effects, tweens, camera, animation, audio, physics, marketplace assets, spatial queries, bulk edits, playtests, screenshots.</p></div>
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="20 6 20 10 16 10"/><polyline points="4 18 4 14 8 14"/><path d="M19 10a7 7 0 0 0-12.5-3M5 14a7 7 0 0 0 12.5 3"/></svg></div>
+        <h3>Two-way sync</h3><p>Mirror the live DataModel to local files and back. Edit scripts in your own editor; changes flow both ways. Multiple Places sync at once, each on its own engine.</p></div>
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3 3 0 0 1 0 5.6"/><path d="M20.5 20a5.5 5.5 0 0 0-4.5-5.4"/></svg></div>
+        <h3>Multi-agent</h3><p>Claude Code, Codex and Antigravity can all drive the <b>same</b> Studio session concurrently through one shared broker.</p></div>
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <h3>It sees what it builds</h3><p><code>capture_studio</code> screenshots the real viewport, so the agent closes the loop instead of building blind.</p></div>
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l2.5 7 4-14 2.5 7H21"/></svg></div>
+        <h3>Live dashboard</h3><p>Watch connected agents, plugin status, the command queue and sync state in real time at <code>127.0.0.1:3690</code>.</p></div>
+      <div class="feat">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 2 4.5 13H11l-1 9 8.5-11H12l1-9Z"/></svg></div>
+        <h3>Zero maintenance</h3><p><code>npx … @latest</code> auto-updates the server; the Studio plugin and agent skills self-install on startup.</p></div>
     </div>
   </div>
 </section>
 
 <section id="install">
   <div class="wrap">
-    <p class="eyebrow">Quick start</p>
     <h2>Up and running in two steps</h2>
     <p class="sub">You never start the server by hand; your AI agent launches it with the command you register.</p>
 
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-tab="claude">Claude Code</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="codex">Codex</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="gemini">Antigravity / Gemini</button>
-      <button class="tab" role="tab" aria-selected="false" data-tab="json">Other clients (JSON)</button>
+    <div class="tabs" role="tablist" aria-label="Install command per client">
+      <button class="tab" role="tab" id="tab-claude" aria-controls="p-claude" aria-selected="true" data-tab="claude">Claude Code</button>
+      <button class="tab" role="tab" id="tab-codex" aria-controls="p-codex" aria-selected="false" data-tab="codex">Codex</button>
+      <button class="tab" role="tab" id="tab-gemini" aria-controls="p-gemini" aria-selected="false" data-tab="gemini">Antigravity / Gemini</button>
+      <button class="tab" role="tab" id="tab-json" aria-controls="p-json" aria-selected="false" data-tab="json">Other clients (JSON)</button>
     </div>
 
-    <div class="panel" data-tab="claude" data-active="true">
+    <div class="panel" id="p-claude" role="tabpanel" aria-labelledby="tab-claude" data-tab="claude" data-active="true">
       <div class="code"><button class="copy" data-copy="claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest">Copy</button>
       <pre>claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre></div>
     </div>
-    <div class="panel" data-tab="codex">
+    <div class="panel" id="p-codex" role="tabpanel" aria-labelledby="tab-codex" data-tab="codex" hidden>
       <div class="code"><button class="copy" data-copy="codex mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest">Copy</button>
       <pre>codex mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre></div>
     </div>
-    <div class="panel" data-tab="gemini">
+    <div class="panel" id="p-gemini" role="tabpanel" aria-labelledby="tab-gemini" data-tab="gemini" hidden>
       <div class="code"><button class="copy" data-copy="gemini mcp add roblox-mcp-pro npx -y roblox-mcp-pro@latest">Copy</button>
       <pre>gemini mcp add roblox-mcp-pro npx -y roblox-mcp-pro@latest</pre></div>
     </div>
-    <div class="panel" data-tab="json">
+    <div class="panel" id="p-json" role="tabpanel" aria-labelledby="tab-json" data-tab="json" hidden>
       <p class="sub" style="margin:0 0 10px">Paste into the client's MCP config (Claude Desktop, Cursor, Windsurf, Cline). Add the entry inside the existing <code>mcpServers</code> object, not the whole file.</p>
       <div class="code"><button class="copy" data-copy='{ "mcpServers": { "roblox-mcp-pro": { "command": "npx", "args": ["-y", "roblox-mcp-pro@latest"] } } }'>Copy</button>
       <pre>{
@@ -246,39 +281,40 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
 }</pre></div>
     </div>
 
-    <div class="steps" style="margin-top:26px">
-      <div class="step"><div class="n"></div><div><h3>Register the server</h3><p>Use the command above for your client. <code>npx</code> downloads &amp; runs the package on demand (no clone, no build). <code>@latest</code> keeps it auto-updated.</p></div></div>
-      <div class="step"><div class="n"></div><div><h3>Install the Studio plugin</h3><p>Auto-installs on first run, or do it now: <code>npx roblox-mcp-pro@latest install-plugin</code>. Windows → <code>%LOCALAPPDATA%\Roblox\Plugins</code>, macOS → <code>~/Documents/Roblox/Plugins</code>.</p></div></div>
-      <div class="step"><div class="n"></div><div><h3>Connect &amp; verify</h3><p>In Studio click the <b>Roblox MCP Pro</b> toolbar button (so it's highlighted), then ask your agent to call <code>system_info</code>. You should see <code>pluginConnected: true</code> 🎉</p></div></div>
+    <div class="steps" style="margin-top:28px">
+      <div class="step"><div class="n">1</div><div><h3>Register the server</h3><p>Use the command above for your client. <code>npx</code> downloads &amp; runs the package on demand (no clone, no build). <code>@latest</code> keeps it auto-updated.</p></div></div>
+      <div class="step"><div class="n">2</div><div><h3>Install the Studio plugin</h3><p>Auto-installs on first run, or do it now: <code>npx roblox-mcp-pro@latest install-plugin</code>. Windows → <code>%LOCALAPPDATA%\Roblox\Plugins</code>, macOS → <code>~/Documents/Roblox/Plugins</code>.</p></div></div>
+      <div class="step"><div class="n">3</div><div><h3>Connect &amp; verify</h3><p>In Studio click the <b>Roblox MCP Pro</b> toolbar button (so it's highlighted), then ask your agent to call <code>system_info</code>. You should see <code>pluginConnected: true</code>.</p></div></div>
     </div>
 
-    <h3 style="margin:36px 0 12px;font-size:16px">Optional environment variables</h3>
+    <h3 style="margin:38px 0 12px;font-size:15px;font-weight:650">Optional environment variables</h3>
+    <div class="tablewrap">
     <table>
       <tr><th>Variable</th><th>Default</th><th>Meaning</th></tr>
       <tr><td><code>ROBLOX_MCP_PORT</code></td><td>3690</td><td>Bridge port (the plugin must match).</td></tr>
-      <tr><td><code>ROBLOX_MCP_TOKEN</code></td><td>(none)</td><td>Shared secret; also set it in the plugin.</td></tr>
-      <tr><td><code>ROBLOX_MCP_NO_PLUGIN_AUTOINSTALL</code></td><td>(none)</td><td><code>1</code> disables auto-installing the plugin.</td></tr>
-      <tr><td><code>ROBLOX_MCP_NO_SKILL_AUTOINSTALL</code></td><td>(none)</td><td><code>1</code> disables auto-installing agent skills.</td></tr>
-      <tr><td><code>ROBLOX_MCP_NO_OPEN_DASHBOARD</code></td><td>(none)</td><td><code>1</code> stops the dashboard opening on startup.</td></tr>
+      <tr><td><code>ROBLOX_MCP_TOKEN</code></td><td>none</td><td>Shared secret; also set it in the plugin.</td></tr>
+      <tr><td><code>ROBLOX_MCP_NO_PLUGIN_AUTOINSTALL</code></td><td>off</td><td><code>1</code> disables auto-installing the plugin.</td></tr>
+      <tr><td><code>ROBLOX_MCP_NO_SKILL_AUTOINSTALL</code></td><td>off</td><td><code>1</code> disables auto-installing agent skills.</td></tr>
+      <tr><td><code>ROBLOX_MCP_NO_OPEN_DASHBOARD</code></td><td>off</td><td><code>1</code> stops the dashboard opening on startup.</td></tr>
     </table>
+    </div>
   </div>
 </section>
 
 <section id="tools">
   <div class="wrap">
-    <p class="eyebrow">Toolbox</p>
     <h2>29 tools</h2>
     <p class="sub">Each does one job well; the agent composes them.</p>
 
     <div class="toolcat">
-      <h3>Core</h3>
+      <h3>Core</h3><p class="cn">Read and change the DataModel.</p>
       <div class="tools">
         <div class="tool"><b>system_info</b><span>Connection + Studio session status.</span></div>
         <div class="tool"><b>execute_luau</b><span>Run Luau in Studio; capture output &amp; return values.</span></div>
         <div class="tool"><b>query_instances</b><span>Search the DataModel; serialize matches.</span></div>
         <div class="tool"><b>find_instances</b><span>Targeted multi-filter search; grouped results.</span></div>
         <div class="tool"><b>scene_overview</b><span>One-call map: class histogram + shallow tree.</span></div>
-        <div class="tool"><b>describe_instance</b><span>One instance's props + children + ancestry / class reflection.</span></div>
+        <div class="tool"><b>describe_instance</b><span>Props + children + ancestry, or class reflection.</span></div>
         <div class="tool"><b>mutate_instances</b><span>Create / edit / move / clone / delete instances.</span></div>
         <div class="tool"><b>manage_properties</b><span>Properties, attributes &amp; CollectionService tags.</span></div>
         <div class="tool"><b>batch_execute</b><span>Many operations in one round-trip + one undo.</span></div>
@@ -286,7 +322,7 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
     </div>
 
     <div class="toolcat">
-      <h3>World &amp; visuals</h3>
+      <h3>World &amp; visuals</h3><p class="cn">Shape the scene and how it looks.</p>
       <div class="tools">
         <div class="tool"><b>manage_terrain</b><span>Voxel fills, ramps, material swap, smooth, hills.</span></div>
         <div class="tool"><b>manage_lighting</b><span>Time of day, fog, ambient, exposure, shadows.</span></div>
@@ -299,7 +335,7 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
     </div>
 
     <div class="toolcat">
-      <h3>Content</h3>
+      <h3>Content</h3><p class="cn">Author UI, audio, scripts and assets.</p>
       <div class="tools">
         <div class="tool"><b>manage_ui</b><span>Build/edit GUI hierarchies (UDim2/Color coercion).</span></div>
         <div class="tool"><b>ui_preview</b><span>Show a GUI on a clean backdrop for comparison.</span></div>
@@ -311,7 +347,7 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
     </div>
 
     <div class="toolcat">
-      <h3>Sync, sessions &amp; Studio</h3>
+      <h3>Sync, sessions &amp; Studio</h3><p class="cn">Move data to disk, route agents, run playtests.</p>
       <div class="tools">
         <div class="tool"><b>manage_sync</b><span>Two-way Studio ↔ local mirror; multiple Places at once.</span></div>
         <div class="tool"><b>manage_agents</b><span>List connected agents/Places; bind to a Place.</span></div>
@@ -327,18 +363,17 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
 
 <section id="how">
   <div class="wrap">
-    <p class="eyebrow">Under the hood</p>
     <h2>How it works</h2>
-    <p class="sub">Three processes, two hops, plus multiple agents on one Studio session.</p>
+    <p class="sub">Three processes, two hops, and several agents on one Studio session.</p>
     <div class="diagram">
 <pre>AI Agent A ─MCP stdio─▶ MCP client ─┐
 AI Agent B ─MCP stdio─▶ MCP client ─┼─HTTP 127.0.0.1:3690─▶ Broker ◀─long-poll─ Studio Plugin (Luau)
 AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + dashboard    dispatch handlers</pre>
     </div>
     <div class="steps" style="margin-top:22px">
-      <div class="step"><div class="n"></div><div><h3>MCP client</h3><p>Exposes the tools over stdio. Each AI agent spawns its own.</p></div></div>
-      <div class="step"><div class="n"></div><div><h3>Broker</h3><p>One shared localhost process owns port 3690, queues commands, talks to the plugin. The first client auto-spawns it; the rest just connect, so several agents drive one Studio session at once.</p></div></div>
-      <div class="step"><div class="n"></div><div><h3>Studio plugin</h3><p>Long-polls the broker, runs each command in Studio, and posts the result back.</p></div></div>
+      <div class="step"><div class="n">1</div><div><h3>MCP client</h3><p>Exposes the tools over stdio. Each AI agent spawns its own.</p></div></div>
+      <div class="step"><div class="n">2</div><div><h3>Broker</h3><p>One shared localhost process owns port 3690, queues commands, talks to the plugin. The first client auto-spawns it; the rest just connect, so several agents drive one Studio session at once.</p></div></div>
+      <div class="step"><div class="n">3</div><div><h3>Studio plugin</h3><p>Long-polls the broker, runs each command in Studio, and posts the result back.</p></div></div>
     </div>
   </div>
 </section>
@@ -347,7 +382,7 @@ AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + da
   <div class="wrap">
     <div>
       <b>roblox-mcp-pro</b> · <span class="pill">MIT</span><br>
-      <span style="color:var(--muted)">Free &amp; open source. Use it, fork it, ship it.</span>
+      <span>Free &amp; open source. Use it, fork it, ship it.</span>
     </div>
     <div class="links">
       <a href="https://github.com/PeerapolSelanon/roblox-mcp-pro">GitHub</a>
@@ -360,15 +395,25 @@ AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + da
 </footer>
 
 <script>
-  // tabs
-  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
-    const id=t.dataset.tab;
-    document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected', x===t));
-    document.querySelectorAll('.panel').forEach(p=>p.dataset.active = (p.dataset.tab===id));
-  }));
-  // copy buttons
+  const tabs=[...document.querySelectorAll('.tab')];
+  function select(t){
+    tabs.forEach(x=>x.setAttribute('aria-selected', x===t));
+    document.querySelectorAll('.panel').forEach(p=>{
+      const on=p.dataset.tab===t.dataset.tab;
+      p.dataset.active=on; p.hidden=!on;
+    });
+  }
+  tabs.forEach((t,i)=>{
+    t.addEventListener('click',()=>select(t));
+    t.addEventListener('keydown',e=>{
+      if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;
+      e.preventDefault();
+      const n=(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length;
+      tabs[n].focus(); select(tabs[n]);
+    });
+  });
   document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',async()=>{
-    try{ await navigator.clipboard.writeText(b.dataset.copy); const o=b.textContent; b.textContent='Copied ✓';
+    try{await navigator.clipboard.writeText(b.dataset.copy);const o=b.textContent;b.textContent='Copied';
       setTimeout(()=>b.textContent=o,1400);}catch(e){}
   }));
 </script>
