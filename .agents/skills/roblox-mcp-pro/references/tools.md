@@ -17,12 +17,13 @@ Parameters: none.
 ## `capture_studio` — Capture Roblox Studio Window (read-only)
 
 Screenshot the live Studio window (OS-level, Windows only; needs Studio open). With the plugin connected it captures your bound Place's window, so it's safe when multiple Places are open. Use to visually inspect the real render — lighting, materials, meshes, layout — after building. Briefly foregrounds the Studio window.
-Args: fullscreen (default false = just the Studio window, true = whole primary screen).
-Returns: a PNG image block + { ok, width, height, windowTitle }. Errors if Studio isn't open.
+Args: fullscreen (default false = just the Studio window, true = whole primary screen); savePath (optional: also write the PNG to disk for manage_ui compare).
+Returns: a PNG image block + { ok, width, height, windowTitle, savedPath? }. Errors if Studio isn't open.
 
 Parameters:
 
 - `fullscreen` (boolean, optional, default false) — Capture the whole primary screen instead of just the Studio window (default false).
+- `savePath` (string, optional) — Also write the PNG to this filesystem path (so manage_ui action:'compare' can read it). Returns savedPath when set.
 
 ## `execute_luau` — Execute Luau in Studio (mutating)
 
@@ -274,12 +275,17 @@ Parameters:
 Build and edit Roblox GUI hierarchies (ScreenGui, Frame, TextLabel, buttons, …).
 
 Args:
-  - action ('create'|'set'|'delete').
+  - action ('create'|'set'|'delete'|'sample_color'|'compare').
   - parent (string): for 'create' (default 'StarterGui').
   - tree (object): for 'create' — { className, name?, properties?, children? } (recursive).
   - path (string): for 'set'/'delete'.
   - properties (object): for 'set'.
+  - sample_color: imagePath + (x,y | xPct,yPct), optional w/h box or points[]; reads a PNG eyedropper.
+  - compare: mockupPath + capturePath (PNGs on disk) -> similarity % + worst regions to fix.
   Property hints: Size/Position as UDim2 [[xS,xO],[yS,yO]]; BackgroundColor3/TextColor3 as [r,g,b] 0-1.
+
+Image-to-UI loop: manage_ui create -> ui_preview show -> capture_studio savePath:"cap.png" ->
+manage_ui compare mockupPath:"mock.png" capturePath:"cap.png" -> manage_ui set on the off regions -> repeat.
 
 Returns (structured):
   { "ok": boolean, "rootPath"?: string, "path"?: string, "error"?: string }
@@ -298,7 +304,7 @@ Error Handling:
 
 Parameters:
 
-- `action` ('create' | 'set' | 'delete' | 'sample_color', required) — create: build a tree · set: apply properties to a path · delete: destroy a path · sample_color: read the exact pixel color from a reference PNG on disk (eyedropper).
+- `action` ('create' | 'set' | 'delete' | 'sample_color' | 'compare', required) — create: build a tree · set: apply properties to a path · delete: destroy a path · sample_color: read the exact pixel color from a reference PNG on disk (eyedropper) · compare: score a built-UI capture against a reference mockup (similarity + worst regions).
 - `parent` (string, optional) — Parent for 'create' (default 'StarterGui').
 - `tree` (lazy, optional) — UI tree spec for 'create'.
 - `replace` (boolean, optional, default false) — For 'create': if a child with the same name exists under parent, delete it first (clean rebuild while iterating).
@@ -312,6 +318,11 @@ Parameters:
 - `w` (number, optional) — For 'sample_color': average over a w×h box (default 1). Use ~5-15 to avoid single-pixel noise from stars/edges.
 - `h` (number, optional) — For 'sample_color': box height (default = w, else 1).
 - `points` (object[], optional) — For 'sample_color': sample many points/boxes in one call (decodes the image once). Each: {x,y|xPct,yPct, w?, h?, label?}.
+- `mockupPath` (string, optional) — For 'compare': filesystem path to the reference mockup PNG (the target).
+- `capturePath` (string, optional) — For 'compare': filesystem path to the built-UI capture PNG (save one with capture_studio savePath:...).
+- `cols` (number, optional) — For 'compare': region grid columns (default 8).
+- `rows` (number, optional) — For 'compare': region grid rows (default 6).
+- `top` (number, optional) — For 'compare': how many worst regions to return (default 6).
 
 ## `ui_preview` — Preview GUI (clean capture) (mutating)
 

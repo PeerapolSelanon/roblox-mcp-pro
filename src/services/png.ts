@@ -232,3 +232,138 @@ export function samplePngPoints(path: string, coords: Coord[]): SampledColor[] {
   const img = decodePng(path);
   return coords.map((c) => sampleDecoded(img, c));
 }
+
+/** Average an image down to a gw×gh grid of mean RGB (0-255), in one pass. */
+export function downscaleAvg(img: DecodedPng, gw: number, gh: number): Float64Array {
+  const { width, height, rgba } = img;
+  const acc = new Float64Array(gw * gh * 3);
+  const cnt = new Float64Array(gw * gh);
+  for (let y = 0; y < height; y++) {
+    const gy = Math.min(gh - 1, Math.floor((y * gh) / height));
+    for (let x = 0; x < width; x++) {
+      const gx = Math.min(gw - 1, Math.floor((x * gw) / width));
+      const k = (gy * gw + gx) * 3;
+      const d = (y * width + x) * 4;
+      acc[k] = (acc[k] ?? 0) + (rgba[d] ?? 0);
+      acc[k + 1] = (acc[k + 1] ?? 0) + (rgba[d + 1] ?? 0);
+      acc[k + 2] = (acc[k + 2] ?? 0) + (rgba[d + 2] ?? 0);
+      cnt[gy * gw + gx] = (cnt[gy * gw + gx] ?? 0) + 1;
+    }
+  }
+  for (let c = 0; c < gw * gh; c++) {
+    const n = cnt[c] || 1;
+    acc[c * 3] = (acc[c * 3] ?? 0) / n;
+    acc[c * 3 + 1] = (acc[c * 3 + 1] ?? 0) / n;
+    acc[c * 3 + 2] = (acc[c * 3 + 2] ?? 0) / n;
+  }
+  return acc;
+}
+
+export interface CompareRegion {
+  col: number;
+  row: number;
+  /** Cell-center position as fractions 0-1 (feed back as xPct/yPct). */
+  xPct: number;
+  yPct: number;
+  /** 0-100, higher = more different. */
+  diff: number;
+  /** How the capture differs from the mockup in this cell. */
+  note: string;
+}
+
+export interface CompareResult {
+  /** 0-100, 100 = identical. */
+  similarity: number;
+  meanDiff: number;
+  grid: { cols: number; rows: number };
+  mockup: { width: number; height: number };
+  capture: { width: number; height: number };
+  /** Worst-matching regions first. */
+  regions: CompareRegion[];
+}
+
+const MAX_DIST = Math.sqrt(3) * 255;
+
+/** Describe how the capture cell differs from the mockup cell (signed = capture - mockup). */
+function regionNote(dr: number, dg: number, db: number): string {
+  const parts: string[] = [];
+  const bright = (dr + dg + db) / 3;
+  if (Math.abs(bright) > 8) parts.push(bright < 0 ? "darker" : "brighter");
+  const chans: Array<[number, string]> = [
+    [dr, "red"],
+    [dg, "green"],
+    [db, "blue"],
+  ];
+  chans.sort((a, b) => Math.abs(b[0]) - Math.abs(a[0]));
+  const [dv, name] = chans[0] ?? [0, "red"];
+  if (Math.abs(dv) > 14) parts.push(`${dv < 0 ? "less" : "more"} ${name}`);
+  return parts.join(", ") || "slightly off";
+}
+
+/**
+ * Compare a built-UI capture against a reference mockup. Both are averaged to a
+ * common grid (so different sizes/aspect still line up coarsely), then scored —
+ * an overall similarity plus the worst-matching regions and a hint at what's
+ * wrong. Turns the build→capture→compare→refine loop from eyeballing into a
+ * measured one. ponytail: RGB box-average + Euclidean distance, no SSIM/dep;
+ * good enough to point the agent at the off regions. Reuses decodePng (8-bit
+ * non-interlaced PNG only — same limits as the eyedropper).
+ */
+export function compareImages(
+  mockupPath: string,
+  capturePath: string,
+  opts: { cols?: number; rows?: number; top?: number } = {},
+): CompareResult {
+  const m = decodePng(mockupPath);
+  const c = decodePng(capturePath);
+  const cols = Math.max(2, Math.min(24, opts.cols ?? 8));
+  const rows = Math.max(2, Math.min(24, opts.rows ?? 6));
+  const top = Math.max(1, Math.min(cols * rows, opts.top ?? 6));
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  const at = (a: Float64Array, i: number) => a[i] ?? 0;
+
+  // Fine grid → headline score; coarse grid → actionable regions. Cap the fine
+  // grid to the smaller image's dimensions so we never create empty cells (which
+  // would read as a false match) when comparing tiny images.
+  const fw = Math.max(2, Math.min(48, m.width, c.width));
+  const fh = Math.max(2, Math.min(48, m.height, c.height));
+  const mf = downscaleAvg(m, fw, fh);
+  const cf = downscaleAvg(c, fw, fh);
+  let sum = 0;
+  for (let i = 0; i < fw * fh; i++) {
+    const dr = at(cf, i * 3) - at(mf, i * 3);
+    const dg = at(cf, i * 3 + 1) - at(mf, i * 3 + 1);
+    const db = at(cf, i * 3 + 2) - at(mf, i * 3 + 2);
+    sum += Math.sqrt(dr * dr + dg * dg + db * db);
+  }
+  const meanDiff = (sum / (fw * fh) / MAX_DIST) * 100;
+
+  const mc = downscaleAvg(m, cols, rows);
+  const cc = downscaleAvg(c, cols, rows);
+  const regions: CompareRegion[] = [];
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      const i = gy * cols + gx;
+      const dr = at(cc, i * 3) - at(mc, i * 3);
+      const dg = at(cc, i * 3 + 1) - at(mc, i * 3 + 1);
+      const db = at(cc, i * 3 + 2) - at(mc, i * 3 + 2);
+      regions.push({
+        col: gx,
+        row: gy,
+        xPct: Math.round(((gx + 0.5) / cols) * 1000) / 1000,
+        yPct: Math.round(((gy + 0.5) / rows) * 1000) / 1000,
+        diff: round1((Math.sqrt(dr * dr + dg * dg + db * db) / MAX_DIST) * 100),
+        note: regionNote(dr, dg, db),
+      });
+    }
+  }
+  regions.sort((a, b) => b.diff - a.diff);
+  return {
+    similarity: round1(Math.max(0, 100 - meanDiff)),
+    meanDiff: round1(meanDiff),
+    grid: { cols, rows },
+    mockup: { width: m.width, height: m.height },
+    capture: { width: c.width, height: c.height },
+    regions: regions.slice(0, top),
+  };
+}

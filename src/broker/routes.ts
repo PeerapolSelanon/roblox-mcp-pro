@@ -692,6 +692,7 @@ export function createBrokerRoutes(bridge: Bridge): BrokerRoutes {
             result = await captureStudioWindow({
               fullscreen: Boolean((args as { fullscreen?: boolean } | undefined)?.fullscreen),
               placeName,
+              savePath: (args as { savePath?: string } | undefined)?.savePath,
             });
           } else {
             const target = resolveTargetSession({

@@ -5,7 +5,7 @@ import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { samplePngColor, samplePngPoints } from "../dist/services/png.js";
+import { samplePngColor, samplePngPoints, compareImages } from "../dist/services/png.js";
 
 // CRC32 for PNG chunks.
 const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -83,5 +83,48 @@ const batch = samplePngPoints(file, [
 assert.equal(batch.length, 2, "batch length");
 assert.equal(batch[0].label, "red", "batch label preserved");
 assert.deepEqual(batch[1].rgb255, [0, 255, 0], "batch px(1,0) green");
+
+// --- compare (auto-compare for image-to-UI) ---
+// Encode a solid/whatever RGB (color type 2) image from a (x,y)->[r,g,b] fn.
+function encodeRGB(w, h, fn) {
+  const stride = w * 3;
+  const rawc = Buffer.alloc(h * (stride + 1));
+  for (let y = 0; y < h; y++) {
+    rawc[y * (stride + 1)] = 0; // filter None
+    for (let x = 0; x < w; x++) {
+      const [r, g, b] = fn(x, y);
+      const o = y * (stride + 1) + 1 + x * 3;
+      rawc[o] = r;
+      rawc[o + 1] = g;
+      rawc[o + 2] = b;
+    }
+  }
+  const h2 = Buffer.alloc(13);
+  h2.writeUInt32BE(w, 0);
+  h2.writeUInt32BE(h, 4);
+  h2[8] = 8;
+  h2[9] = 2; // RGB
+  const out = Buffer.concat([
+    sig,
+    chunk("IHDR", h2),
+    chunk("IDAT", deflateSync(rawc)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+  const f = join(mkdtempSync(join(tmpdir(), "png-cmp-")), "i.png");
+  writeFileSync(f, out);
+  return f;
+}
+
+const black = encodeRGB(20, 20, () => [0, 0, 0]);
+const same = compareImages(black, black, { cols: 4, rows: 4 });
+assert.ok(same.similarity > 99.5, "identical images ~100% similar");
+assert.equal(same.regions[0].diff, 0, "identical → zero diff regions");
+
+// mockup all black, capture white on the right half → right region is worst, brighter.
+const halfWhite = encodeRGB(20, 20, (x) => (x >= 10 ? [255, 255, 255] : [0, 0, 0]));
+const cmp = compareImages(black, halfWhite, { cols: 4, rows: 2 });
+assert.ok(cmp.similarity < 80, "half-different → lower similarity");
+assert.ok(cmp.regions[0].xPct > 0.5, "worst region on the changed (right) half");
+assert.ok(/brighter/.test(cmp.regions[0].note), "note reports the capture is brighter");
 
 console.log("png-smoke OK");

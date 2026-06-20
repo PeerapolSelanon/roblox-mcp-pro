@@ -19,6 +19,13 @@ const InputSchema = z
       .describe(
         "Capture the whole primary screen instead of just the Studio window (default false).",
       ),
+    savePath: z
+      .string()
+      .optional()
+      .describe(
+        "Also write the PNG to this filesystem path (so manage_ui action:'compare' can read it). " +
+          "Returns savedPath when set.",
+      ),
   })
   .strict();
 
@@ -32,8 +39,9 @@ export function registerCaptureTools(server: McpServer): void {
         "With the plugin connected it captures your bound Place's window, so it's safe when " +
         "multiple Places are open. Use to visually inspect the real render — lighting, materials, " +
         "meshes, layout — after building. Briefly foregrounds the Studio window.\n" +
-        "Args: fullscreen (default false = just the Studio window, true = whole primary screen).\n" +
-        "Returns: a PNG image block + { ok, width, height, windowTitle }. Errors if Studio isn't open.",
+        "Args: fullscreen (default false = just the Studio window, true = whole primary screen); " +
+        "savePath (optional: also write the PNG to disk for manage_ui compare).\n" +
+        "Returns: a PNG image block + { ok, width, height, windowTitle, savedPath? }. Errors if Studio isn't open.",
       inputSchema: InputSchema.shape,
       annotations: {
         readOnlyHint: true,
@@ -42,18 +50,21 @@ export function registerCaptureTools(server: McpServer): void {
         openWorldHint: true,
       },
     },
-    async (args: { fullscreen?: boolean }) => {
+    async (args: { fullscreen?: boolean; savePath?: string }) => {
       try {
         // Runs in the broker (the Studio host), which resolves the bound Place so
         // multi-place sessions capture the right window.
         const shot = await callStudio<CaptureResult>("capture_studio", {
           fullscreen: args.fullscreen,
+          savePath: args.savePath,
         });
         return {
           content: [
             {
               type: "text" as const,
-              text: `Captured Studio window "${shot.windowTitle}" (${shot.width}×${shot.height}px).`,
+              text:
+                `Captured Studio window "${shot.windowTitle}" (${shot.width}×${shot.height}px).` +
+                (shot.savedPath ? ` Saved to ${shot.savedPath}.` : ""),
             },
             {
               type: "image" as const,
@@ -66,6 +77,7 @@ export function registerCaptureTools(server: McpServer): void {
             width: shot.width,
             height: shot.height,
             windowTitle: shot.windowTitle,
+            ...(shot.savedPath ? { savedPath: shot.savedPath } : {}),
           },
         };
       } catch (err) {

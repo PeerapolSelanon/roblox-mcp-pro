@@ -18,6 +18,8 @@ export interface CaptureResult {
   width: number;
   height: number;
   windowTitle: string;
+  /** Where the PNG was persisted, when a savePath was requested. */
+  savedPath?: string;
 }
 
 /** PowerShell that captures the Studio window (or the primary screen) to a PNG. */
@@ -111,7 +113,7 @@ $g.Dispose(); $bmp.Dispose()
  * @throws Error with an actionable message if Studio isn't found or capture fails.
  */
 export function captureStudioWindow(
-  opts: { fullscreen?: boolean; placeName?: string } = {},
+  opts: { fullscreen?: boolean; placeName?: string; savePath?: string } = {},
 ): Promise<CaptureResult> {
   const dir = mkdtempSync(join(tmpdir(), "rmp-cap-"));
   const scriptPath = join(dir, "capture.ps1");
@@ -159,11 +161,13 @@ export function captureStudioWindow(
           title?: string;
         };
         const buf = readFileSync(pngPath);
+        if (opts.savePath) writeFileSync(opts.savePath, buf);
         resolve({
           base64: buf.toString("base64"),
           width: meta.width ?? 0,
           height: meta.height ?? 0,
           windowTitle: meta.title ?? "",
+          ...(opts.savePath ? { savedPath: opts.savePath } : {}),
         });
       } catch (err) {
         reject(

@@ -24,10 +24,21 @@ comes from a **visual feedback loop** — build, look at the real render, compar
 3. **Build** with `manage_ui` (`action: "create"`, `replace: true` so re-runs don't stack copies).
 4. **Preview clean**: `ui_preview` (`action: "show"`, `path:` your ScreenGui) renders it full-screen
    on a solid backdrop in edit mode (hides the 3D scene behind it).
-5. **Capture**: `capture_studio` — now you see your UI isolated, centered in the viewport.
-6. **Compare** the capture to the mockup. Note differences (position, size, color, font, spacing).
-7. **Refine** with `manage_ui` (`action: "set"`) on the specific paths, then repeat 5–6 until close.
+5. **Capture to disk**: `capture_studio` with `savePath: "<tmp>/cap.png"` — you see your UI isolated
+   AND get a PNG on disk for the next step.
+6. **Compare (measured, not eyeballed)**: when the mockup is a PNG **file on disk**, call
+   `manage_ui action:"compare", mockupPath:"<mockup.png>", capturePath:"<tmp>/cap.png"`. It returns a
+   **similarity %** plus the **worst-matching regions** as `xPct,yPct` with a hint (e.g. "brighter,
+   more red") — go fix those regions first. (Also look at the capture yourself for layout/font issues
+   the color score can't see.)
+7. **Refine** with `manage_ui` (`action: "set"`) on the paths covering the worst regions, then repeat
+   5–6. Watch similarity climb; stop when it plateaus or looks right.
 8. **Done**: `ui_preview` (`action: "hide"`) to remove the preview overlay.
+
+> **compare** averages both images onto a grid and scores color distance — great for catching wrong
+> colors, missing/extra elements, and gross position errors, and for telling you *where* to look. It
+> can't judge font choice or sub-pixel alignment, so keep your own eye on the capture too. Only the
+> mockup needs to be on disk for sample_color; **compare needs both** the mockup and a saved capture.
 
 Always `system_info` first to confirm the plugin is connected. Studio renders `StarterGui` content
 in the edit viewport, so a capture without `ui_preview` also works — but `ui_preview` gives a clean

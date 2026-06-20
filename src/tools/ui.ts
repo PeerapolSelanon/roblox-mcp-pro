@@ -7,7 +7,7 @@ import { z } from "zod";
 import { callStudio, describeError } from "../services/studio.js";
 import { ok, fail } from "../services/format.js";
 import { InstancePath } from "../schemas/common.js";
-import { samplePngColor, samplePngPoints, type Coord } from "../services/png.js";
+import { samplePngColor, samplePngPoints, compareImages, type Coord } from "../services/png.js";
 
 interface UINodeShape {
   className: string;
@@ -35,10 +35,11 @@ const UINode: z.ZodType<UINodeShape> = z.lazy(() =>
 const InputSchema = z
   .object({
     action: z
-      .enum(["create", "set", "delete", "sample_color"])
+      .enum(["create", "set", "delete", "sample_color", "compare"])
       .describe(
         "create: build a tree · set: apply properties to a path · delete: destroy a path · " +
-          "sample_color: read the exact pixel color from a reference PNG on disk (eyedropper).",
+          "sample_color: read the exact pixel color from a reference PNG on disk (eyedropper) · " +
+          "compare: score a built-UI capture against a reference mockup (similarity + worst regions).",
       ),
     parent: InstancePath.optional().describe("Parent for 'create' (default 'StarterGui')."),
     tree: UINode.optional().describe("UI tree spec for 'create'."),
@@ -77,6 +78,17 @@ const InputSchema = z
       )
       .optional()
       .describe("For 'sample_color': sample many points/boxes in one call (decodes the image once). Each: {x,y|xPct,yPct, w?, h?, label?}."),
+    mockupPath: z
+      .string()
+      .optional()
+      .describe("For 'compare': filesystem path to the reference mockup PNG (the target)."),
+    capturePath: z
+      .string()
+      .optional()
+      .describe("For 'compare': filesystem path to the built-UI capture PNG (save one with capture_studio savePath:...)."),
+    cols: z.number().int().min(2).max(24).optional().describe("For 'compare': region grid columns (default 8)."),
+    rows: z.number().int().min(2).max(24).optional().describe("For 'compare': region grid rows (default 6)."),
+    top: z.number().int().min(1).max(50).optional().describe("For 'compare': how many worst regions to return (default 6)."),
   })
   .strict();
 
@@ -105,12 +117,17 @@ export function registerUITools(server: McpServer): void {
       description: `Build and edit Roblox GUI hierarchies (ScreenGui, Frame, TextLabel, buttons, …).
 
 Args:
-  - action ('create'|'set'|'delete').
+  - action ('create'|'set'|'delete'|'sample_color'|'compare').
   - parent (string): for 'create' (default 'StarterGui').
   - tree (object): for 'create' — { className, name?, properties?, children? } (recursive).
   - path (string): for 'set'/'delete'.
   - properties (object): for 'set'.
+  - sample_color: imagePath + (x,y | xPct,yPct), optional w/h box or points[]; reads a PNG eyedropper.
+  - compare: mockupPath + capturePath (PNGs on disk) -> similarity % + worst regions to fix.
   Property hints: Size/Position as UDim2 [[xS,xO],[yS,yO]]; BackgroundColor3/TextColor3 as [r,g,b] 0-1.
+
+Image-to-UI loop: manage_ui create -> ui_preview show -> capture_studio savePath:"cap.png" ->
+manage_ui compare mockupPath:"mock.png" capturePath:"cap.png" -> manage_ui set on the off regions -> repeat.
 
 Returns (structured):
   { "ok": boolean, "rootPath"?: string, "path"?: string, "error"?: string }
@@ -160,6 +177,34 @@ Error Handling:
               h: input.h ?? input.w,
             });
             return ok({ ok: true, ...c }, fmt(c));
+          } catch (e) {
+            return fail(e instanceof Error ? e.message : String(e));
+          }
+        }
+        // compare runs server-side (reads two local PNGs); it never touches Studio.
+        if (input.action === "compare") {
+          if (!input.mockupPath || !input.capturePath) {
+            return fail(
+              "compare requires 'mockupPath' and 'capturePath' (PNGs on disk). " +
+                "Save a capture with capture_studio savePath:..., then compare it to the mockup.",
+            );
+          }
+          try {
+            const r = compareImages(input.mockupPath, input.capturePath, {
+              cols: input.cols,
+              rows: input.rows,
+              top: input.top,
+            });
+            const text = [
+              `Similarity ${r.similarity}% (mean diff ${r.meanDiff}%).`,
+              `mockup ${r.mockup.width}x${r.mockup.height} vs capture ${r.capture.width}x${r.capture.height}, grid ${r.grid.cols}x${r.grid.rows}.`,
+              "Worst regions (how the capture differs from the mockup):",
+              ...r.regions.map(
+                (g) =>
+                  `  (${g.col},${g.row}) @ ${Math.round(g.xPct * 100)}%,${Math.round(g.yPct * 100)}% — ${g.diff}% off, ${g.note}`,
+              ),
+            ].join("\n");
+            return ok({ ok: true, ...r }, text);
           } catch (e) {
             return fail(e instanceof Error ? e.message : String(e));
           }
