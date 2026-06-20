@@ -38,12 +38,13 @@
     font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial,sans-serif;
     line-height:1.65;-webkit-font-smoothing:antialiased;
   }
-  a{color:var(--accent);text-decoration:none}
+  a{color:var(--accent);text-decoration:none;transition:color .15s ease}
   a:hover{text-decoration:underline}
   code,pre,kbd{font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
   section{padding:clamp(56px,8vw,88px) 0;border-top:1px solid var(--line)}
+  section[id]{scroll-margin-top:72px}  /* clear the sticky nav on anchor jumps */
   h2{font-size:clamp(24px,3.4vw,30px);margin:0 0 10px;letter-spacing:-.02em;text-wrap:balance}
   h2 + .sub{color:var(--muted);margin:0 0 36px;font-size:16.5px;max-width:62ch;text-wrap:pretty}
 
@@ -56,9 +57,10 @@
   .logo{width:29px;height:29px;border-radius:8px;background:var(--accent);color:var(--accent-ink);
         display:grid;place-items:center;font-weight:800;font-size:14px}
   nav .links{margin-left:auto;display:flex;gap:8px;align-items:center}
-  nav .links a{color:var(--muted);font-size:14px;font-weight:500;padding:8px 6px;border-radius:8px}
+  nav .links a{color:var(--muted);font-size:14px;font-weight:500;padding:8px 6px;border-radius:8px;
+    transition:color .15s ease,border-color .15s ease}
   nav .links a:hover{color:var(--text);text-decoration:none}
-  .ghbtn{border:1px solid var(--line2);color:var(--text)!important}
+  .ghbtn{border:1px solid var(--line2);color:var(--text)!important;padding:8px 14px;border-radius:9px}
   .ghbtn:hover{border-color:var(--accent-line)}
   @media(max-width:720px){nav .links a.hideable{display:none}}
 
@@ -70,8 +72,10 @@
   .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:30px}
   .badges img{height:22px}
   .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:36px}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:11px;
-    font-weight:600;font-size:15px;min-height:46px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px;
+    border-radius:11px;font-weight:600;font-size:15px;min-height:46px;
+    transition:filter .16s ease,border-color .16s ease,transform .08s ease}
+  .btn:active{transform:translateY(1px)}
   .btn-primary{background:var(--accent);color:var(--accent-ink)}
   .btn-primary:hover{text-decoration:none;filter:brightness(1.06)}
   .btn-ghost{border:1px solid var(--line2);color:var(--text)}
@@ -82,8 +86,10 @@
     text-align:left;overflow:hidden}
   .code pre{margin:0;padding:16px 18px;overflow:auto;font-size:13.5px;line-height:1.7}
   .code .copy{position:absolute;top:8px;right:8px;background:var(--card2);border:1px solid var(--line2);
-    color:var(--muted);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;min-height:34px}
+    color:var(--muted);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;min-height:36px;
+    transition:color .15s ease,border-color .15s ease}
   .code .copy:hover{color:var(--text);border-color:var(--accent-line)}
+  .code .copy:active{transform:translateY(1px)}
   .tok-c{color:var(--muted)}
   .tok-s{color:var(--accent)}
   .hero .code{max-width:620px;margin:0 auto}
@@ -118,7 +124,8 @@
   /* tabs */
   .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
   .tab{background:var(--card);border:1px solid var(--line2);color:var(--muted);border-radius:10px;
-    padding:9px 15px;font-size:13.5px;cursor:pointer;font-weight:500;min-height:40px}
+    padding:9px 15px;font-size:13.5px;cursor:pointer;font-weight:500;min-height:40px;
+    transition:color .15s ease,background .15s ease,border-color .15s ease}
   .tab:hover{color:var(--text)}
   .tab[aria-selected="true"]{background:var(--accent-bg);border-color:var(--accent-line);color:var(--text)}
   .panel{display:none}
@@ -171,7 +178,7 @@
       <a class="hideable" href="#install">Install</a>
       <a class="hideable" href="#tools">Tools</a>
       <a class="hideable" href="#how">How it works</a>
-      <a class="ghbtn" href="https://github.com/PeerapolSelanon/roblox-mcp-pro" style="padding:8px 14px;border-radius:9px">GitHub</a>
+      <a class="ghbtn" href="https://github.com/PeerapolSelanon/roblox-mcp-pro">GitHub</a>
     </div>
   </div>
 </nav>
@@ -202,6 +209,7 @@ claude mcp add roblox-mcp-pro -- npx -y roblox-mcp-pro@latest</pre>
   </div>
 </header>
 
+<main>
 <section id="feel">
   <div class="wrap">
     <h2>Just talk to your agent</h2>
@@ -377,6 +385,7 @@ AI Agent C ─MCP stdio─▶ MCP client ─┘                       queue + da
     </div>
   </div>
 </section>
+</main>
 
 <footer>
   <div class="wrap">
