@@ -198,4 +198,16 @@ Also: `UIGradient` **multiplies** with the object's own color, so set the fill `
   - **Dynamic Canvas Sizing**: Set `AutomaticCanvasSize = Enum.AutomaticSize.Y` and `CanvasSize = UDim2.new(0, 0, 0, 0)`. This forces Roblox to automatically recalculate the canvas height based on the total height of child layouts (like `UIListLayout` or `UIGridLayout`) without manual script updates.
   - **Lock Scrolling Axis**: Set `ScrollingDirection = Enum.ScrollingDirection.Y` to lock scrolling vertically and prevent accidental horizontal scrolling/panning.
   - **UIStroke Padding Requirement**: If any child elements inside the `ScrollingFrame` have a `UIStroke` applied (regardless of element type), you must always add a `UIPadding` inside the `ScrollingFrame` and configure padding on all sides (`PaddingTop`, `PaddingBottom`, `PaddingLeft`, `PaddingRight`) to prevent the strokes from being cut off or clipped at the borders of the `ScrollingFrame`.
+- **`ClipsDescendants` does NOT clip *rotated* descendants** — a rotated child renders outside a
+  `ClipsDescendants` parent regardless. Don't rely on clipping to contain rotated decorations
+  (diagonal stripes, skewed banners). Size and position the rotated element so its post-rotation
+  bounding box already fits inside the parent (a vertical bar `H` tall rotated by θ spans
+  `H*cosθ + W*sinθ`; keep its center on the parent's center and shrink `H` until it fits, and keep
+  it far enough from the left/right edges that the rotated tips don't poke out sideways).
+- **compare a non-fullscreen panel with `captureRegion`/`mockupRegion`**: `capture_studio` grabs the
+  whole Studio window (panel centered, chrome + black margins around it), so a raw `compare` against a
+  full-bleed mockup scores low on the margins. Pass `captureRegion: [xPct,yPct,wPct,hPct]` (0-1) to
+  crop the capture down to just the panel before scoring (and `mockupRegion` if the mockup has its own
+  margins). Eyeball the fractional rect from the capture once; it's stable for a given Studio layout.
+  For a fast, framing-free measured loop, prefer `render_local` (full-bleed by construction).
 - After previewing, always `ui_preview hide` so the overlay doesn't linger in CoreGui.

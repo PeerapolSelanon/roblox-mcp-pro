@@ -127,6 +127,14 @@ assert.ok(cmp.similarity < 80, "half-different → lower similarity");
 assert.ok(cmp.regions[0].xPct > 0.5, "worst region on the changed (right) half");
 assert.ok(/brighter/.test(cmp.regions[0].note), "note reports the capture is brighter");
 
+// crop region: compare only the white right half of halfWhite to an all-white mockup.
+const white = encodeRGB(20, 20, () => [255, 255, 255]);
+const cropCmp = compareImages(white, halfWhite, { captureRegion: [0.5, 0, 0.5, 1] });
+assert.ok(cropCmp.similarity > 99, "cropped right (white) half matches the white mockup");
+// without the crop, the half-black image is far from all-white.
+const noCrop = compareImages(white, halfWhite, {});
+assert.ok(noCrop.similarity < 70, "uncropped half-black vs white scores low");
+
 // --- local UI renderer (image-to-UI without Studio) ---
 import { renderUiTree } from "../dist/services/uirender.js";
 import { decodePng } from "../dist/services/png.js";

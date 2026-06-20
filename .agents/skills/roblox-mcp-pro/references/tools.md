@@ -323,6 +323,8 @@ Parameters:
 - `cols` (number, optional) — For 'compare': region grid columns (default 8).
 - `rows` (number, optional) — For 'compare': region grid rows (default 6).
 - `top` (number, optional) — For 'compare': how many worst regions to return (default 6).
+- `mockupRegion` (number[], optional) — For 'compare': crop the mockup to [xPct,yPct,wPct,hPct] (0-1) before scoring.
+- `captureRegion` (number[], optional) — For 'compare': crop the capture to [xPct,yPct,wPct,hPct] (0-1) — e.g. the panel inside a full-window screenshot.
 - `outPath` (string, optional) — For 'render_local': filesystem path to write the rendered PNG.
 - `width` (number, optional) — For 'render_local': viewport width px (default 1280; match the mockup).
 - `height` (number, optional) — For 'render_local': viewport height px (default 720; match the mockup).

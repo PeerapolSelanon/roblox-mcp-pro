@@ -330,6 +330,22 @@ export interface CompareResult {
 
 const MAX_DIST = Math.sqrt(3) * 255;
 
+/** Crop a decoded image to a fractional rect [xPct,yPct,wPct,hPct] (0-1). No-op if absent. */
+function cropDecoded(img: DecodedPng, region?: number[]): DecodedPng {
+  if (region?.length !== 4) return img;
+  const [fx, fy, fw, fh] = region as [number, number, number, number];
+  const x0 = Math.max(0, Math.min(img.width - 1, Math.round(fx * img.width)));
+  const y0 = Math.max(0, Math.min(img.height - 1, Math.round(fy * img.height)));
+  const w = Math.max(1, Math.min(img.width - x0, Math.round(fw * img.width)));
+  const h = Math.max(1, Math.min(img.height - y0, Math.round(fh * img.height)));
+  const out = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const src = ((y0 + y) * img.width + x0) * 4;
+    out.set(img.rgba.subarray(src, src + w * 4), y * w * 4);
+  }
+  return { width: w, height: h, rgba: out };
+}
+
 /** Describe how the capture cell differs from the mockup cell (signed = capture - mockup). */
 function regionNote(dr: number, dg: number, db: number): string {
   const parts: string[] = [];
@@ -358,10 +374,18 @@ function regionNote(dr: number, dg: number, db: number): string {
 export function compareImages(
   mockupPath: string,
   capturePath: string,
-  opts: { cols?: number; rows?: number; top?: number } = {},
+  opts: {
+    cols?: number;
+    rows?: number;
+    top?: number;
+    mockupRegion?: number[];
+    captureRegion?: number[];
+  } = {},
 ): CompareResult {
-  const m = decodePng(mockupPath);
-  const c = decodePng(capturePath);
+  // Crop each image to its region first (e.g. the panel inside a full window
+  // capture) so a non-fullscreen UI lines up with a full-bleed mockup.
+  const m = cropDecoded(decodePng(mockupPath), opts.mockupRegion);
+  const c = cropDecoded(decodePng(capturePath), opts.captureRegion);
   const cols = Math.max(2, Math.min(24, opts.cols ?? 8));
   const rows = Math.max(2, Math.min(24, opts.rows ?? 6));
   const top = Math.max(1, Math.min(cols * rows, opts.top ?? 6));

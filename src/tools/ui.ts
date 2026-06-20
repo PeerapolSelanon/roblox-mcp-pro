@@ -91,6 +91,16 @@ const InputSchema = z
     cols: z.number().int().min(2).max(24).optional().describe("For 'compare': region grid columns (default 8)."),
     rows: z.number().int().min(2).max(24).optional().describe("For 'compare': region grid rows (default 6)."),
     top: z.number().int().min(1).max(50).optional().describe("For 'compare': how many worst regions to return (default 6)."),
+    mockupRegion: z
+      .array(z.number().min(0).max(1))
+      .length(4)
+      .optional()
+      .describe("For 'compare': crop the mockup to [xPct,yPct,wPct,hPct] (0-1) before scoring."),
+    captureRegion: z
+      .array(z.number().min(0).max(1))
+      .length(4)
+      .optional()
+      .describe("For 'compare': crop the capture to [xPct,yPct,wPct,hPct] (0-1) — e.g. the panel inside a full-window screenshot."),
     outPath: z
       .string()
       .optional()
@@ -212,6 +222,8 @@ Error Handling:
                 cols: input.cols,
                 rows: input.rows,
                 top: input.top,
+                mockupRegion: input.mockupRegion,
+                captureRegion: input.captureRegion,
               });
               const text = [
                 `Rendered ${r.width}x${r.height} → ${r.path}`,
@@ -240,6 +252,8 @@ Error Handling:
               cols: input.cols,
               rows: input.rows,
               top: input.top,
+              mockupRegion: input.mockupRegion,
+              captureRegion: input.captureRegion,
             });
             const text = [
               `Similarity ${r.similarity}% (mean diff ${r.meanDiff}%).`,
